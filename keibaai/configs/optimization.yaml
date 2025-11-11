@@ -1,0 +1,45 @@
+# configs/optimization.yaml
+
+# ポートフォリオ最適化の設定
+optimizer:
+  # 最適化手法
+  method: "fractional_kelly" # or "equal_weight", "custom"
+
+  # Fractional Kelly の設定
+  fractional_kelly:
+    # 켈리比率に乗じる係数 (0.0 ~ 1.0)
+    # 1.0に近いほど積極的、0.0に近いほど保守的
+    fraction: 0.1
+
+  # 投資制約
+  constraints:
+    # 1レースあたりの最大投資額（円）
+    max_investment_per_race: 10000
+
+    # 1つの買い目あたりの最大投資額（円）
+    max_investment_per_bet: 1000
+
+    # 最小投資単位（円）
+    min_bet_unit: 100
+
+    # 期待値の閾値（この値より低い期待値の買い目は除外）
+    min_expected_value: 1.2
+
+# シミュレーション設定
+simulation:
+  # モンテカルロシミュレーションの試行回数
+  monte_carlo_trials: 1000
+
+  # バックテスト期間
+  backtest_period:
+    start: "2024-01-01"
+    end: "2024-12-31"
+
+# 発注実行の設定
+executor:
+  # 自動発注を有効にするか (true/false)
+  # 安全のため、デフォルトは false
+  auto_execute: false
+
+  # 発注ログの保存先
+  order_log_path: "${data_path}/orders/{YYYYMMDD}_orders.json"

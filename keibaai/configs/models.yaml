@@ -1,0 +1,62 @@
+# configs/models.yaml
+
+# モデル学習全般の設定
+training:
+  # 学習に使用する特徴量のバージョン
+  feature_version: "v1.0"
+  
+  # 学習対象期間
+  train_period:
+    start: "2018-01-01"
+    end: "2023-12-31"
+    
+  # 検証期間
+  validation_period:
+    start: "2024-01-01"
+    end: "2024-12-31"
+
+  # 乱数シード
+  random_seed: 42
+
+# モデルごとの設定
+models:
+  # LightGBMによる平均順位予測モデル
+  lgbm_ranker:
+    model_type: "ranker"
+    objective: "lambdarank"
+    metric: "ndcg"
+    
+    # ハイパーパラメータ
+    hyperparameters:
+      boosting_type: "gbdt"
+      n_estimators: 2000
+      learning_rate: 0.01
+      num_leaves: 31
+      max_depth: -1
+      reg_alpha: 0.1
+      reg_lambda: 0.1
+      colsample_bytree: 0.8
+      subsample: 0.8
+      
+    # 学習時のコールバック
+    callbacks:
+      - type: "early_stopping"
+        patience: 100
+        verbose: true
+
+  # LightGBMによる確率的回帰モデル（例: タイム予測）
+  lgbm_regressor_time:
+    model_type: "regressor"
+    objective: "regression_l1"
+    metric: "mae"
+    
+    hyperparameters:
+      boosting_type: "gbdt"
+      n_estimators: 1000
+      learning_rate: 0.05
+      num_leaves: 64
+
+# 確率キャリブレーションの設定
+calibration:
+  method: "isotonic" # or "platt" (temperature scaling)
+  cv_folds: 5

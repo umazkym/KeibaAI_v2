@@ -1,0 +1,52 @@
+# configs/scraping.yaml
+
+# スクレイピング全般の設定
+scraping:
+  # スクレイピング対象サイト
+  target_sites:
+    - "netkeiba"
+    - "jra"
+
+  # リクエスト間の遅延（秒）
+  delay_seconds:
+    min: 2.5
+    max: 10.0
+
+  # リトライ設定
+  retry:
+    max_attempts: 5
+    backoff_factor: 2 # 指数バックオフの係数
+
+  # User-Agentのローテーションリスト
+  user_agents:
+    - "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36"
+    - "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36"
+    - "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36"
+
+# netkeiba.com 固有の設定
+netkeiba:
+  base_url: "https://db.netkeiba.com"
+  # 取得対象とするデータ種別
+  data_types:
+    - "race"
+    - "shutuba"
+    - "horse_profile"
+    - "horse_performance"
+    - "pedigree"
+
+# JRA 固有の設定
+jra:
+  base_url: "https://www.jra.go.jp"
+  # オッズ取得の設定
+  odds:
+    # 締切何分前に取得するか
+    minutes_before_deadline: 5
+    # 取得対象の券種
+    ticket_types:
+      - "win"         # 単勝
+      - "place"       # 複勝
+      - "exacta"      # 馬単
+      - "quinella"    # 馬連
+      - "wide"        # ワイド
+      - "trifecta"    # 3連単
+      - "trio"        # 3連複

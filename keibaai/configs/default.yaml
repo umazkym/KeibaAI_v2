@@ -1,0 +1,20 @@
+# configs/default.yaml
+
+# 基本的なパス設定
+data_path: "data"
+raw_data_path: "${data_path}/raw"
+parsed_data_path: "${data_path}/parsed"
+features_path: "${data_path}/features"
+models_path: "${data_path}/models"
+logs_path: "${data_path}/logs"
+metadata_path: "${data_path}/metadata"
+
+# データベース設定
+database:
+  path: "${metadata_path}/db.sqlite3"
+
+# ログ設定
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  log_file: "${logs_path}/{YYYY}/{MM}/{DD}/pipeline.log"

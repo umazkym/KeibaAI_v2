@@ -1,0 +1,399 @@
+2025-11-11 10:21:26,350 - __main__ - INFO - スクレイピングパイプラインを開始します...
+2025-11-11 10:21:26,351 - __main__ - INFO - 深夜バッチ処理を開始...
+2025-11-11 10:21:26,351 - src.modules.preparing._requests_utils - INFO - 開催日一覧のスクレイピングを開始します...
+2025-11-11 10:21:26,351 - src.modules.preparing._requests_utils - WARNING - scrape_kaisai_dates は現在モック実装です。
+2025-11-11 10:21:26,351 - __main__ - INFO - 取得した開催日（モック）: ['2023/01/05', '2023/01/07', '2023/01/08']
+2025-11-11 10:21:26,352 - src.modules.preparing._requests_utils - INFO - レースID一覧のスクレイピングを開始します...
+2025-11-11 10:21:26,352 - src.modules.preparing._requests_utils - WARNING - scrape_race_id_list は現在モック実装です。
+2025-11-11 10:21:26,352 - __main__ - INFO - 取得したレースID（モック）: ['2023010501', '2023010502', '2023010701', '2023010702']
+2025-11-11 10:21:26,352 - __main__ - INFO - HTMLの取得処理は現在プレースホルダーです。
+2025-11-11 10:21:26,352 - __main__ - INFO - 深夜バッチ処理が完了。
+2025-11-11 10:21:26,352 - __main__ - INFO - 当日バッチ処理（オッズ取得）を開始...
+2025-11-11 10:21:26,352 - src.modules.preparing._scrape_jra_odds - INFO - JRAオッズのダミー生成を開始: 2023010501
+2025-11-11 10:21:26,353 - __main__ - ERROR - パイプラインの実行中にエラーが発生しました: [WinError 87] パラメーターが間違っています。: 'C:\\Users\\zk-ht\\Keiba\\test\\keibaai\\data\\raw\\json\\jra_odds\\.tmp_od1g091u2023010501_snapshot_20251111T102126+09:00_sha256=6fd36bf4.json' -> 'C:\\Users\\zk-ht\\Keiba\\test\\keibaai\\data\\raw\\json\\jra_odds\\2023010501_snapshot_20251111T102126+09:00_sha256=6fd36bf4.json'
+Traceback (most recent call last):
+  File "C:\Users\zk-ht\Keiba\test\keibaai\src\run_scraping_pipeline_local.py", line 105, in main
+    _scrape_jra_odds.scrape_and_save_jra_odds(race_id, cfg, conn)
+  File "C:\Users\zk-ht\Keiba\test\keibaai\src\modules\preparing\_scrape_jra_odds.py", line 53, in scrape_and_save_jra_odds
+    pipeline_core.atomic_write(str(file_path), dummy_data_bytes)
+  File "C:\Users\zk-ht\Keiba\test\keibaai\src\pipeline_core.py", line 38, in atomic_write
+    raise e
+  File "C:\Users\zk-ht\Keiba\test\keibaai\src\pipeline_core.py", line 32, in atomic_write
+    os.replace(tmp_path, path)
+OSError: [WinError 87] パラメーターが間違っています。: 'C:\\Users\\zk-ht\\Keiba\\test\\keibaai\\data\\raw\\json\\jra_odds\\.tmp_od1g091u2023010501_snapshot_20251111T102126+09:00_sha256=6fd36bf4.json' -> 'C:\\Users\\zk-ht\\Keiba\\test\\keibaai\\data\\raw\\json\\jra_odds\\2023010501_snapshot_20251111T102126+09:00_sha256=6fd36bf4.json'
+2025-11-11 10:21:26,354 - __main__ - INFO - データベース接続をクローズしました。
+2025-11-11 10:21:26,354 - __main__ - INFO - スクレイピングパイプラインが終了しました。
+2025-11-11 10:22:01,964 - __main__ - INFO - スクレイピングパイプラインを開始します...
+2025-11-11 10:22:01,964 - __main__ - INFO - 深夜バッチ処理を開始...
+2025-11-11 10:22:01,964 - src.modules.preparing._requests_utils - INFO - 開催日一覧のスクレイピングを開始します...
+2025-11-11 10:22:01,964 - src.modules.preparing._requests_utils - WARNING - scrape_kaisai_dates は現在モック実装です。
+2025-11-11 10:22:01,964 - __main__ - INFO - 取得した開催日（モック）: ['2023/01/05', '2023/01/07', '2023/01/08']
+2025-11-11 10:22:01,964 - src.modules.preparing._requests_utils - INFO - レースID一覧のスクレイピングを開始します...
+2025-11-11 10:22:01,964 - src.modules.preparing._requests_utils - WARNING - scrape_race_id_list は現在モック実装です。
+2025-11-11 10:22:01,964 - __main__ - INFO - 取得したレースID（モック）: ['2023010501', '2023010502', '2023010701', '2023010702']
+2025-11-11 10:22:01,964 - __main__ - INFO - HTMLの取得処理は現在プレースホルダーです。
+2025-11-11 10:22:01,964 - __main__ - INFO - 深夜バッチ処理が完了。
+2025-11-11 10:22:01,965 - __main__ - INFO - 当日バッチ処理（オッズ取得）を開始...
+2025-11-11 10:22:01,965 - src.modules.preparing._scrape_jra_odds - INFO - JRAオッズのダミー生成を開始: 2023010501
+2025-11-11 10:22:01,966 - src.modules.preparing._scrape_jra_odds - INFO - ダミーオッズデータを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\json\jra_odds\2023010501_snapshot_20251111T102201+0900_sha256=49bfe8d5.json
+2025-11-11 10:22:01,967 - __main__ - ERROR - パイプラインの実行中にエラーが発生しました: no such table: fetch_log
+Traceback (most recent call last):
+  File "C:\Users\zk-ht\Keiba\test\keibaai\src\run_scraping_pipeline_local.py", line 105, in main
+    _scrape_jra_odds.scrape_and_save_jra_odds(race_id, cfg, conn)
+  File "C:\Users\zk-ht\Keiba\test\keibaai\src\modules\preparing\_scrape_jra_odds.py", line 60, in scrape_and_save_jra_odds
+    data_utils.save_fetch_metadata(
+  File "C:\Users\zk-ht\Keiba\test\keibaai\src\utils\data_utils.py", line 25, in save_fetch_metadata
+    cursor.execute('''
+sqlite3.OperationalError: no such table: fetch_log
+2025-11-11 10:22:01,967 - __main__ - INFO - データベース接続をクローズしました。
+2025-11-11 10:22:01,967 - __main__ - INFO - スクレイピングパイプラインが終了しました。
+2025-11-11 10:22:55,723 - __main__ - INFO - スクレイピングパイプラインを開始します...
+2025-11-11 10:22:55,725 - __main__ - INFO - 深夜バッチ処理を開始...
+2025-11-11 10:22:55,725 - src.modules.preparing._requests_utils - INFO - 開催日一覧のスクレイピングを開始します...
+2025-11-11 10:22:55,725 - src.modules.preparing._requests_utils - WARNING - scrape_kaisai_dates は現在モック実装です。
+2025-11-11 10:22:55,725 - __main__ - INFO - 取得した開催日（モック）: ['2023/01/05', '2023/01/07', '2023/01/08']
+2025-11-11 10:22:55,725 - src.modules.preparing._requests_utils - INFO - レースID一覧のスクレイピングを開始します...
+2025-11-11 10:22:55,725 - src.modules.preparing._requests_utils - WARNING - scrape_race_id_list は現在モック実装です。
+2025-11-11 10:22:55,725 - __main__ - INFO - 取得したレースID（モック）: ['2023010501', '2023010502', '2023010701', '2023010702']
+2025-11-11 10:22:55,725 - __main__ - INFO - HTMLの取得処理は現在プレースホルダーです。
+2025-11-11 10:22:55,725 - __main__ - INFO - 深夜バッチ処理が完了。
+2025-11-11 10:22:55,725 - __main__ - INFO - 当日バッチ処理（オッズ取得）を開始...
+2025-11-11 10:22:55,725 - src.modules.preparing._scrape_jra_odds - INFO - JRAオッズのダミー生成を開始: 2023010501
+2025-11-11 10:22:55,727 - src.modules.preparing._scrape_jra_odds - INFO - ダミーオッズデータを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\json\jra_odds\2023010501_snapshot_20251111T102255+0900_sha256=c5730716.json
+2025-11-11 10:22:55,730 - src.modules.preparing._scrape_jra_odds - INFO - メタデータをデータベースに保存しました: https://www.jra.go.jp/dummy/odds/2023010501
+2025-11-11 10:22:55,730 - src.modules.preparing._scrape_jra_odds - INFO - JRAオッズのダミー生成を開始: 2023010502
+2025-11-11 10:22:55,731 - src.modules.preparing._scrape_jra_odds - INFO - ダミーオッズデータを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\json\jra_odds\2023010502_snapshot_20251111T102255+0900_sha256=828fcde1.json
+2025-11-11 10:22:55,733 - src.modules.preparing._scrape_jra_odds - INFO - メタデータをデータベースに保存しました: https://www.jra.go.jp/dummy/odds/2023010502
+2025-11-11 10:22:55,733 - src.modules.preparing._scrape_jra_odds - INFO - JRAオッズのダミー生成を開始: 2023010701
+2025-11-11 10:22:55,735 - src.modules.preparing._scrape_jra_odds - INFO - ダミーオッズデータを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\json\jra_odds\2023010701_snapshot_20251111T102255+0900_sha256=ee43e866.json
+2025-11-11 10:22:55,739 - src.modules.preparing._scrape_jra_odds - INFO - メタデータをデータベースに保存しました: https://www.jra.go.jp/dummy/odds/2023010701
+2025-11-11 10:22:55,739 - src.modules.preparing._scrape_jra_odds - INFO - JRAオッズのダミー生成を開始: 2023010702
+2025-11-11 10:22:55,741 - src.modules.preparing._scrape_jra_odds - INFO - ダミーオッズデータを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\json\jra_odds\2023010702_snapshot_20251111T102255+0900_sha256=ff49b1d0.json
+2025-11-11 10:22:55,743 - src.modules.preparing._scrape_jra_odds - INFO - メタデータをデータベースに保存しました: https://www.jra.go.jp/dummy/odds/2023010702
+2025-11-11 10:22:55,743 - __main__ - INFO - 当日バッチ処理が完了。
+2025-11-11 10:22:55,743 - __main__ - INFO - データベース接続をクローズしました。
+2025-11-11 10:22:55,743 - __main__ - INFO - スクレイピングパイプラインが終了しました。
+2025-11-11 10:23:24,139 - __main__ - INFO - スクレイピングパイプラインを開始します...
+2025-11-11 10:23:24,141 - __main__ - INFO - 深夜バッチ処理を開始...
+2025-11-11 10:23:24,141 - src.modules.preparing._requests_utils - INFO - 開催日一覧のスクレイピングを開始します...
+2025-11-11 10:23:24,141 - src.modules.preparing._requests_utils - WARNING - scrape_kaisai_dates は現在モック実装です。
+2025-11-11 10:23:24,141 - __main__ - INFO - 取得した開催日（モック）: ['2023/01/05', '2023/01/07', '2023/01/08']
+2025-11-11 10:23:24,141 - src.modules.preparing._requests_utils - INFO - レースID一覧のスクレイピングを開始します...
+2025-11-11 10:23:24,141 - src.modules.preparing._requests_utils - WARNING - scrape_race_id_list は現在モック実装です。
+2025-11-11 10:23:24,141 - __main__ - INFO - 取得したレースID（モック）: ['2023010501', '2023010502', '2023010701', '2023010702']
+2025-11-11 10:23:24,141 - __main__ - INFO - レース結果HTMLの取得処理を開始します。
+2025-11-11 10:23:24,141 - __main__ - ERROR - レースID 2023010501 の処理中にエラーが発生しました: 'dict' object has no attribute 'scraping'
+Traceback (most recent call last):
+  File "C:\Users\zk-ht\Keiba\test\keibaai\src\run_scraping_pipeline_local.py", line 92, in main
+    response = _requests_utils.fetch_html(url, cfg)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\zk-ht\Keiba\test\keibaai\src\modules\preparing\_requests_utils.py", line 16, in fetch_html
+    max_attempts = cfg.scraping.retry.max_attempts
+                   ^^^^^^^^^^^^
+AttributeError: 'dict' object has no attribute 'scraping'
+2025-11-11 10:23:24,142 - __main__ - ERROR - レースID 2023010502 の処理中にエラーが発生しました: 'dict' object has no attribute 'scraping'
+Traceback (most recent call last):
+  File "C:\Users\zk-ht\Keiba\test\keibaai\src\run_scraping_pipeline_local.py", line 92, in main
+    response = _requests_utils.fetch_html(url, cfg)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\zk-ht\Keiba\test\keibaai\src\modules\preparing\_requests_utils.py", line 16, in fetch_html
+    max_attempts = cfg.scraping.retry.max_attempts
+                   ^^^^^^^^^^^^
+AttributeError: 'dict' object has no attribute 'scraping'
+2025-11-11 10:23:24,142 - __main__ - ERROR - レースID 2023010701 の処理中にエラーが発生しました: 'dict' object has no attribute 'scraping'
+Traceback (most recent call last):
+  File "C:\Users\zk-ht\Keiba\test\keibaai\src\run_scraping_pipeline_local.py", line 92, in main
+    response = _requests_utils.fetch_html(url, cfg)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\zk-ht\Keiba\test\keibaai\src\modules\preparing\_requests_utils.py", line 16, in fetch_html
+    max_attempts = cfg.scraping.retry.max_attempts
+                   ^^^^^^^^^^^^
+AttributeError: 'dict' object has no attribute 'scraping'
+2025-11-11 10:23:24,143 - __main__ - ERROR - レースID 2023010702 の処理中にエラーが発生しました: 'dict' object has no attribute 'scraping'
+Traceback (most recent call last):
+  File "C:\Users\zk-ht\Keiba\test\keibaai\src\run_scraping_pipeline_local.py", line 92, in main
+    response = _requests_utils.fetch_html(url, cfg)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\zk-ht\Keiba\test\keibaai\src\modules\preparing\_requests_utils.py", line 16, in fetch_html
+    max_attempts = cfg.scraping.retry.max_attempts
+                   ^^^^^^^^^^^^
+AttributeError: 'dict' object has no attribute 'scraping'
+2025-11-11 10:23:24,144 - __main__ - INFO - 深夜バッチ処理が完了。
+2025-11-11 10:23:24,144 - __main__ - INFO - 当日バッチ処理（オッズ取得）を開始...
+2025-11-11 10:23:24,144 - src.modules.preparing._scrape_jra_odds - INFO - JRAオッズのダミー生成を開始: 2023010501
+2025-11-11 10:23:24,146 - src.modules.preparing._scrape_jra_odds - INFO - ダミーオッズデータを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\json\jra_odds\2023010501_snapshot_20251111T102324+0900_sha256=ec3bfcf5.json
+2025-11-11 10:23:24,149 - src.modules.preparing._scrape_jra_odds - INFO - メタデータをデータベースに保存しました: https://www.jra.go.jp/dummy/odds/2023010501
+2025-11-11 10:23:24,149 - src.modules.preparing._scrape_jra_odds - INFO - JRAオッズのダミー生成を開始: 2023010502
+2025-11-11 10:23:24,150 - src.modules.preparing._scrape_jra_odds - INFO - ダミーオッズデータを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\json\jra_odds\2023010502_snapshot_20251111T102324+0900_sha256=f66fd434.json
+2025-11-11 10:23:24,152 - src.modules.preparing._scrape_jra_odds - INFO - メタデータをデータベースに保存しました: https://www.jra.go.jp/dummy/odds/2023010502
+2025-11-11 10:23:24,153 - src.modules.preparing._scrape_jra_odds - INFO - JRAオッズのダミー生成を開始: 2023010701
+2025-11-11 10:23:24,154 - src.modules.preparing._scrape_jra_odds - INFO - ダミーオッズデータを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\json\jra_odds\2023010701_snapshot_20251111T102324+0900_sha256=ff117611.json
+2025-11-11 10:23:24,159 - src.modules.preparing._scrape_jra_odds - INFO - メタデータをデータベースに保存しました: https://www.jra.go.jp/dummy/odds/2023010701
+2025-11-11 10:23:24,159 - src.modules.preparing._scrape_jra_odds - INFO - JRAオッズのダミー生成を開始: 2023010702
+2025-11-11 10:23:24,160 - src.modules.preparing._scrape_jra_odds - INFO - ダミーオッズデータを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\json\jra_odds\2023010702_snapshot_20251111T102324+0900_sha256=cf3171c0.json
+2025-11-11 10:23:24,162 - src.modules.preparing._scrape_jra_odds - INFO - メタデータをデータベースに保存しました: https://www.jra.go.jp/dummy/odds/2023010702
+2025-11-11 10:23:24,162 - __main__ - INFO - 当日バッチ処理が完了。
+2025-11-11 10:23:24,163 - __main__ - INFO - データベース接続をクローズしました。
+2025-11-11 10:23:24,163 - __main__ - INFO - スクレイピングパイプラインが終了しました。
+2025-11-11 10:23:58,401 - __main__ - INFO - スクレイピングパイプラインを開始します...
+2025-11-11 10:23:58,402 - __main__ - INFO - 深夜バッチ処理を開始...
+2025-11-11 10:23:58,402 - src.modules.preparing._requests_utils - INFO - 開催日一覧のスクレイピングを開始します...
+2025-11-11 10:23:58,402 - src.modules.preparing._requests_utils - WARNING - scrape_kaisai_dates は現在モック実装です。
+2025-11-11 10:23:58,403 - __main__ - INFO - 取得した開催日（モック）: ['2023/01/05', '2023/01/07', '2023/01/08']
+2025-11-11 10:23:58,403 - src.modules.preparing._requests_utils - INFO - レースID一覧のスクレイピングを開始します...
+2025-11-11 10:23:58,403 - src.modules.preparing._requests_utils - WARNING - scrape_race_id_list は現在モック実装です。
+2025-11-11 10:23:58,403 - __main__ - INFO - 取得したレースID（モック）: ['2023010501', '2023010502', '2023010701', '2023010702']
+2025-11-11 10:23:58,403 - __main__ - INFO - レース結果HTMLの取得処理を開始します。
+2025-11-11 10:23:58,403 - __main__ - ERROR - レースID 2023010501 の処理中にエラーが発生しました: 'retry'
+Traceback (most recent call last):
+  File "C:\Users\zk-ht\Keiba\test\keibaai\src\run_scraping_pipeline_local.py", line 92, in main
+    response = _requests_utils.fetch_html(url, cfg)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\zk-ht\Keiba\test\keibaai\src\modules\preparing\_requests_utils.py", line 16, in fetch_html
+    max_attempts = cfg['scraping']['retry']['max_attempts']
+                   ~~~~~~~~~~~~~~~^^^^^^^^^
+KeyError: 'retry'
+2025-11-11 10:23:58,403 - __main__ - ERROR - レースID 2023010502 の処理中にエラーが発生しました: 'retry'
+Traceback (most recent call last):
+  File "C:\Users\zk-ht\Keiba\test\keibaai\src\run_scraping_pipeline_local.py", line 92, in main
+    response = _requests_utils.fetch_html(url, cfg)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\zk-ht\Keiba\test\keibaai\src\modules\preparing\_requests_utils.py", line 16, in fetch_html
+    max_attempts = cfg['scraping']['retry']['max_attempts']
+                   ~~~~~~~~~~~~~~~^^^^^^^^^
+KeyError: 'retry'
+2025-11-11 10:23:58,404 - __main__ - ERROR - レースID 2023010701 の処理中にエラーが発生しました: 'retry'
+Traceback (most recent call last):
+  File "C:\Users\zk-ht\Keiba\test\keibaai\src\run_scraping_pipeline_local.py", line 92, in main
+    response = _requests_utils.fetch_html(url, cfg)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\zk-ht\Keiba\test\keibaai\src\modules\preparing\_requests_utils.py", line 16, in fetch_html
+    max_attempts = cfg['scraping']['retry']['max_attempts']
+                   ~~~~~~~~~~~~~~~^^^^^^^^^
+KeyError: 'retry'
+2025-11-11 10:23:58,404 - __main__ - ERROR - レースID 2023010702 の処理中にエラーが発生しました: 'retry'
+Traceback (most recent call last):
+  File "C:\Users\zk-ht\Keiba\test\keibaai\src\run_scraping_pipeline_local.py", line 92, in main
+    response = _requests_utils.fetch_html(url, cfg)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\zk-ht\Keiba\test\keibaai\src\modules\preparing\_requests_utils.py", line 16, in fetch_html
+    max_attempts = cfg['scraping']['retry']['max_attempts']
+                   ~~~~~~~~~~~~~~~^^^^^^^^^
+KeyError: 'retry'
+2025-11-11 10:23:58,404 - __main__ - INFO - 深夜バッチ処理が完了。
+2025-11-11 10:23:58,405 - __main__ - INFO - 当日バッチ処理（オッズ取得）を開始...
+2025-11-11 10:23:58,405 - src.modules.preparing._scrape_jra_odds - INFO - JRAオッズのダミー生成を開始: 2023010501
+2025-11-11 10:23:58,406 - src.modules.preparing._scrape_jra_odds - INFO - ダミーオッズデータを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\json\jra_odds\2023010501_snapshot_20251111T102358+0900_sha256=a421c741.json
+2025-11-11 10:23:58,410 - src.modules.preparing._scrape_jra_odds - INFO - メタデータをデータベースに保存しました: https://www.jra.go.jp/dummy/odds/2023010501
+2025-11-11 10:23:58,410 - src.modules.preparing._scrape_jra_odds - INFO - JRAオッズのダミー生成を開始: 2023010502
+2025-11-11 10:23:58,412 - src.modules.preparing._scrape_jra_odds - INFO - ダミーオッズデータを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\json\jra_odds\2023010502_snapshot_20251111T102358+0900_sha256=06a9edd1.json
+2025-11-11 10:23:58,414 - src.modules.preparing._scrape_jra_odds - INFO - メタデータをデータベースに保存しました: https://www.jra.go.jp/dummy/odds/2023010502
+2025-11-11 10:23:58,415 - src.modules.preparing._scrape_jra_odds - INFO - JRAオッズのダミー生成を開始: 2023010701
+2025-11-11 10:23:58,418 - src.modules.preparing._scrape_jra_odds - INFO - ダミーオッズデータを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\json\jra_odds\2023010701_snapshot_20251111T102358+0900_sha256=9b3980e5.json
+2025-11-11 10:23:58,420 - src.modules.preparing._scrape_jra_odds - INFO - メタデータをデータベースに保存しました: https://www.jra.go.jp/dummy/odds/2023010701
+2025-11-11 10:23:58,421 - src.modules.preparing._scrape_jra_odds - INFO - JRAオッズのダミー生成を開始: 2023010702
+2025-11-11 10:23:58,422 - src.modules.preparing._scrape_jra_odds - INFO - ダミーオッズデータを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\json\jra_odds\2023010702_snapshot_20251111T102358+0900_sha256=8e0d2123.json
+2025-11-11 10:23:58,424 - src.modules.preparing._scrape_jra_odds - INFO - メタデータをデータベースに保存しました: https://www.jra.go.jp/dummy/odds/2023010702
+2025-11-11 10:23:58,424 - __main__ - INFO - 当日バッチ処理が完了。
+2025-11-11 10:23:58,424 - __main__ - INFO - データベース接続をクローズしました。
+2025-11-11 10:23:58,424 - __main__ - INFO - スクレイピングパイプラインが終了しました。
+2025-11-11 10:24:25,623 - __main__ - INFO - スクレイピングパイプラインを開始します...
+2025-11-11 10:24:25,625 - __main__ - INFO - 深夜バッチ処理を開始...
+2025-11-11 10:24:25,625 - src.modules.preparing._requests_utils - INFO - 開催日一覧のスクレイピングを開始します...
+2025-11-11 10:24:25,625 - src.modules.preparing._requests_utils - WARNING - scrape_kaisai_dates は現在モック実装です。
+2025-11-11 10:24:25,625 - __main__ - INFO - 取得した開催日（モック）: ['2023/01/05', '2023/01/07', '2023/01/08']
+2025-11-11 10:24:25,625 - src.modules.preparing._requests_utils - INFO - レースID一覧のスクレイピングを開始します...
+2025-11-11 10:24:25,625 - src.modules.preparing._requests_utils - WARNING - scrape_race_id_list は現在モック実装です。
+2025-11-11 10:24:25,625 - __main__ - INFO - 取得したレースID（モック）: ['2023010501', '2023010502', '2023010701', '2023010702']
+2025-11-11 10:24:25,625 - __main__ - INFO - レース結果HTMLの取得処理を開始します。
+2025-11-11 10:24:31,299 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/race/2023010501
+2025-11-11 10:24:31,304 - __main__ - INFO - HTMLを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\html\race\race_2023010501_20251111T102431+0900_sha256=06f0f78a.html
+2025-11-11 10:24:31,307 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/race/2023010501
+2025-11-11 10:24:35,578 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/race/2023010502
+2025-11-11 10:24:35,580 - __main__ - INFO - HTMLを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\html\race\race_2023010502_20251111T102435+0900_sha256=b007e534.html
+2025-11-11 10:24:35,584 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/race/2023010502
+2025-11-11 10:24:42,956 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/race/2023010701
+2025-11-11 10:24:42,958 - __main__ - INFO - HTMLを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\html\race\race_2023010701_20251111T102442+0900_sha256=9d291bca.html
+2025-11-11 10:24:42,961 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/race/2023010701
+2025-11-11 10:24:52,210 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/race/2023010702
+2025-11-11 10:24:52,211 - __main__ - INFO - HTMLを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\html\race\race_2023010702_20251111T102452+0900_sha256=d6c4015e.html
+2025-11-11 10:24:52,213 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/race/2023010702
+2025-11-11 10:24:52,213 - __main__ - INFO - 深夜バッチ処理が完了。
+2025-11-11 10:24:52,214 - __main__ - INFO - 当日バッチ処理（オッズ取得）を開始...
+2025-11-11 10:24:52,214 - src.modules.preparing._scrape_jra_odds - INFO - JRAオッズのダミー生成を開始: 2023010501
+2025-11-11 10:24:52,215 - src.modules.preparing._scrape_jra_odds - INFO - ダミーオッズデータを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\json\jra_odds\2023010501_snapshot_20251111T102452+0900_sha256=da11d854.json
+2025-11-11 10:24:52,217 - src.modules.preparing._scrape_jra_odds - INFO - メタデータをデータベースに保存しました: https://www.jra.go.jp/dummy/odds/2023010501
+2025-11-11 10:24:52,217 - src.modules.preparing._scrape_jra_odds - INFO - JRAオッズのダミー生成を開始: 2023010502
+2025-11-11 10:24:52,219 - src.modules.preparing._scrape_jra_odds - INFO - ダミーオッズデータを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\json\jra_odds\2023010502_snapshot_20251111T102452+0900_sha256=a5c112d3.json
+2025-11-11 10:24:52,222 - src.modules.preparing._scrape_jra_odds - INFO - メタデータをデータベースに保存しました: https://www.jra.go.jp/dummy/odds/2023010502
+2025-11-11 10:24:52,222 - src.modules.preparing._scrape_jra_odds - INFO - JRAオッズのダミー生成を開始: 2023010701
+2025-11-11 10:24:52,223 - src.modules.preparing._scrape_jra_odds - INFO - ダミーオッズデータを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\json\jra_odds\2023010701_snapshot_20251111T102452+0900_sha256=0a4ad9d3.json
+2025-11-11 10:24:52,225 - src.modules.preparing._scrape_jra_odds - INFO - メタデータをデータベースに保存しました: https://www.jra.go.jp/dummy/odds/2023010701
+2025-11-11 10:24:52,225 - src.modules.preparing._scrape_jra_odds - INFO - JRAオッズのダミー生成を開始: 2023010702
+2025-11-11 10:24:52,226 - src.modules.preparing._scrape_jra_odds - INFO - ダミーオッズデータを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\json\jra_odds\2023010702_snapshot_20251111T102452+0900_sha256=323f114c.json
+2025-11-11 10:24:52,229 - src.modules.preparing._scrape_jra_odds - INFO - メタデータをデータベースに保存しました: https://www.jra.go.jp/dummy/odds/2023010702
+2025-11-11 10:24:52,229 - __main__ - INFO - 当日バッチ処理が完了。
+2025-11-11 10:24:52,229 - __main__ - INFO - データベース接続をクローズしました。
+2025-11-11 10:24:52,229 - __main__ - INFO - スクレイピングパイプラインが終了しました。
+2025-11-11 10:26:38,855 - __main__ - INFO - スクレイピングパイプラインを開始します...
+2025-11-11 10:26:38,856 - __main__ - INFO - 深夜バッチ処理を開始...
+2025-11-11 10:26:38,856 - src.modules.preparing._requests_utils - INFO - 開催日一覧のスクレイピングを開始します...
+2025-11-11 10:26:38,856 - src.modules.preparing._requests_utils - WARNING - scrape_kaisai_dates は現在モック実装です。
+2025-11-11 10:26:38,856 - __main__ - INFO - 取得した開催日（モック）: ['2023/01/05', '2023/01/07', '2023/01/08']
+2025-11-11 10:26:38,856 - src.modules.preparing._requests_utils - INFO - レースID一覧のスクレイピングを開始します...
+2025-11-11 10:26:38,856 - src.modules.preparing._requests_utils - WARNING - scrape_race_id_list は現在、単一の存在するレースIDを返すテスト実装です。
+2025-11-11 10:26:38,856 - __main__ - INFO - 取得したレースID（モック）: ['202305020811']
+2025-11-11 10:26:38,856 - __main__ - INFO - レース結果HTMLの取得処理を開始します。
+2025-11-11 10:26:46,979 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/race/202305020811
+2025-11-11 10:26:46,981 - __main__ - INFO - HTMLを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\html\race\race_202305020811_20251111T102646+0900_sha256=f6778e3d.html
+2025-11-11 10:26:46,988 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/race/202305020811
+2025-11-11 10:26:46,988 - __main__ - INFO - 深夜バッチ処理が完了。
+2025-11-11 10:26:46,988 - __main__ - INFO - 当日バッチ処理（オッズ取得）を開始...
+2025-11-11 10:26:46,988 - src.modules.preparing._scrape_jra_odds - INFO - JRAオッズのダミー生成を開始: 202305020811
+2025-11-11 10:26:46,990 - src.modules.preparing._scrape_jra_odds - INFO - ダミーオッズデータを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\json\jra_odds\202305020811_snapshot_20251111T102646+0900_sha256=b995c0f3.json
+2025-11-11 10:26:46,992 - src.modules.preparing._scrape_jra_odds - INFO - メタデータをデータベースに保存しました: https://www.jra.go.jp/dummy/odds/202305020811
+2025-11-11 10:26:46,992 - __main__ - INFO - 当日バッチ処理が完了。
+2025-11-11 10:26:46,992 - __main__ - INFO - データベース接続をクローズしました。
+2025-11-11 10:26:46,993 - __main__ - INFO - スクレイピングパイプラインが終了しました。
+2025-11-11 10:29:04,081 - __main__ - INFO - スクレイピングパイプラインを開始します...
+2025-11-11 10:29:04,081 - __main__ - INFO - 深夜バッチ処理を開始...
+2025-11-11 10:29:04,082 - src.modules.preparing._requests_utils - INFO - 開催日一覧のスクレイピングを開始します...
+2025-11-11 10:29:04,082 - src.modules.preparing._requests_utils - WARNING - scrape_kaisai_dates は現在モック実装です。
+2025-11-11 10:29:04,082 - __main__ - INFO - 取得した開催日（モック）: ['2023/01/05', '2023/01/07', '2023/01/08']
+2025-11-11 10:29:04,082 - src.modules.preparing._requests_utils - INFO - レースID一覧のスクレイピングを開始します...
+2025-11-11 10:29:04,082 - src.modules.preparing._requests_utils - WARNING - scrape_race_id_list は現在、単一の存在するレースIDを返すテスト実装です。
+2025-11-11 10:29:04,082 - __main__ - INFO - 取得したレースID（モック）: ['202305020811']
+2025-11-11 10:29:08,351 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/race/202305020811
+2025-11-11 10:29:08,354 - __main__ - INFO - race HTMLを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\html\race\race_202305020811_20251111T102908+0900_sha256=c90e86f1.html
+2025-11-11 10:29:08,366 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/race/202305020811
+2025-11-11 10:29:15,580 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://race.netkeiba.com/race/shutuba.html?race_id=202305020811
+2025-11-11 10:29:15,582 - __main__ - INFO - shutuba HTMLを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251111T102915+0900_sha256=0bd7bfca.html
+2025-11-11 10:29:15,588 - __main__ - INFO - メタデータをデータベースに保存しました: https://race.netkeiba.com/race/shutuba.html?race_id=202305020811
+2025-11-11 10:29:15,592 - __main__ - INFO - 深夜バッチ処理が完了。
+2025-11-11 10:29:15,592 - __main__ - INFO - 当日バッチ処理（オッズ取得）を開始...
+2025-11-11 10:29:15,592 - src.modules.preparing._scrape_jra_odds - INFO - JRAオッズのダミー生成を開始: 202305020811
+2025-11-11 10:29:15,594 - src.modules.preparing._scrape_jra_odds - INFO - ダミーオッズデータを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\json\jra_odds\202305020811_snapshot_20251111T102915+0900_sha256=f67e3533.json
+2025-11-11 10:29:15,598 - src.modules.preparing._scrape_jra_odds - INFO - メタデータをデータベースに保存しました: https://www.jra.go.jp/dummy/odds/202305020811
+2025-11-11 10:29:15,598 - __main__ - INFO - 当日バッチ処理が完了。
+2025-11-11 10:29:15,598 - __main__ - INFO - データベース接続をクローズしました。
+2025-11-11 10:29:15,599 - __main__ - INFO - スクレイピングパイプラインが終了しました。
+2025-11-11 10:33:27,811 - __main__ - INFO - スクレイピングパイプラインを開始します...
+2025-11-11 10:33:27,811 - __main__ - INFO - レース情報のスクレイピングを開始...
+2025-11-11 10:33:27,811 - src.modules.preparing._requests_utils - INFO - 開催日一覧のスクレイピングを開始します...
+2025-11-11 10:33:27,811 - src.modules.preparing._requests_utils - WARNING - scrape_kaisai_dates は現在モック実装です。
+2025-11-11 10:33:27,811 - src.modules.preparing._requests_utils - INFO - レースID一覧のスクレイピングを開始します...
+2025-11-11 10:33:27,812 - src.modules.preparing._requests_utils - WARNING - scrape_race_id_list は現在、単一の存在するレースIDを返すテスト実装です。
+2025-11-11 10:33:35,383 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/race/202305020811
+2025-11-11 10:33:35,385 - __main__ - INFO - race HTMLを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\html\race\race_202305020811_20251111T103335+0900_sha256=c90e86f1.html
+2025-11-11 10:33:35,389 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/race/202305020811
+2025-11-11 10:33:40,211 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://race.netkeiba.com/race/shutuba.html?race_id=202305020811
+2025-11-11 10:33:40,212 - __main__ - INFO - shutuba HTMLを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251111T103340+0900_sha256=0bd7bfca.html
+2025-11-11 10:33:40,215 - __main__ - INFO - メタデータをデータベースに保存しました: https://race.netkeiba.com/race/shutuba.html?race_id=202305020811
+2025-11-11 10:33:40,215 - __main__ - INFO - 出馬表から馬IDを取得...
+2025-11-11 10:33:40,215 - root - INFO - 出馬表パース開始: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251111T103340+0900_sha256=0bd7bfca.html
+2025-11-11 10:33:40,692 - root - INFO - 出馬表パース完了: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251111T103340+0900_sha256=0bd7bfca.html (16行)
+2025-11-11 10:33:40,694 - __main__ - INFO - 16頭のユニークな馬IDを取得しました。
+2025-11-11 10:33:40,694 - __main__ - INFO - 馬関連情報のスクレイピングを開始...
+2025-11-11 10:33:47,014 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/2018101871
+2025-11-11 10:33:47,019 - __main__ - INFO - horse HTMLを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\html\horse\horse_2018101871_20251111T103347+0900_sha256=fb624c27.html
+2025-11-11 10:33:47,023 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/2018101871
+2025-11-11 10:33:56,041 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/ped/2018101871
+2025-11-11 10:33:56,042 - __main__ - INFO - ped HTMLを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\html\ped\ped_2018101871_20251111T103356+0900_sha256=9b619143.html
+2025-11-11 10:33:56,045 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/ped/2018101871
+2025-11-11 10:34:04,974 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/2017103201
+2025-11-11 10:34:04,976 - __main__ - INFO - horse HTMLを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\html\horse\horse_2017103201_20251111T103404+0900_sha256=b522107e.html
+2025-11-11 10:34:04,989 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/2017103201
+2025-11-11 10:34:12,579 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/ped/2017103201
+2025-11-11 10:34:12,580 - __main__ - INFO - ped HTMLを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\html\ped\ped_2017103201_20251111T103412+0900_sha256=91a91b64.html
+2025-11-11 10:34:12,582 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/ped/2017103201
+2025-11-11 10:34:22,564 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/2018105554
+2025-11-11 10:34:22,566 - __main__ - INFO - horse HTMLを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\html\horse\horse_2018105554_20251111T103422+0900_sha256=54d3b02b.html
+2025-11-11 10:34:22,568 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/2018105554
+2025-11-11 10:34:31,706 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/ped/2018105554
+2025-11-11 10:34:31,708 - __main__ - INFO - ped HTMLを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\html\ped\ped_2018105554_20251111T103431+0900_sha256=05bf8b6c.html
+2025-11-11 10:34:31,709 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/ped/2018105554
+2025-11-11 10:34:40,062 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/2017102294
+2025-11-11 10:34:40,063 - __main__ - INFO - horse HTMLを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\html\horse\horse_2017102294_20251111T103440+0900_sha256=c07cb689.html
+2025-11-11 10:34:40,065 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/2017102294
+2025-11-11 10:34:50,322 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/ped/2017102294
+2025-11-11 10:34:50,324 - __main__ - INFO - ped HTMLを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\html\ped\ped_2017102294_20251111T103450+0900_sha256=d12ea532.html
+2025-11-11 10:34:50,326 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/ped/2017102294
+2025-11-11 10:34:53,877 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/2019105213
+2025-11-11 10:34:53,878 - __main__ - INFO - horse HTMLを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\html\horse\horse_2019105213_20251111T103453+0900_sha256=5bfeaa00.html
+2025-11-11 10:34:53,880 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/2019105213
+2025-11-11 10:34:57,197 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/ped/2019105213
+2025-11-11 10:34:57,199 - __main__ - INFO - ped HTMLを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\html\ped\ped_2019105213_20251111T103457+0900_sha256=67c42efe.html
+2025-11-11 10:34:57,201 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/ped/2019105213
+2025-11-11 10:35:01,768 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/2018104947
+2025-11-11 10:35:01,769 - __main__ - INFO - horse HTMLを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\html\horse\horse_2018104947_20251111T103501+0900_sha256=f46d7a32.html
+2025-11-11 10:35:01,772 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/2018104947
+2025-11-11 10:35:04,738 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/ped/2018104947
+2025-11-11 10:35:04,740 - __main__ - INFO - ped HTMLを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\html\ped\ped_2018104947_20251111T103504+0900_sha256=e14e95f0.html
+2025-11-11 10:35:04,742 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/ped/2018104947
+2025-11-11 10:35:13,176 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/2019105345
+2025-11-11 10:35:13,178 - __main__ - INFO - horse HTMLを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\html\horse\horse_2019105345_20251111T103513+0900_sha256=0e9b02d6.html
+2025-11-11 10:35:13,180 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/2019105345
+2025-11-11 10:35:16,247 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/ped/2019105345
+2025-11-11 10:35:16,248 - __main__ - INFO - ped HTMLを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\html\ped\ped_2019105345_20251111T103516+0900_sha256=4d4ff782.html
+2025-11-11 10:35:16,250 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/ped/2019105345
+2025-11-11 10:35:24,272 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/2019104982
+2025-11-11 10:35:24,273 - __main__ - INFO - horse HTMLを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\html\horse\horse_2019104982_20251111T103524+0900_sha256=e8313f2a.html
+2025-11-11 10:35:24,276 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/2019104982
+2025-11-11 10:35:32,429 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/ped/2019104982
+2025-11-11 10:35:32,436 - __main__ - INFO - ped HTMLを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\html\ped\ped_2019104982_20251111T103532+0900_sha256=a57f214a.html
+2025-11-11 10:35:32,438 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/ped/2019104982
+2025-11-11 10:35:37,883 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/2019104057
+2025-11-11 10:35:37,885 - __main__ - INFO - horse HTMLを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\html\horse\horse_2019104057_20251111T103537+0900_sha256=8eb7a8d3.html
+2025-11-11 10:35:37,889 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/2019104057
+2025-11-11 10:35:44,283 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/ped/2019104057
+2025-11-11 10:35:44,285 - __main__ - INFO - ped HTMLを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\html\ped\ped_2019104057_20251111T103544+0900_sha256=10cd9243.html
+2025-11-11 10:35:44,288 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/ped/2019104057
+2025-11-11 10:35:48,757 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/2017110144
+2025-11-11 10:35:48,758 - __main__ - INFO - horse HTMLを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\html\horse\horse_2017110144_20251111T103548+0900_sha256=577b7825.html
+2025-11-11 10:35:48,762 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/2017110144
+2025-11-11 10:35:53,153 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/ped/2017110144
+2025-11-11 10:35:53,155 - __main__ - INFO - ped HTMLを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\html\ped\ped_2017110144_20251111T103553+0900_sha256=6b039648.html
+2025-11-11 10:35:53,158 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/ped/2017110144
+2025-11-11 10:35:58,873 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/2018105020
+2025-11-11 10:35:58,875 - __main__ - INFO - horse HTMLを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\html\horse\horse_2018105020_20251111T103558+0900_sha256=0dbb20e7.html
+2025-11-11 10:35:58,877 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/2018105020
+2025-11-11 10:36:06,634 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/ped/2018105020
+2025-11-11 10:36:06,636 - __main__ - INFO - ped HTMLを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\html\ped\ped_2018105020_20251111T103606+0900_sha256=60e3da0a.html
+2025-11-11 10:36:06,638 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/ped/2018105020
+2025-11-11 10:36:10,271 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/2018105355
+2025-11-11 10:36:10,273 - __main__ - INFO - horse HTMLを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\html\horse\horse_2018105355_20251111T103610+0900_sha256=e3ca2bbf.html
+2025-11-11 10:36:10,276 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/2018105355
+2025-11-11 10:36:13,312 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/ped/2018105355
+2025-11-11 10:36:13,313 - __main__ - INFO - ped HTMLを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\html\ped\ped_2018105355_20251111T103613+0900_sha256=f2d294f1.html
+2025-11-11 10:36:13,316 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/ped/2018105355
+2025-11-11 10:36:17,282 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/2019105565
+2025-11-11 10:36:17,285 - __main__ - INFO - horse HTMLを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\html\horse\horse_2019105565_20251111T103617+0900_sha256=0684a5a7.html
+2025-11-11 10:36:17,288 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/2019105565
+2025-11-11 10:36:24,403 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/ped/2019105565
+2025-11-11 10:36:24,404 - __main__ - INFO - ped HTMLを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\html\ped\ped_2019105565_20251111T103624+0900_sha256=4c6cf0c2.html
+2025-11-11 10:36:24,406 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/ped/2019105565
+2025-11-11 10:36:34,266 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/2019103753
+2025-11-11 10:36:34,268 - __main__ - INFO - horse HTMLを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\html\horse\horse_2019103753_20251111T103634+0900_sha256=b6b0f3ac.html
+2025-11-11 10:36:34,270 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/2019103753
+2025-11-11 10:36:43,520 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/ped/2019103753
+2025-11-11 10:36:43,521 - __main__ - INFO - ped HTMLを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\html\ped\ped_2019103753_20251111T103643+0900_sha256=f394243b.html
+2025-11-11 10:36:43,525 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/ped/2019103753
+2025-11-11 10:36:47,395 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/2019104740
+2025-11-11 10:36:47,397 - __main__ - INFO - horse HTMLを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\html\horse\horse_2019104740_20251111T103647+0900_sha256=5813cbe9.html
+2025-11-11 10:36:47,399 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/2019104740
+2025-11-11 10:36:57,060 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/ped/2019104740
+2025-11-11 10:36:57,062 - __main__ - INFO - ped HTMLを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\html\ped\ped_2019104740_20251111T103657+0900_sha256=eb1745ad.html
+2025-11-11 10:36:57,065 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/ped/2019104740
+2025-11-11 10:37:05,099 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/2018105233
+2025-11-11 10:37:05,100 - __main__ - INFO - horse HTMLを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\html\horse\horse_2018105233_20251111T103705+0900_sha256=4e8a8be8.html
+2025-11-11 10:37:05,102 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/2018105233
+2025-11-11 10:37:09,624 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/ped/2018105233
+2025-11-11 10:37:09,626 - __main__ - INFO - ped HTMLを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\html\ped\ped_2018105233_20251111T103709+0900_sha256=afd83162.html
+2025-11-11 10:37:09,629 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/ped/2018105233
+2025-11-11 10:37:09,629 - __main__ - INFO - 当日バッチ処理（オッズ取得）を開始...
+2025-11-11 10:37:09,629 - src.modules.preparing._scrape_jra_odds - INFO - JRAオッズのダミー生成を開始: 202305020811
+2025-11-11 10:37:09,631 - src.modules.preparing._scrape_jra_odds - INFO - ダミーオッズデータを保存しました: C:\Users\zk-ht\Keiba\test\keibaai\data\raw\json\jra_odds\202305020811_snapshot_20251111T103709+0900_sha256=ad721561.json
+2025-11-11 10:37:09,633 - src.modules.preparing._scrape_jra_odds - INFO - メタデータをデータベースに保存しました: https://www.jra.go.jp/dummy/odds/202305020811
+2025-11-11 10:37:09,633 - __main__ - INFO - 当日バッチ処理が完了。
+2025-11-11 10:37:09,633 - __main__ - INFO - データベース接続をクローズしました。
+2025-11-11 10:37:09,633 - __main__ - INFO - スクレイピングパイプラインが終了しました。
