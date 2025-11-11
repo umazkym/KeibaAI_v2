@@ -18,7 +18,7 @@ from .common_utils import (
     parse_horse_weight,
     parse_prize_money,
     normalize_owner_name,
-    parse_owner_odds,
+    parse_owner_odds, # この行は実際には使われなくなりますが、import文は残しておきます
 )
 
 
@@ -189,7 +189,8 @@ def parse_shutuba_row(tr, race_id: str) -> Optional[Dict]:
     # 仕様: Cell[9]は前日オッズ（"---.-"形式で表示、数値の場合もある）
     if len(cells) > 9:
         odds_text = cells[9].get_text(strip=True)
-        row_data['morning_odds'] = parse_owner_odds(odds_text)
+        # (修正箇所: parse_owner_odds -> parse_float_or_none)
+        row_data['morning_odds'] = parse_float_or_none(odds_text)
     else:
         row_data['morning_odds'] = None
 

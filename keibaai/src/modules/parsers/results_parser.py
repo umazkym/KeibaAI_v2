@@ -126,11 +126,15 @@ def parse_result_row(tr, race_id: str) -> Optional[Dict]:
     weight_text = cells[5].get_text(strip=True)
     row_data['basis_weight'] = parse_float_or_none(weight_text)
     
-    # 騎手名・騎手ID
-    jockey_link = cells[6].find('a', href=re.compile(r'/jockey/result/recent/\d+'))
+    # 騎手名・騎手ID (修正箇所: shutuba_parser.py の堅牢なロジックを採用)
+    jockey_link = cells[6].find('a', href=re.compile(r'/jockey/'))
     if jockey_link:
         row_data['jockey_name'] = jockey_link.get_text(strip=True)
-        jockey_id_match = re.search(r'/jockey/result/recent/(\d+)', jockey_link['href'])
+        # URLパターンの優先順位: /jockey/result/recent/\d+ > /jockey/\d+
+        href = jockey_link['href']
+        jockey_id_match = re.search(r'/jockey/result/recent/(\d+)', href)
+        if not jockey_id_match:
+            jockey_id_match = re.search(r'/jockey/(\d+)', href)
         row_data['jockey_id'] = jockey_id_match.group(1) if jockey_id_match else None
     else:
         row_data['jockey_name'] = cells[6].get_text(strip=True)
