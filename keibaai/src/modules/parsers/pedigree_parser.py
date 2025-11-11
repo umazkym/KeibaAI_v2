@@ -1,5 +1,5 @@
 """
-血統情報パーサ
+血統情報パーサ (修正版)
 netkeiba.com の血統ページから情報を抽出
 """
 
@@ -11,16 +11,10 @@ from pathlib import Path
 import pandas as pd
 from bs4 import BeautifulSoup
 
+
 def parse_pedigree_html(file_path: str, horse_id: str = None) -> pd.DataFrame:
     """
     血統HTMLをパースしてDataFrameを返す
-
-    Args:
-        file_path: HTMLファイルパス
-        horse_id: 馬ID
-
-    Returns:
-        5代血統のDataFrame
     """
     logging.info(f"血統情報パース開始: {file_path}")
 
@@ -46,18 +40,19 @@ def parse_pedigree_html(file_path: str, horse_id: str = None) -> pd.DataFrame:
     rows = []
 
     # 血統テーブル内のすべての馬リンクを取得
-    ancestor_links = blood_table.find_all('a', href=re.compile(r'/horse/\d+'))
+    ancestor_links = blood_table.find_all('a', href=re.compile(r'/horse/'))
 
     for link in ancestor_links:
         href = link.get('href')
-        match = re.search(r'/horse/(\d+)', href)
+        match = re.search(r'/horse/([^/]+)', href)
         if match:
-            ancestor_id = normalize_ancestor_id(match.group(1))
+            raw_id = match.group(1)
+            ancestor_id = normalize_ancestor_id(raw_id)
             ancestor_name = normalize_ancestor_name(link.get_text(strip=True))
 
-            # バリデーション: 無効なIDを除外
+            # バリデーション: 有効なIDと名前のみ追加
             if ancestor_id and ancestor_name:
-                # 重複を避ける
+                # 重複チェック
                 if not any(d.get('ancestor_id') == ancestor_id for d in rows):
                     rows.append({
                         'horse_id': horse_id,
@@ -70,16 +65,19 @@ def parse_pedigree_html(file_path: str, horse_id: str = None) -> pd.DataFrame:
 
     return df
 
+
 def normalize_ancestor_id(ancestor_id: str) -> Optional[str]:
     """
-    祖先馬IDを正規化
-    - 外国馬（netkeiba ID = "000"）を除外
-    - JRA馬ID（4-10桁の数字）のみ有効
-    - 有効なJRA ID例: 2004110007, 1991190001, 2010104155
-
+    祖先馬IDを正規化（修正版）
+    
+    修正ポイント:
+    1. 外国馬ID「000」を明示的に除外
+    2. 数字のみを抽出し、全ゼロパターンを除外
+    3. JRA馬IDの桁数チェック（4-10桁）
+    
     Args:
         ancestor_id: 生のID文字列
-
+    
     Returns:
         正規化されたID、または無効な場合はNone
     """
@@ -89,16 +87,19 @@ def normalize_ancestor_id(ancestor_id: str) -> Optional[str]:
     # 数字のみを抽出
     cleaned = re.sub(r'[^\d]', '', ancestor_id).strip()
 
-    # 空の場合
     if not cleaned:
         return None
 
-    # 外国馬（"000"や同等の無効パターン）を除外
-    # これらはnetkeiba上で個別情報ページがない祖先（外国生まれ等）
-    if cleaned in ['0', '00', '000', '0000', '00000', '000000', '0000000', '00000000', '000000000', '0000000000']:
+    # 外国馬（netkeiba ID = "000"）を除外
+    # これはnetkeiba上で詳細ページが存在しない祖先を示す
+    if cleaned == '000':
         return None
 
-    # JRA馬ID長チェック（通常4-10桁）
+    # 全ゼロパターンを除外（000以外の桁数でも）
+    if cleaned == '0' * len(cleaned):
+        return None
+
+    # JRA馬IDの桁数チェック（通常4-10桁）
     if len(cleaned) < 4 or len(cleaned) > 10:
         return None
 
@@ -107,28 +108,31 @@ def normalize_ancestor_id(ancestor_id: str) -> Optional[str]:
 
 def normalize_ancestor_name(name: str) -> Optional[str]:
     """
-    祖先馬名を正規化
-    - スペース/タブを統一
-    - 英名とカタカナの混在を正規化（カタカナ優先）
-
-    Args:
-        name: 生の名前文字列
-
-    Returns:
-        正規化された名前、または無効な場合はNone
+    祖先馬名を正規化（修正版）
+    
+    修正ポイント:
+    1. 複数行テキストから最初の行のみ取得
+    2. 前後のスペース除去
+    3. 空文字列チェック
+    
+    Note:
+    英名とカタカナの混在は元データの仕様なので、
+    そのまま保持します（正規化しません）
     """
     if not name:
         return None
 
-    # スペース/タブを統一（先頭後置のスペース除去）
+    # 前後のスペース除去
     name = name.strip()
 
-    # 空の場合
     if not name:
         return None
 
     # 複数行テキストから最初の行のみを取得
     name = name.split('\n')[0].strip()
+
+    if not name:
+        return None
 
     return name
 

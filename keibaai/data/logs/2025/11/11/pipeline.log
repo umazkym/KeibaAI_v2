@@ -397,3 +397,33 @@ KeyError: 'retry'
 2025-11-11 10:37:09,633 - __main__ - INFO - 当日バッチ処理が完了。
 2025-11-11 10:37:09,633 - __main__ - INFO - データベース接続をクローズしました。
 2025-11-11 10:37:09,633 - __main__ - INFO - スクレイピングパイプラインが終了しました。
+2025-11-11 22:44:04,335 - __main__ - INFO - スクレイピングパイプラインを開始します...
+2025-11-11 22:44:04,335 - __main__ - INFO - レース情報のスクレイピングを開始...
+2025-11-11 22:44:04,336 - src.modules.preparing._requests_utils - INFO - 開催日一覧のスクレイピングを開始します...
+2025-11-11 22:44:04,336 - src.modules.preparing._requests_utils - WARNING - scrape_kaisai_dates は現在モック実装です。
+2025-11-11 22:44:04,336 - src.modules.preparing._requests_utils - INFO - レースID一覧のスクレイピングを開始します...
+2025-11-11 22:44:04,336 - src.modules.preparing._requests_utils - WARNING - scrape_race_id_list は現在、単一の存在するレースIDを返すテスト実装です。
+2025-11-11 22:44:08,135 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/race/202305020811
+2025-11-11 22:44:08,137 - __main__ - INFO - race HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251111T224408+0900_sha256=0e511e63.html
+2025-11-11 22:44:08,140 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/race/202305020811
+2025-11-11 22:44:11,580 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://race.netkeiba.com/race/shutuba.html?race_id=202305020811
+2025-11-11 22:44:11,582 - __main__ - INFO - shutuba HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251111T224411+0900_sha256=4cfeb609.html
+2025-11-11 22:44:11,584 - __main__ - INFO - メタデータをデータベースに保存しました: https://race.netkeiba.com/race/shutuba.html?race_id=202305020811
+2025-11-11 22:44:11,584 - __main__ - INFO - 出馬表から馬IDを取得...
+2025-11-11 22:44:11,584 - root - INFO - 出馬表パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251111T224411+0900_sha256=4cfeb609.html
+2025-11-11 22:44:12,056 - root - INFO - 出馬表パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251111T224411+0900_sha256=4cfeb609.html (16行)
+2025-11-11 22:44:12,057 - __main__ - INFO - 16頭のユニークな馬IDを取得しました。
+2025-11-11 22:44:12,057 - __main__ - INFO - 馬関連情報のスクレイピングを開始...
+2025-11-11 22:44:20,695 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/2018104947
+2025-11-11 22:44:20,697 - __main__ - INFO - horse HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2018104947_20251111T224420+0900_sha256=0ed38be7.html
+2025-11-11 22:44:20,701 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/2018104947
+2025-11-11 22:44:26,259 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/ped/2018104947
+2025-11-11 22:44:26,261 - __main__ - INFO - ped HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018104947_20251111T224426+0900_sha256=cdf0a167.html
+2025-11-11 22:44:26,263 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/ped/2018104947
+2025-11-11 22:44:31,669 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/2018101871
+2025-11-11 22:44:31,671 - __main__ - INFO - horse HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2018101871_20251111T224431+0900_sha256=337d9b87.html
+2025-11-11 22:44:31,675 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/2018101871
+2025-11-11 22:44:35,156 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/ped/2018101871
+2025-11-11 22:44:35,159 - __main__ - INFO - ped HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018101871_20251111T224435+0900_sha256=7568b270.html
+2025-11-11 22:44:35,162 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/ped/2018101871
+2025-11-11 22:44:44,222 - __main__ - INFO - データベース接続をクローズしました。
