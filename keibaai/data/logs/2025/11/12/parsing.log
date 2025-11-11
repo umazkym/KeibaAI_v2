@@ -1,0 +1,422 @@
+2025-11-12 01:01:13,838 - __main__ - INFO - データ整形パイプラインを開始します...
+2025-11-12 01:01:13,839 - __main__ - INFO - レース結果HTMLのパース処理を開始します。
+2025-11-12 01:01:13,840 - __main__ - INFO - 9件のレース結果HTMLファイルが見つかりました。
+2025-11-12 01:01:13,840 - root - INFO - レース結果パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_2023010501_20251111T102431+0900_sha256=06f0f78a.html
+2025-11-12 01:01:13,846 - root - ERROR - レース結果テーブルが見つかりません: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_2023010501_20251111T102431+0900_sha256=06f0f78a.html
+2025-11-12 01:01:13,847 - root - INFO - レース結果パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_2023010502_20251111T102435+0900_sha256=b007e534.html
+2025-11-12 01:01:13,854 - root - ERROR - レース結果テーブルが見つかりません: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_2023010502_20251111T102435+0900_sha256=b007e534.html
+2025-11-12 01:01:13,854 - root - INFO - レース結果パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_2023010701_20251111T102442+0900_sha256=9d291bca.html
+2025-11-12 01:01:13,861 - root - ERROR - レース結果テーブルが見つかりません: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_2023010701_20251111T102442+0900_sha256=9d291bca.html
+2025-11-12 01:01:13,861 - root - INFO - レース結果パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_2023010702_20251111T102452+0900_sha256=d6c4015e.html
+2025-11-12 01:01:13,867 - root - ERROR - レース結果テーブルが見つかりません: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_2023010702_20251111T102452+0900_sha256=d6c4015e.html
+2025-11-12 01:01:13,868 - root - INFO - レース結果パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251111T102646+0900_sha256=f6778e3d.html
+2025-11-12 01:01:13,889 - root - INFO - レース結果パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251111T102646+0900_sha256=f6778e3d.html (16行)
+2025-11-12 01:01:13,889 - root - INFO - レース結果パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251111T102908+0900_sha256=c90e86f1.html
+2025-11-12 01:01:13,909 - root - INFO - レース結果パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251111T102908+0900_sha256=c90e86f1.html (16行)
+2025-11-12 01:01:13,910 - root - INFO - レース結果パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251111T103335+0900_sha256=c90e86f1.html
+2025-11-12 01:01:13,930 - root - INFO - レース結果パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251111T103335+0900_sha256=c90e86f1.html (16行)
+2025-11-12 01:01:13,930 - root - INFO - レース結果パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251111T224408+0900_sha256=0e511e63.html
+2025-11-12 01:01:13,951 - root - INFO - レース結果パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251111T224408+0900_sha256=0e511e63.html (16行)
+2025-11-12 01:01:13,952 - root - INFO - レース結果パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251112T005748+0900_sha256=0e511e63.html
+2025-11-12 01:01:14,191 - root - INFO - レース結果パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251112T005748+0900_sha256=0e511e63.html (16行)
+2025-11-12 01:01:14,209 - __main__ - INFO - レース結果のパース結果をParquetファイルとして保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\parsed\parquet\races\races.parquet (80レコード)
+2025-11-12 01:01:14,209 - __main__ - INFO - 出馬表HTMLのパース処理を開始します。
+2025-11-12 01:01:14,210 - __main__ - INFO - 4件の出馬表HTMLファイルが見つかりました。
+2025-11-12 01:01:14,210 - root - INFO - 出馬表パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251111T102915+0900_sha256=0bd7bfca.html
+2025-11-12 01:01:14,264 - root - INFO - 出馬表パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251111T102915+0900_sha256=0bd7bfca.html (16行)
+2025-11-12 01:01:14,264 - root - INFO - 出馬表パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251111T103340+0900_sha256=0bd7bfca.html
+2025-11-12 01:01:14,297 - root - INFO - 出馬表パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251111T103340+0900_sha256=0bd7bfca.html (16行)
+2025-11-12 01:01:14,297 - root - INFO - 出馬表パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251111T224411+0900_sha256=4cfeb609.html
+2025-11-12 01:01:14,330 - root - INFO - 出馬表パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251111T224411+0900_sha256=4cfeb609.html (16行)
+2025-11-12 01:01:14,330 - root - INFO - 出馬表パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251112T005756+0900_sha256=4cfeb609.html
+2025-11-12 01:01:14,364 - root - INFO - 出馬表パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251112T005756+0900_sha256=4cfeb609.html (16行)
+2025-11-12 01:01:14,368 - __main__ - INFO - 出馬表のパース結果をParquetファイルとして保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\parsed\parquet\shutuba\shutuba.parquet (64レコード)
+2025-11-12 01:01:14,368 - __main__ - INFO - 馬プロフィールHTMLのパース処理を開始します。
+2025-11-12 01:01:14,369 - __main__ - INFO - 34件の馬プロフィールHTMLファイルが見つかりました。
+2025-11-12 01:01:14,369 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2017102294_20251111T103440+0900_sha256=c07cb689.html
+2025-11-12 01:01:14,379 - root - INFO - 馬プロフィールパース完了: 2017102294
+2025-11-12 01:01:14,379 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2017102294_20251112T005835+0900_sha256=d84df314.html
+2025-11-12 01:01:14,800 - root - INFO - 馬プロフィールパース完了: 2017102294
+2025-11-12 01:01:14,800 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2017103201_20251111T103404+0900_sha256=b522107e.html
+2025-11-12 01:01:14,810 - root - INFO - 馬プロフィールパース完了: 2017103201
+2025-11-12 01:01:14,810 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2017103201_20251112T005916+0900_sha256=58889afb.html
+2025-11-12 01:01:15,278 - root - INFO - 馬プロフィールパース完了: 2017103201
+2025-11-12 01:01:15,278 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2017110144_20251111T103548+0900_sha256=577b7825.html
+2025-11-12 01:01:15,287 - root - INFO - 馬プロフィールパース完了: 2017110144
+2025-11-12 01:01:15,287 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2017110144_20251112T010026+0900_sha256=201c80c5.html
+2025-11-12 01:01:15,761 - root - INFO - 馬プロフィールパース完了: 2017110144
+2025-11-12 01:01:15,762 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2018101871_20251111T103347+0900_sha256=fb624c27.html
+2025-11-12 01:01:15,770 - root - INFO - 馬プロフィールパース完了: 2018101871
+2025-11-12 01:01:15,771 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2018101871_20251111T224431+0900_sha256=337d9b87.html
+2025-11-12 01:01:15,809 - root - INFO - 馬プロフィールパース完了: 2018101871
+2025-11-12 01:01:15,809 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2018101871_20251112T005811+0900_sha256=4ad9800f.html
+2025-11-12 01:01:16,272 - root - INFO - 馬プロフィールパース完了: 2018101871
+2025-11-12 01:01:16,272 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2018104947_20251111T103501+0900_sha256=f46d7a32.html
+2025-11-12 01:01:16,282 - root - INFO - 馬プロフィールパース完了: 2018104947
+2025-11-12 01:01:16,282 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2018104947_20251111T224420+0900_sha256=0ed38be7.html
+2025-11-12 01:01:16,291 - root - INFO - 馬プロフィールパース完了: 2018104947
+2025-11-12 01:01:16,291 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2018104947_20251112T010013+0900_sha256=8c84f638.html
+2025-11-12 01:01:16,765 - root - INFO - 馬プロフィールパース完了: 2018104947
+2025-11-12 01:01:16,766 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2018105020_20251111T103558+0900_sha256=0dbb20e7.html
+2025-11-12 01:01:16,774 - root - INFO - 馬プロフィールパース完了: 2018105020
+2025-11-12 01:01:16,775 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2018105020_20251112T010104+0900_sha256=0b071601.html
+2025-11-12 01:01:17,245 - root - INFO - 馬プロフィールパース完了: 2018105020
+2025-11-12 01:01:17,245 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2018105233_20251111T103705+0900_sha256=4e8a8be8.html
+2025-11-12 01:01:17,254 - root - INFO - 馬プロフィールパース完了: 2018105233
+2025-11-12 01:01:17,254 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2018105233_20251112T010003+0900_sha256=d00d1034.html
+2025-11-12 01:01:17,751 - root - INFO - 馬プロフィールパース完了: 2018105233
+2025-11-12 01:01:17,752 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2018105355_20251111T103610+0900_sha256=e3ca2bbf.html
+2025-11-12 01:01:17,761 - root - INFO - 馬プロフィールパース完了: 2018105355
+2025-11-12 01:01:17,762 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2018105355_20251112T005852+0900_sha256=8ed514f7.html
+2025-11-12 01:01:18,251 - root - INFO - 馬プロフィールパース完了: 2018105355
+2025-11-12 01:01:18,251 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2018105554_20251111T103422+0900_sha256=54d3b02b.html
+2025-11-12 01:01:18,261 - root - INFO - 馬プロフィールパース完了: 2018105554
+2025-11-12 01:01:18,261 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2018105554_20251112T005907+0900_sha256=256931c4.html
+2025-11-12 01:01:18,728 - root - INFO - 馬プロフィールパース完了: 2018105554
+2025-11-12 01:01:18,728 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2019103753_20251111T103634+0900_sha256=b6b0f3ac.html
+2025-11-12 01:01:18,737 - root - INFO - 馬プロフィールパース完了: 2019103753
+2025-11-12 01:01:18,737 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2019103753_20251112T005940+0900_sha256=afff0fa3.html
+2025-11-12 01:01:19,210 - root - INFO - 馬プロフィールパース完了: 2019103753
+2025-11-12 01:01:19,210 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2019104057_20251111T103537+0900_sha256=8eb7a8d3.html
+2025-11-12 01:01:19,219 - root - INFO - 馬プロフィールパース完了: 2019104057
+2025-11-12 01:01:19,219 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2019104057_20251112T010040+0900_sha256=c03611f2.html
+2025-11-12 01:01:19,684 - root - INFO - 馬プロフィールパース完了: 2019104057
+2025-11-12 01:01:19,684 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2019104740_20251111T103647+0900_sha256=5813cbe9.html
+2025-11-12 01:01:19,694 - root - INFO - 馬プロフィールパース完了: 2019104740
+2025-11-12 01:01:19,694 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2019104740_20251112T010052+0900_sha256=fc2d6c49.html
+2025-11-12 01:01:20,226 - root - INFO - 馬プロフィールパース完了: 2019104740
+2025-11-12 01:01:20,226 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2019104982_20251111T103524+0900_sha256=e8313f2a.html
+2025-11-12 01:01:20,235 - root - INFO - 馬プロフィールパース完了: 2019104982
+2025-11-12 01:01:20,235 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2019104982_20251112T005952+0900_sha256=9579da64.html
+2025-11-12 01:01:20,722 - root - INFO - 馬プロフィールパース完了: 2019104982
+2025-11-12 01:01:20,723 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2019105213_20251111T103453+0900_sha256=5bfeaa00.html
+2025-11-12 01:01:20,731 - root - INFO - 馬プロフィールパース完了: 2019105213
+2025-11-12 01:01:20,732 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2019105213_20251112T005930+0900_sha256=48644f27.html
+2025-11-12 01:01:21,202 - root - INFO - 馬プロフィールパース完了: 2019105213
+2025-11-12 01:01:21,202 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2019105345_20251111T103513+0900_sha256=0e9b02d6.html
+2025-11-12 01:01:21,212 - root - INFO - 馬プロフィールパース完了: 2019105345
+2025-11-12 01:01:21,213 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2019105345_20251112T005803+0900_sha256=e02dd876.html
+2025-11-12 01:01:21,677 - root - INFO - 馬プロフィールパース完了: 2019105345
+2025-11-12 01:01:21,677 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2019105565_20251111T103617+0900_sha256=0684a5a7.html
+2025-11-12 01:01:21,687 - root - INFO - 馬プロフィールパース完了: 2019105565
+2025-11-12 01:01:21,687 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2019105565_20251112T005826+0900_sha256=a15c3bdc.html
+2025-11-12 01:01:22,164 - root - INFO - 馬プロフィールパース完了: 2019105565
+2025-11-12 01:01:22,166 - __main__ - INFO - 馬プロフィールのパース結果をParquetファイルとして保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\parsed\parquet\horses\horses.parquet (34レコード)
+2025-11-12 01:01:22,167 - __main__ - INFO - 血統HTMLのパース処理を開始します。
+2025-11-12 01:01:22,167 - __main__ - INFO - 34件の血統HTMLファイルが見つかりました。
+2025-11-12 01:01:22,168 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2017102294_20251111T103450+0900_sha256=d12ea532.html
+2025-11-12 01:01:22,179 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2017102294_20251111T103450+0900_sha256=d12ea532.html (53行)
+2025-11-12 01:01:22,181 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2017102294_20251112T005844+0900_sha256=85eaf494.html
+2025-11-12 01:01:22,346 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2017102294_20251112T005844+0900_sha256=85eaf494.html (53行)
+2025-11-12 01:01:22,346 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2017103201_20251111T103412+0900_sha256=91a91b64.html
+2025-11-12 01:01:22,357 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2017103201_20251111T103412+0900_sha256=91a91b64.html (52行)
+2025-11-12 01:01:22,357 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2017103201_20251112T005921+0900_sha256=3418a926.html
+2025-11-12 01:01:22,520 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2017103201_20251112T005921+0900_sha256=3418a926.html (52行)
+2025-11-12 01:01:22,520 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2017110144_20251111T103553+0900_sha256=6b039648.html
+2025-11-12 01:01:22,530 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2017110144_20251111T103553+0900_sha256=6b039648.html (48行)
+2025-11-12 01:01:22,530 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2017110144_20251112T010031+0900_sha256=cdf63e1b.html
+2025-11-12 01:01:22,693 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2017110144_20251112T010031+0900_sha256=cdf63e1b.html (48行)
+2025-11-12 01:01:22,694 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018101871_20251111T103356+0900_sha256=9b619143.html
+2025-11-12 01:01:22,705 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018101871_20251111T103356+0900_sha256=9b619143.html (55行)
+2025-11-12 01:01:22,705 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018101871_20251111T224435+0900_sha256=7568b270.html
+2025-11-12 01:01:22,717 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018101871_20251111T224435+0900_sha256=7568b270.html (55行)
+2025-11-12 01:01:22,718 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018101871_20251112T005822+0900_sha256=7568b270.html
+2025-11-12 01:01:22,879 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018101871_20251112T005822+0900_sha256=7568b270.html (55行)
+2025-11-12 01:01:22,880 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018104947_20251111T103504+0900_sha256=e14e95f0.html
+2025-11-12 01:01:22,915 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018104947_20251111T103504+0900_sha256=e14e95f0.html (52行)
+2025-11-12 01:01:22,916 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018104947_20251111T224426+0900_sha256=cdf0a167.html
+2025-11-12 01:01:22,928 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018104947_20251111T224426+0900_sha256=cdf0a167.html (52行)
+2025-11-12 01:01:22,928 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018104947_20251112T010023+0900_sha256=cdf0a167.html
+2025-11-12 01:01:23,053 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018104947_20251112T010023+0900_sha256=cdf0a167.html (52行)
+2025-11-12 01:01:23,054 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018105020_20251111T103606+0900_sha256=60e3da0a.html
+2025-11-12 01:01:23,072 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018105020_20251111T103606+0900_sha256=60e3da0a.html (54行)
+2025-11-12 01:01:23,073 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018105020_20251112T010113+0900_sha256=76351b52.html
+2025-11-12 01:01:23,246 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018105020_20251112T010113+0900_sha256=76351b52.html (54行)
+2025-11-12 01:01:23,246 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018105233_20251111T103709+0900_sha256=afd83162.html
+2025-11-12 01:01:23,261 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018105233_20251111T103709+0900_sha256=afd83162.html (55行)
+2025-11-12 01:01:23,262 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018105233_20251112T010009+0900_sha256=390b8bd3.html
+2025-11-12 01:01:23,431 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018105233_20251112T010009+0900_sha256=390b8bd3.html (55行)
+2025-11-12 01:01:23,431 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018105355_20251111T103613+0900_sha256=f2d294f1.html
+2025-11-12 01:01:23,442 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018105355_20251111T103613+0900_sha256=f2d294f1.html (53行)
+2025-11-12 01:01:23,442 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018105355_20251112T005901+0900_sha256=50d71cd9.html
+2025-11-12 01:01:23,609 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018105355_20251112T005901+0900_sha256=50d71cd9.html (53行)
+2025-11-12 01:01:23,609 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018105554_20251111T103431+0900_sha256=05bf8b6c.html
+2025-11-12 01:01:23,620 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018105554_20251111T103431+0900_sha256=05bf8b6c.html (49行)
+2025-11-12 01:01:23,620 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018105554_20251112T005912+0900_sha256=9541867f.html
+2025-11-12 01:01:23,783 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018105554_20251112T005912+0900_sha256=9541867f.html (49行)
+2025-11-12 01:01:23,784 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019103753_20251111T103643+0900_sha256=f394243b.html
+2025-11-12 01:01:23,795 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019103753_20251111T103643+0900_sha256=f394243b.html (52行)
+2025-11-12 01:01:23,795 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019103753_20251112T005949+0900_sha256=9980a381.html
+2025-11-12 01:01:23,986 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019103753_20251112T005949+0900_sha256=9980a381.html (52行)
+2025-11-12 01:01:23,986 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019104057_20251111T103544+0900_sha256=10cd9243.html
+2025-11-12 01:01:23,998 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019104057_20251111T103544+0900_sha256=10cd9243.html (57行)
+2025-11-12 01:01:23,998 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019104057_20251112T010048+0900_sha256=13515b3d.html
+2025-11-12 01:01:24,162 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019104057_20251112T010048+0900_sha256=13515b3d.html (57行)
+2025-11-12 01:01:24,162 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019104740_20251111T103657+0900_sha256=eb1745ad.html
+2025-11-12 01:01:24,174 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019104740_20251111T103657+0900_sha256=eb1745ad.html (57行)
+2025-11-12 01:01:24,174 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019104740_20251112T010101+0900_sha256=806213c3.html
+2025-11-12 01:01:24,340 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019104740_20251112T010101+0900_sha256=806213c3.html (57行)
+2025-11-12 01:01:24,341 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019104982_20251111T103532+0900_sha256=a57f214a.html
+2025-11-12 01:01:24,351 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019104982_20251111T103532+0900_sha256=a57f214a.html (50行)
+2025-11-12 01:01:24,351 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019104982_20251112T005957+0900_sha256=0a060f4a.html
+2025-11-12 01:01:24,539 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019104982_20251112T005957+0900_sha256=0a060f4a.html (50行)
+2025-11-12 01:01:24,540 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019105213_20251111T103457+0900_sha256=67c42efe.html
+2025-11-12 01:01:24,552 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019105213_20251111T103457+0900_sha256=67c42efe.html (52行)
+2025-11-12 01:01:24,552 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019105213_20251112T005933+0900_sha256=01800906.html
+2025-11-12 01:01:24,729 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019105213_20251112T005933+0900_sha256=01800906.html (52行)
+2025-11-12 01:01:24,729 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019105345_20251111T103516+0900_sha256=4d4ff782.html
+2025-11-12 01:01:24,741 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019105345_20251111T103516+0900_sha256=4d4ff782.html (54行)
+2025-11-12 01:01:24,741 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019105345_20251112T005808+0900_sha256=18089c2a.html
+2025-11-12 01:01:24,909 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019105345_20251112T005808+0900_sha256=18089c2a.html (54行)
+2025-11-12 01:01:24,909 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019105565_20251111T103624+0900_sha256=4c6cf0c2.html
+2025-11-12 01:01:24,923 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019105565_20251111T103624+0900_sha256=4c6cf0c2.html (56行)
+2025-11-12 01:01:24,923 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019105565_20251112T005830+0900_sha256=ae3c09aa.html
+2025-11-12 01:01:25,090 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019105565_20251112T005830+0900_sha256=ae3c09aa.html (56行)
+2025-11-12 01:01:25,095 - __main__ - INFO - 血統のパース結果をParquetファイルとして保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\parsed\parquet\pedigrees\pedigrees.parquet (1805レコード)
+2025-11-12 01:01:25,096 - __main__ - INFO - データベース接続をクローズしました。
+2025-11-12 01:01:25,096 - __main__ - INFO - データ整形パイプラインが終了しました。
+2025-11-12 01:21:52,430 - __main__ - INFO - データ整形パイプラインを開始します...
+2025-11-12 01:21:52,432 - __main__ - INFO - レース結果HTMLのパース処理を開始します。
+2025-11-12 01:21:52,432 - __main__ - INFO - 10件のレース結果HTMLファイルが見つかりました。
+2025-11-12 01:21:52,432 - root - INFO - レース結果パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_2023010501_20251111T102431+0900_sha256=06f0f78a.html
+2025-11-12 01:21:52,438 - root - ERROR - レース結果テーブルが見つかりません: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_2023010501_20251111T102431+0900_sha256=06f0f78a.html
+2025-11-12 01:21:52,439 - root - INFO - レース結果パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_2023010502_20251111T102435+0900_sha256=b007e534.html
+2025-11-12 01:21:52,446 - root - ERROR - レース結果テーブルが見つかりません: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_2023010502_20251111T102435+0900_sha256=b007e534.html
+2025-11-12 01:21:52,446 - root - INFO - レース結果パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_2023010701_20251111T102442+0900_sha256=9d291bca.html
+2025-11-12 01:21:52,453 - root - ERROR - レース結果テーブルが見つかりません: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_2023010701_20251111T102442+0900_sha256=9d291bca.html
+2025-11-12 01:21:52,453 - root - INFO - レース結果パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_2023010702_20251111T102452+0900_sha256=d6c4015e.html
+2025-11-12 01:21:52,460 - root - ERROR - レース結果テーブルが見つかりません: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_2023010702_20251111T102452+0900_sha256=d6c4015e.html
+2025-11-12 01:21:52,460 - root - INFO - レース結果パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251111T102646+0900_sha256=f6778e3d.html
+2025-11-12 01:21:52,480 - root - INFO - レース結果パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251111T102646+0900_sha256=f6778e3d.html (16行)
+2025-11-12 01:21:52,480 - root - INFO - レース結果パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251111T102908+0900_sha256=c90e86f1.html
+2025-11-12 01:21:52,499 - root - INFO - レース結果パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251111T102908+0900_sha256=c90e86f1.html (16行)
+2025-11-12 01:21:52,499 - root - INFO - レース結果パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251111T103335+0900_sha256=c90e86f1.html
+2025-11-12 01:21:52,519 - root - INFO - レース結果パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251111T103335+0900_sha256=c90e86f1.html (16行)
+2025-11-12 01:21:52,519 - root - INFO - レース結果パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251111T224408+0900_sha256=0e511e63.html
+2025-11-12 01:21:52,538 - root - INFO - レース結果パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251111T224408+0900_sha256=0e511e63.html (16行)
+2025-11-12 01:21:52,539 - root - INFO - レース結果パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251112T005748+0900_sha256=0e511e63.html
+2025-11-12 01:21:52,557 - root - INFO - レース結果パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251112T005748+0900_sha256=0e511e63.html (16行)
+2025-11-12 01:21:52,558 - root - INFO - レース結果パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251112T011827+0900_sha256=a0b610ef.html
+2025-11-12 01:21:52,802 - root - INFO - レース結果パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251112T011827+0900_sha256=a0b610ef.html (16行)
+2025-11-12 01:21:52,818 - __main__ - INFO - レース結果のパース結果をParquetファイルとして保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\parsed\parquet\races\races.parquet (96レコード)
+2025-11-12 01:21:52,819 - __main__ - INFO - 出馬表HTMLのパース処理を開始します。
+2025-11-12 01:21:52,820 - __main__ - INFO - 5件の出馬表HTMLファイルが見つかりました。
+2025-11-12 01:21:52,820 - root - INFO - 出馬表パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251111T102915+0900_sha256=0bd7bfca.html
+2025-11-12 01:21:52,875 - root - INFO - 出馬表パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251111T102915+0900_sha256=0bd7bfca.html (16行)
+2025-11-12 01:21:52,875 - root - INFO - 出馬表パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251111T103340+0900_sha256=0bd7bfca.html
+2025-11-12 01:21:52,908 - root - INFO - 出馬表パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251111T103340+0900_sha256=0bd7bfca.html (16行)
+2025-11-12 01:21:52,909 - root - INFO - 出馬表パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251111T224411+0900_sha256=4cfeb609.html
+2025-11-12 01:21:52,940 - root - INFO - 出馬表パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251111T224411+0900_sha256=4cfeb609.html (16行)
+2025-11-12 01:21:52,941 - root - INFO - 出馬表パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251112T005756+0900_sha256=4cfeb609.html
+2025-11-12 01:21:52,973 - root - INFO - 出馬表パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251112T005756+0900_sha256=4cfeb609.html (16行)
+2025-11-12 01:21:52,973 - root - INFO - 出馬表パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251112T011836+0900_sha256=4cfeb609.html
+2025-11-12 01:21:53,006 - root - INFO - 出馬表パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251112T011836+0900_sha256=4cfeb609.html (16行)
+2025-11-12 01:21:53,011 - __main__ - INFO - 出馬表のパース結果をParquetファイルとして保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\parsed\parquet\shutuba\shutuba.parquet (80レコード)
+2025-11-12 01:21:53,011 - __main__ - INFO - 馬プロフィールHTMLのパース処理を開始します。
+2025-11-12 01:21:53,012 - __main__ - INFO - 50件の馬プロフィールHTMLファイルが見つかりました。
+2025-11-12 01:21:53,012 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2017102294_20251111T103440+0900_sha256=c07cb689.html
+2025-11-12 01:21:53,022 - root - INFO - 馬プロフィールパース完了: 2017102294
+2025-11-12 01:21:53,022 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2017102294_20251112T005835+0900_sha256=d84df314.html
+2025-11-12 01:21:53,063 - root - INFO - 馬プロフィールパース完了: 2017102294
+2025-11-12 01:21:53,063 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2017102294_20251112T012130+0900_sha256=67f97854.html
+2025-11-12 01:21:53,410 - root - INFO - 馬プロフィールパース完了: 2017102294
+2025-11-12 01:21:53,411 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2017103201_20251111T103404+0900_sha256=b522107e.html
+2025-11-12 01:21:53,420 - root - INFO - 馬プロフィールパース完了: 2017103201
+2025-11-12 01:21:53,421 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2017103201_20251112T005916+0900_sha256=58889afb.html
+2025-11-12 01:21:53,430 - root - INFO - 馬プロフィールパース完了: 2017103201
+2025-11-12 01:21:53,430 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2017103201_20251112T011907+0900_sha256=65eeead9.html
+2025-11-12 01:21:53,896 - root - INFO - 馬プロフィールパース完了: 2017103201
+2025-11-12 01:21:53,897 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2017110144_20251111T103548+0900_sha256=577b7825.html
+2025-11-12 01:21:53,905 - root - INFO - 馬プロフィールパース完了: 2017110144
+2025-11-12 01:21:53,906 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2017110144_20251112T010026+0900_sha256=201c80c5.html
+2025-11-12 01:21:53,916 - root - INFO - 馬プロフィールパース完了: 2017110144
+2025-11-12 01:21:53,916 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2017110144_20251112T012000+0900_sha256=db8922e4.html
+2025-11-12 01:21:54,412 - root - INFO - 馬プロフィールパース完了: 2017110144
+2025-11-12 01:21:54,413 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2018101871_20251111T103347+0900_sha256=fb624c27.html
+2025-11-12 01:21:54,422 - root - INFO - 馬プロフィールパース完了: 2018101871
+2025-11-12 01:21:54,422 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2018101871_20251111T224431+0900_sha256=337d9b87.html
+2025-11-12 01:21:54,432 - root - INFO - 馬プロフィールパース完了: 2018101871
+2025-11-12 01:21:54,433 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2018101871_20251112T005811+0900_sha256=4ad9800f.html
+2025-11-12 01:21:54,442 - root - INFO - 馬プロフィールパース完了: 2018101871
+2025-11-12 01:21:54,442 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2018101871_20251112T012030+0900_sha256=26ea18fb.html
+2025-11-12 01:21:54,872 - root - INFO - 馬プロフィールパース完了: 2018101871
+2025-11-12 01:21:54,872 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2018104947_20251111T103501+0900_sha256=f46d7a32.html
+2025-11-12 01:21:54,881 - root - INFO - 馬プロフィールパース完了: 2018104947
+2025-11-12 01:21:54,881 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2018104947_20251111T224420+0900_sha256=0ed38be7.html
+2025-11-12 01:21:54,891 - root - INFO - 馬プロフィールパース完了: 2018104947
+2025-11-12 01:21:54,891 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2018104947_20251112T010013+0900_sha256=8c84f638.html
+2025-11-12 01:21:54,901 - root - INFO - 馬プロフィールパース完了: 2018104947
+2025-11-12 01:21:54,901 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2018104947_20251112T011921+0900_sha256=226e5c10.html
+2025-11-12 01:21:55,375 - root - INFO - 馬プロフィールパース完了: 2018104947
+2025-11-12 01:21:55,376 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2018105020_20251111T103558+0900_sha256=0dbb20e7.html
+2025-11-12 01:21:55,385 - root - INFO - 馬プロフィールパース完了: 2018105020
+2025-11-12 01:21:55,385 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2018105020_20251112T010104+0900_sha256=0b071601.html
+2025-11-12 01:21:55,396 - root - INFO - 馬プロフィールパース完了: 2018105020
+2025-11-12 01:21:55,396 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2018105020_20251112T012021+0900_sha256=be1a906a.html
+2025-11-12 01:21:55,839 - root - INFO - 馬プロフィールパース完了: 2018105020
+2025-11-12 01:21:55,839 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2018105233_20251111T103705+0900_sha256=4e8a8be8.html
+2025-11-12 01:21:55,848 - root - INFO - 馬プロフィールパース完了: 2018105233
+2025-11-12 01:21:55,848 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2018105233_20251112T010003+0900_sha256=d00d1034.html
+2025-11-12 01:21:55,878 - root - INFO - 馬プロフィールパース完了: 2018105233
+2025-11-12 01:21:55,878 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2018105233_20251112T012147+0900_sha256=95e7da4c.html
+2025-11-12 01:21:56,352 - root - INFO - 馬プロフィールパース完了: 2018105233
+2025-11-12 01:21:56,352 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2018105355_20251111T103610+0900_sha256=e3ca2bbf.html
+2025-11-12 01:21:56,361 - root - INFO - 馬プロフィールパース完了: 2018105355
+2025-11-12 01:21:56,361 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2018105355_20251112T005852+0900_sha256=8ed514f7.html
+2025-11-12 01:21:56,371 - root - INFO - 馬プロフィールパース完了: 2018105355
+2025-11-12 01:21:56,371 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2018105355_20251112T012113+0900_sha256=0a45bd2f.html
+2025-11-12 01:21:56,846 - root - INFO - 馬プロフィールパース完了: 2018105355
+2025-11-12 01:21:56,847 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2018105554_20251111T103422+0900_sha256=54d3b02b.html
+2025-11-12 01:21:56,856 - root - INFO - 馬プロフィールパース完了: 2018105554
+2025-11-12 01:21:56,856 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2018105554_20251112T005907+0900_sha256=256931c4.html
+2025-11-12 01:21:56,865 - root - INFO - 馬プロフィールパース完了: 2018105554
+2025-11-12 01:21:56,866 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2018105554_20251112T012123+0900_sha256=6aa4a217.html
+2025-11-12 01:21:57,351 - root - INFO - 馬プロフィールパース完了: 2018105554
+2025-11-12 01:21:57,352 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2019103753_20251111T103634+0900_sha256=b6b0f3ac.html
+2025-11-12 01:21:57,360 - root - INFO - 馬プロフィールパース完了: 2019103753
+2025-11-12 01:21:57,360 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2019103753_20251112T005940+0900_sha256=afff0fa3.html
+2025-11-12 01:21:57,370 - root - INFO - 馬プロフィールパース完了: 2019103753
+2025-11-12 01:21:57,370 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2019103753_20251112T011852+0900_sha256=a92cf769.html
+2025-11-12 01:21:57,839 - root - INFO - 馬プロフィールパース完了: 2019103753
+2025-11-12 01:21:57,839 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2019104057_20251111T103537+0900_sha256=8eb7a8d3.html
+2025-11-12 01:21:57,848 - root - INFO - 馬プロフィールパース完了: 2019104057
+2025-11-12 01:21:57,848 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2019104057_20251112T010040+0900_sha256=c03611f2.html
+2025-11-12 01:21:57,859 - root - INFO - 馬プロフィールパース完了: 2019104057
+2025-11-12 01:21:57,859 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2019104057_20251112T012042+0900_sha256=4331c29e.html
+2025-11-12 01:21:58,319 - root - INFO - 馬プロフィールパース完了: 2019104057
+2025-11-12 01:21:58,320 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2019104740_20251111T103647+0900_sha256=5813cbe9.html
+2025-11-12 01:21:58,331 - root - INFO - 馬プロフィールパース完了: 2019104740
+2025-11-12 01:21:58,331 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2019104740_20251112T010052+0900_sha256=fc2d6c49.html
+2025-11-12 01:21:58,340 - root - INFO - 馬プロフィールパース完了: 2019104740
+2025-11-12 01:21:58,341 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2019104740_20251112T011934+0900_sha256=208c3a61.html
+2025-11-12 01:21:58,772 - root - INFO - 馬プロフィールパース完了: 2019104740
+2025-11-12 01:21:58,772 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2019104982_20251111T103524+0900_sha256=e8313f2a.html
+2025-11-12 01:21:58,781 - root - INFO - 馬プロフィールパース完了: 2019104982
+2025-11-12 01:21:58,781 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2019104982_20251112T005952+0900_sha256=9579da64.html
+2025-11-12 01:21:58,792 - root - INFO - 馬プロフィールパース完了: 2019104982
+2025-11-12 01:21:58,792 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2019104982_20251112T011842+0900_sha256=90cd2d7f.html
+2025-11-12 01:21:59,276 - root - INFO - 馬プロフィールパース完了: 2019104982
+2025-11-12 01:21:59,276 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2019105213_20251111T103453+0900_sha256=5bfeaa00.html
+2025-11-12 01:21:59,285 - root - INFO - 馬プロフィールパース完了: 2019105213
+2025-11-12 01:21:59,285 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2019105213_20251112T005930+0900_sha256=48644f27.html
+2025-11-12 01:21:59,295 - root - INFO - 馬プロフィールパース完了: 2019105213
+2025-11-12 01:21:59,296 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2019105213_20251112T012052+0900_sha256=0b5acba3.html
+2025-11-12 01:21:59,762 - root - INFO - 馬プロフィールパース完了: 2019105213
+2025-11-12 01:21:59,762 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2019105345_20251111T103513+0900_sha256=0e9b02d6.html
+2025-11-12 01:21:59,772 - root - INFO - 馬プロフィールパース完了: 2019105345
+2025-11-12 01:21:59,772 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2019105345_20251112T005803+0900_sha256=e02dd876.html
+2025-11-12 01:21:59,782 - root - INFO - 馬プロフィールパース完了: 2019105345
+2025-11-12 01:21:59,782 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2019105345_20251112T012011+0900_sha256=bcd01bdf.html
+2025-11-12 01:22:00,249 - root - INFO - 馬プロフィールパース完了: 2019105345
+2025-11-12 01:22:00,249 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2019105565_20251111T103617+0900_sha256=0684a5a7.html
+2025-11-12 01:22:00,258 - root - INFO - 馬プロフィールパース完了: 2019105565
+2025-11-12 01:22:00,259 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2019105565_20251112T005826+0900_sha256=a15c3bdc.html
+2025-11-12 01:22:00,270 - root - INFO - 馬プロフィールパース完了: 2019105565
+2025-11-12 01:22:00,270 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2019105565_20251112T011944+0900_sha256=bab09861.html
+2025-11-12 01:22:00,750 - root - INFO - 馬プロフィールパース完了: 2019105565
+2025-11-12 01:22:00,753 - __main__ - INFO - 馬プロフィールのパース結果をParquetファイルとして保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\parsed\parquet\horses\horses.parquet (50レコード)
+2025-11-12 01:22:00,753 - __main__ - INFO - 血統HTMLのパース処理を開始します。
+2025-11-12 01:22:00,754 - __main__ - INFO - 50件の血統HTMLファイルが見つかりました。
+2025-11-12 01:22:00,754 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2017102294_20251111T103450+0900_sha256=d12ea532.html
+2025-11-12 01:22:00,765 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2017102294_20251111T103450+0900_sha256=d12ea532.html (53行)
+2025-11-12 01:22:00,766 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2017102294_20251112T005844+0900_sha256=85eaf494.html
+2025-11-12 01:22:00,777 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2017102294_20251112T005844+0900_sha256=85eaf494.html (53行)
+2025-11-12 01:22:00,778 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2017102294_20251112T012138+0900_sha256=85eaf494.html
+2025-11-12 01:22:00,944 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2017102294_20251112T012138+0900_sha256=85eaf494.html (53行)
+2025-11-12 01:22:00,944 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2017103201_20251111T103412+0900_sha256=91a91b64.html
+2025-11-12 01:22:00,955 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2017103201_20251111T103412+0900_sha256=91a91b64.html (52行)
+2025-11-12 01:22:00,956 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2017103201_20251112T005921+0900_sha256=3418a926.html
+2025-11-12 01:22:00,968 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2017103201_20251112T005921+0900_sha256=3418a926.html (52行)
+2025-11-12 01:22:00,968 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2017103201_20251112T011911+0900_sha256=3418a926.html
+2025-11-12 01:22:01,132 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2017103201_20251112T011911+0900_sha256=3418a926.html (52行)
+2025-11-12 01:22:01,133 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2017110144_20251111T103553+0900_sha256=6b039648.html
+2025-11-12 01:22:01,142 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2017110144_20251111T103553+0900_sha256=6b039648.html (48行)
+2025-11-12 01:22:01,142 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2017110144_20251112T010031+0900_sha256=cdf63e1b.html
+2025-11-12 01:22:01,176 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2017110144_20251112T010031+0900_sha256=cdf63e1b.html (48行)
+2025-11-12 01:22:01,176 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2017110144_20251112T012007+0900_sha256=cdf63e1b.html
+2025-11-12 01:22:01,341 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2017110144_20251112T012007+0900_sha256=cdf63e1b.html (48行)
+2025-11-12 01:22:01,341 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018101871_20251111T103356+0900_sha256=9b619143.html
+2025-11-12 01:22:01,352 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018101871_20251111T103356+0900_sha256=9b619143.html (55行)
+2025-11-12 01:22:01,352 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018101871_20251111T224435+0900_sha256=7568b270.html
+2025-11-12 01:22:01,366 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018101871_20251111T224435+0900_sha256=7568b270.html (55行)
+2025-11-12 01:22:01,366 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018101871_20251112T005822+0900_sha256=7568b270.html
+2025-11-12 01:22:01,377 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018101871_20251112T005822+0900_sha256=7568b270.html (55行)
+2025-11-12 01:22:01,378 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018101871_20251112T012036+0900_sha256=4fc56ab1.html
+2025-11-12 01:22:01,544 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018101871_20251112T012036+0900_sha256=4fc56ab1.html (55行)
+2025-11-12 01:22:01,544 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018104947_20251111T103504+0900_sha256=e14e95f0.html
+2025-11-12 01:22:01,555 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018104947_20251111T103504+0900_sha256=e14e95f0.html (52行)
+2025-11-12 01:22:01,555 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018104947_20251111T224426+0900_sha256=cdf0a167.html
+2025-11-12 01:22:01,570 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018104947_20251111T224426+0900_sha256=cdf0a167.html (52行)
+2025-11-12 01:22:01,570 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018104947_20251112T010023+0900_sha256=cdf0a167.html
+2025-11-12 01:22:01,582 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018104947_20251112T010023+0900_sha256=cdf0a167.html (52行)
+2025-11-12 01:22:01,582 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018104947_20251112T011927+0900_sha256=ef07c8ca.html
+2025-11-12 01:22:01,742 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018104947_20251112T011927+0900_sha256=ef07c8ca.html (52行)
+2025-11-12 01:22:01,743 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018105020_20251111T103606+0900_sha256=60e3da0a.html
+2025-11-12 01:22:01,761 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018105020_20251111T103606+0900_sha256=60e3da0a.html (54行)
+2025-11-12 01:22:01,761 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018105020_20251112T010113+0900_sha256=76351b52.html
+2025-11-12 01:22:01,781 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018105020_20251112T010113+0900_sha256=76351b52.html (54行)
+2025-11-12 01:22:01,781 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018105020_20251112T012026+0900_sha256=76351b52.html
+2025-11-12 01:22:02,027 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018105020_20251112T012026+0900_sha256=76351b52.html (54行)
+2025-11-12 01:22:02,027 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018105233_20251111T103709+0900_sha256=afd83162.html
+2025-11-12 01:22:02,042 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018105233_20251111T103709+0900_sha256=afd83162.html (55行)
+2025-11-12 01:22:02,042 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018105233_20251112T010009+0900_sha256=390b8bd3.html
+2025-11-12 01:22:02,057 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018105233_20251112T010009+0900_sha256=390b8bd3.html (55行)
+2025-11-12 01:22:02,058 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018105233_20251112T012151+0900_sha256=42d45f78.html
+2025-11-12 01:22:02,223 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018105233_20251112T012151+0900_sha256=42d45f78.html (55行)
+2025-11-12 01:22:02,223 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018105355_20251111T103613+0900_sha256=f2d294f1.html
+2025-11-12 01:22:02,236 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018105355_20251111T103613+0900_sha256=f2d294f1.html (53行)
+2025-11-12 01:22:02,236 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018105355_20251112T005901+0900_sha256=50d71cd9.html
+2025-11-12 01:22:02,247 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018105355_20251112T005901+0900_sha256=50d71cd9.html (53行)
+2025-11-12 01:22:02,247 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018105355_20251112T012118+0900_sha256=50d71cd9.html
+2025-11-12 01:22:02,415 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018105355_20251112T012118+0900_sha256=50d71cd9.html (53行)
+2025-11-12 01:22:02,416 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018105554_20251111T103431+0900_sha256=05bf8b6c.html
+2025-11-12 01:22:02,426 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018105554_20251111T103431+0900_sha256=05bf8b6c.html (49行)
+2025-11-12 01:22:02,426 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018105554_20251112T005912+0900_sha256=9541867f.html
+2025-11-12 01:22:02,438 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018105554_20251112T005912+0900_sha256=9541867f.html (49行)
+2025-11-12 01:22:02,438 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018105554_20251112T012127+0900_sha256=9541867f.html
+2025-11-12 01:22:02,600 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018105554_20251112T012127+0900_sha256=9541867f.html (49行)
+2025-11-12 01:22:02,600 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019103753_20251111T103643+0900_sha256=f394243b.html
+2025-11-12 01:22:02,611 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019103753_20251111T103643+0900_sha256=f394243b.html (52行)
+2025-11-12 01:22:02,612 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019103753_20251112T005949+0900_sha256=9980a381.html
+2025-11-12 01:22:02,624 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019103753_20251112T005949+0900_sha256=9980a381.html (52行)
+2025-11-12 01:22:02,624 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019103753_20251112T011900+0900_sha256=9980a381.html
+2025-11-12 01:22:02,787 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019103753_20251112T011900+0900_sha256=9980a381.html (52行)
+2025-11-12 01:22:02,787 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019104057_20251111T103544+0900_sha256=10cd9243.html
+2025-11-12 01:22:02,799 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019104057_20251111T103544+0900_sha256=10cd9243.html (57行)
+2025-11-12 01:22:02,799 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019104057_20251112T010048+0900_sha256=13515b3d.html
+2025-11-12 01:22:02,836 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019104057_20251112T010048+0900_sha256=13515b3d.html (57行)
+2025-11-12 01:22:02,836 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019104057_20251112T012049+0900_sha256=13515b3d.html
+2025-11-12 01:22:02,995 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019104057_20251112T012049+0900_sha256=13515b3d.html (57行)
+2025-11-12 01:22:02,995 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019104740_20251111T103657+0900_sha256=eb1745ad.html
+2025-11-12 01:22:03,007 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019104740_20251111T103657+0900_sha256=eb1745ad.html (57行)
+2025-11-12 01:22:03,007 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019104740_20251112T010101+0900_sha256=806213c3.html
+2025-11-12 01:22:03,021 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019104740_20251112T010101+0900_sha256=806213c3.html (57行)
+2025-11-12 01:22:03,021 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019104740_20251112T011940+0900_sha256=806213c3.html
+2025-11-12 01:22:03,182 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019104740_20251112T011940+0900_sha256=806213c3.html (57行)
+2025-11-12 01:22:03,182 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019104982_20251111T103532+0900_sha256=a57f214a.html
+2025-11-12 01:22:03,191 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019104982_20251111T103532+0900_sha256=a57f214a.html (50行)
+2025-11-12 01:22:03,192 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019104982_20251112T005957+0900_sha256=0a060f4a.html
+2025-11-12 01:22:03,204 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019104982_20251112T005957+0900_sha256=0a060f4a.html (50行)
+2025-11-12 01:22:03,204 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019104982_20251112T011848+0900_sha256=0a060f4a.html
+2025-11-12 01:22:03,364 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019104982_20251112T011848+0900_sha256=0a060f4a.html (50行)
+2025-11-12 01:22:03,364 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019105213_20251111T103457+0900_sha256=67c42efe.html
+2025-11-12 01:22:03,377 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019105213_20251111T103457+0900_sha256=67c42efe.html (52行)
+2025-11-12 01:22:03,377 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019105213_20251112T005933+0900_sha256=01800906.html
+2025-11-12 01:22:03,389 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019105213_20251112T005933+0900_sha256=01800906.html (52行)
+2025-11-12 01:22:03,389 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019105213_20251112T012103+0900_sha256=01800906.html
+2025-11-12 01:22:03,553 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019105213_20251112T012103+0900_sha256=01800906.html (52行)
+2025-11-12 01:22:03,554 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019105345_20251111T103516+0900_sha256=4d4ff782.html
+2025-11-12 01:22:03,568 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019105345_20251111T103516+0900_sha256=4d4ff782.html (54行)
+2025-11-12 01:22:03,568 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019105345_20251112T005808+0900_sha256=18089c2a.html
+2025-11-12 01:22:03,579 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019105345_20251112T005808+0900_sha256=18089c2a.html (54行)
+2025-11-12 01:22:03,580 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019105345_20251112T012014+0900_sha256=18089c2a.html
+2025-11-12 01:22:03,745 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019105345_20251112T012014+0900_sha256=18089c2a.html (54行)
+2025-11-12 01:22:03,745 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019105565_20251111T103624+0900_sha256=4c6cf0c2.html
+2025-11-12 01:22:03,780 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019105565_20251111T103624+0900_sha256=4c6cf0c2.html (56行)
+2025-11-12 01:22:03,780 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019105565_20251112T005830+0900_sha256=ae3c09aa.html
+2025-11-12 01:22:03,794 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019105565_20251112T005830+0900_sha256=ae3c09aa.html (56行)
+2025-11-12 01:22:03,794 - root - INFO - 血統情報パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019105565_20251112T011953+0900_sha256=3961b502.html
+2025-11-12 01:22:03,960 - root - INFO - 血統情報パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019105565_20251112T011953+0900_sha256=3961b502.html (56行)
+2025-11-12 01:22:03,966 - __main__ - INFO - 血統のパース結果をParquetファイルとして保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\parsed\parquet\pedigrees\pedigrees.parquet (2654レコード)
+2025-11-12 01:22:03,966 - __main__ - INFO - データベース接続をクローズしました。
+2025-11-12 01:22:03,966 - __main__ - INFO - データ整形パイプラインが終了しました。
