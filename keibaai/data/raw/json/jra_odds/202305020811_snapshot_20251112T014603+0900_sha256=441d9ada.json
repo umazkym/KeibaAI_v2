@@ -1,0 +1,157 @@
+{
+  "race_id": "202305020811",
+  "snapshot_time": "2025-11-12T01:46:03.995406+09:00",
+  "source": "jra_official_dummy",
+  "market": {
+    "win": {
+      "1": {
+        "odds": 27.0,
+        "popularity": 1
+      },
+      "2": {
+        "odds": 37.0,
+        "popularity": 2
+      },
+      "3": {
+        "odds": 88.5,
+        "popularity": 3
+      },
+      "4": {
+        "odds": 49.9,
+        "popularity": 4
+      },
+      "5": {
+        "odds": 89.1,
+        "popularity": 5
+      },
+      "6": {
+        "odds": 9.6,
+        "popularity": 6
+      },
+      "7": {
+        "odds": 75.9,
+        "popularity": 7
+      },
+      "8": {
+        "odds": 34.4,
+        "popularity": 8
+      },
+      "9": {
+        "odds": 91.5,
+        "popularity": 9
+      },
+      "10": {
+        "odds": 38.0,
+        "popularity": 10
+      },
+      "11": {
+        "odds": 54.6,
+        "popularity": 11
+      },
+      "12": {
+        "odds": 21.8,
+        "popularity": 12
+      },
+      "13": {
+        "odds": 88.0,
+        "popularity": 13
+      },
+      "14": {
+        "odds": 93.6,
+        "popularity": 14
+      },
+      "15": {
+        "odds": 71.4,
+        "popularity": 15
+      },
+      "16": {
+        "odds": 8.5,
+        "popularity": 16
+      },
+      "17": {
+        "odds": 47.6,
+        "popularity": 17
+      },
+      "18": {
+        "odds": 55.1,
+        "popularity": 18
+      }
+    },
+    "place": {
+      "1": {
+        "odds": 5.1,
+        "popularity": 1
+      },
+      "2": {
+        "odds": 11.1,
+        "popularity": 2
+      },
+      "3": {
+        "odds": 17.6,
+        "popularity": 3
+      },
+      "4": {
+        "odds": 8.5,
+        "popularity": 4
+      },
+      "5": {
+        "odds": 14.8,
+        "popularity": 5
+      },
+      "6": {
+        "odds": 19.2,
+        "popularity": 6
+      },
+      "7": {
+        "odds": 6.4,
+        "popularity": 7
+      },
+      "8": {
+        "odds": 6.4,
+        "popularity": 8
+      },
+      "9": {
+        "odds": 8.1,
+        "popularity": 9
+      },
+      "10": {
+        "odds": 19.1,
+        "popularity": 10
+      },
+      "11": {
+        "odds": 5.9,
+        "popularity": 11
+      },
+      "12": {
+        "odds": 15.2,
+        "popularity": 12
+      },
+      "13": {
+        "odds": 9.2,
+        "popularity": 13
+      },
+      "14": {
+        "odds": 12.0,
+        "popularity": 14
+      },
+      "15": {
+        "odds": 7.9,
+        "popularity": 15
+      },
+      "16": {
+        "odds": 6.8,
+        "popularity": 16
+      },
+      "17": {
+        "odds": 5.2,
+        "popularity": 17
+      },
+      "18": {
+        "odds": 13.4,
+        "popularity": 18
+      }
+    }
+  },
+  "raw_html": "<html><body>dummy content</body></html>",
+  "data_version": "v_dummy_20250101"
+}

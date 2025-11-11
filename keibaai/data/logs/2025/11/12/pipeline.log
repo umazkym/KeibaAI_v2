@@ -238,3 +238,243 @@
 2025-11-12 01:21:51,941 - __main__ - INFO - 当日バッチ処理が完了。
 2025-11-12 01:21:51,941 - __main__ - INFO - データベース接続をクローズしました。
 2025-11-12 01:21:51,941 - __main__ - INFO - スクレイピングパイプラインが終了しました。
+2025-11-12 01:29:26,396 - __main__ - INFO - スクレイピングパイプラインを開始します...
+2025-11-12 01:29:26,397 - __main__ - INFO - レース情報のスクレイピングを開始...
+2025-11-12 01:29:26,397 - src.modules.preparing._requests_utils - INFO - 開催日一覧のスクレイピングを開始します...
+2025-11-12 01:29:26,397 - src.modules.preparing._requests_utils - WARNING - scrape_kaisai_dates は現在モック実装です。
+2025-11-12 01:29:26,397 - src.modules.preparing._requests_utils - INFO - レースID一覧のスクレイピングを開始します...
+2025-11-12 01:29:26,397 - src.modules.preparing._requests_utils - WARNING - scrape_race_id_list は現在、単一の存在するレースIDを返すテスト実装です。
+2025-11-12 01:29:33,633 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/race/202305020811
+2025-11-12 01:29:33,634 - __main__ - INFO - race HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251112T012933+0900_sha256=0e511e63.html
+2025-11-12 01:29:33,637 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/race/202305020811
+2025-11-12 01:29:40,952 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://race.netkeiba.com/race/shutuba.html?race_id=202305020811
+2025-11-12 01:29:40,954 - __main__ - INFO - shutuba HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251112T012940+0900_sha256=4cfeb609.html
+2025-11-12 01:29:40,958 - __main__ - INFO - メタデータをデータベースに保存しました: https://race.netkeiba.com/race/shutuba.html?race_id=202305020811
+2025-11-12 01:29:40,964 - __main__ - INFO - 出馬表から馬IDを取得...
+2025-11-12 01:29:40,964 - root - INFO - 出馬表パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251112T012940+0900_sha256=4cfeb609.html
+2025-11-12 01:29:41,452 - root - INFO - 出馬表パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251112T012940+0900_sha256=4cfeb609.html (16行)
+2025-11-12 01:29:41,453 - __main__ - INFO - 16頭のユニークな馬IDを取得しました。
+2025-11-12 01:29:41,453 - __main__ - INFO - 馬関連情報のスクレイピングを開始...
+2025-11-12 01:29:48,101 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/2019104057
+2025-11-12 01:29:48,103 - __main__ - INFO - horse HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2019104057_20251112T012948+0900_sha256=075d9e10.html
+2025-11-12 01:29:48,116 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/2019104057
+2025-11-12 01:29:55,834 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/ped/2019104057
+2025-11-12 01:29:55,836 - __main__ - INFO - ped HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019104057_20251112T012955+0900_sha256=13515b3d.html
+2025-11-12 01:29:55,838 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/ped/2019104057
+2025-11-12 01:30:02,930 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/2019104982
+2025-11-12 01:30:02,931 - __main__ - INFO - horse HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2019104982_20251112T013002+0900_sha256=1654075d.html
+2025-11-12 01:30:02,934 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/2019104982
+2025-11-12 01:30:10,028 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/ped/2019104982
+2025-11-12 01:30:10,030 - __main__ - INFO - ped HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019104982_20251112T013010+0900_sha256=0a060f4a.html
+2025-11-12 01:30:10,032 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/ped/2019104982
+2025-11-12 01:30:18,818 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/2017103201
+2025-11-12 01:30:18,820 - __main__ - INFO - horse HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2017103201_20251112T013018+0900_sha256=36ebc8b6.html
+2025-11-12 01:30:18,824 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/2017103201
+2025-11-12 01:30:27,945 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/ped/2017103201
+2025-11-12 01:30:27,947 - __main__ - INFO - ped HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2017103201_20251112T013027+0900_sha256=3418a926.html
+2025-11-12 01:30:27,966 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/ped/2017103201
+2025-11-12 01:30:38,065 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/2018105554
+2025-11-12 01:30:38,067 - __main__ - INFO - horse HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2018105554_20251112T013038+0900_sha256=4b74478e.html
+2025-11-12 01:30:38,071 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/2018105554
+2025-11-12 01:30:44,365 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/ped/2018105554
+2025-11-12 01:30:44,367 - __main__ - INFO - ped HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018105554_20251112T013044+0900_sha256=9541867f.html
+2025-11-12 01:30:44,379 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/ped/2018105554
+2025-11-12 01:30:52,942 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/2017102294
+2025-11-12 01:30:52,945 - __main__ - INFO - horse HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2017102294_20251112T013052+0900_sha256=fa23b92d.html
+2025-11-12 01:30:52,956 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/2017102294
+2025-11-12 01:30:56,713 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/ped/2017102294
+2025-11-12 01:30:56,715 - __main__ - INFO - ped HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2017102294_20251112T013056+0900_sha256=85eaf494.html
+2025-11-12 01:30:56,718 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/ped/2017102294
+2025-11-12 01:31:05,938 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/2018105355
+2025-11-12 01:31:05,941 - __main__ - INFO - horse HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2018105355_20251112T013105+0900_sha256=2258285d.html
+2025-11-12 01:31:05,951 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/2018105355
+2025-11-12 01:31:08,768 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/ped/2018105355
+2025-11-12 01:31:08,770 - __main__ - INFO - ped HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018105355_20251112T013108+0900_sha256=50d71cd9.html
+2025-11-12 01:31:08,773 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/ped/2018105355
+2025-11-12 01:31:14,180 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/2018101871
+2025-11-12 01:31:14,181 - __main__ - INFO - horse HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2018101871_20251112T013114+0900_sha256=e517446c.html
+2025-11-12 01:31:14,183 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/2018101871
+2025-11-12 01:31:20,956 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/ped/2018101871
+2025-11-12 01:31:20,958 - __main__ - INFO - ped HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018101871_20251112T013120+0900_sha256=7568b270.html
+2025-11-12 01:31:20,961 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/ped/2018101871
+2025-11-12 01:31:28,217 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/2019103753
+2025-11-12 01:31:28,218 - __main__ - INFO - horse HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2019103753_20251112T013128+0900_sha256=3004f84e.html
+2025-11-12 01:31:28,221 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/2019103753
+2025-11-12 01:31:35,746 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/ped/2019103753
+2025-11-12 01:31:35,748 - __main__ - INFO - ped HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019103753_20251112T013135+0900_sha256=9980a381.html
+2025-11-12 01:31:35,752 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/ped/2019103753
+2025-11-12 01:31:42,100 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/2019105565
+2025-11-12 01:31:42,102 - __main__ - INFO - horse HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2019105565_20251112T013142+0900_sha256=218f7c98.html
+2025-11-12 01:31:42,105 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/2019105565
+2025-11-12 01:31:52,020 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/ped/2019105565
+2025-11-12 01:31:52,022 - __main__ - INFO - ped HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019105565_20251112T013152+0900_sha256=ae3c09aa.html
+2025-11-12 01:31:52,025 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/ped/2019105565
+2025-11-12 01:31:56,527 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/2018104947
+2025-11-12 01:31:56,529 - __main__ - INFO - horse HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2018104947_20251112T013156+0900_sha256=aee63f48.html
+2025-11-12 01:31:56,532 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/2018104947
+2025-11-12 01:32:01,602 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/ped/2018104947
+2025-11-12 01:32:01,604 - __main__ - INFO - ped HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018104947_20251112T013201+0900_sha256=cdf0a167.html
+2025-11-12 01:32:01,617 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/ped/2018104947
+2025-11-12 01:32:05,254 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/2018105233
+2025-11-12 01:32:05,256 - __main__ - INFO - horse HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2018105233_20251112T013205+0900_sha256=bc484e59.html
+2025-11-12 01:32:05,259 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/2018105233
+2025-11-12 01:32:09,239 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/ped/2018105233
+2025-11-12 01:32:09,240 - __main__ - INFO - ped HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018105233_20251112T013209+0900_sha256=42d45f78.html
+2025-11-12 01:32:09,261 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/ped/2018105233
+2025-11-12 01:32:17,631 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/2019105213
+2025-11-12 01:32:17,633 - __main__ - INFO - horse HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2019105213_20251112T013217+0900_sha256=128a6ebc.html
+2025-11-12 01:32:17,636 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/2019105213
+2025-11-12 01:32:20,607 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/ped/2019105213
+2025-11-12 01:32:20,609 - __main__ - INFO - ped HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019105213_20251112T013220+0900_sha256=01800906.html
+2025-11-12 01:32:20,621 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/ped/2019105213
+2025-11-12 01:32:24,922 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/2017110144
+2025-11-12 01:32:24,923 - __main__ - INFO - horse HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2017110144_20251112T013224+0900_sha256=940ea41d.html
+2025-11-12 01:32:24,935 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/2017110144
+2025-11-12 01:32:35,268 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/ped/2017110144
+2025-11-12 01:32:35,270 - __main__ - INFO - ped HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2017110144_20251112T013235+0900_sha256=cdf63e1b.html
+2025-11-12 01:32:35,282 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/ped/2017110144
+2025-11-12 01:32:41,399 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/2019104740
+2025-11-12 01:32:41,400 - __main__ - INFO - horse HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2019104740_20251112T013241+0900_sha256=f88812e8.html
+2025-11-12 01:32:41,403 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/2019104740
+2025-11-12 01:32:50,384 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/ped/2019104740
+2025-11-12 01:32:50,386 - __main__ - INFO - ped HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019104740_20251112T013250+0900_sha256=806213c3.html
+2025-11-12 01:32:50,389 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/ped/2019104740
+2025-11-12 01:32:55,121 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/2019105345
+2025-11-12 01:32:55,123 - __main__ - INFO - horse HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2019105345_20251112T013255+0900_sha256=f59b4b31.html
+2025-11-12 01:32:55,126 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/2019105345
+2025-11-12 01:33:00,927 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/ped/2019105345
+2025-11-12 01:33:00,928 - __main__ - INFO - ped HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019105345_20251112T013300+0900_sha256=18089c2a.html
+2025-11-12 01:33:00,932 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/ped/2019105345
+2025-11-12 01:33:04,627 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/2018105020
+2025-11-12 01:33:04,629 - __main__ - INFO - horse HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2018105020_20251112T013304+0900_sha256=104d8ea4.html
+2025-11-12 01:33:04,632 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/2018105020
+2025-11-12 01:33:10,895 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/ped/2018105020
+2025-11-12 01:33:10,897 - __main__ - INFO - ped HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018105020_20251112T013310+0900_sha256=76351b52.html
+2025-11-12 01:33:10,900 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/ped/2018105020
+2025-11-12 01:33:10,910 - __main__ - INFO - 当日バッチ処理（オッズ取得）を開始...
+2025-11-12 01:33:10,911 - src.modules.preparing._scrape_jra_odds - INFO - JRAオッズのダミー生成を開始: 202305020811
+2025-11-12 01:33:10,913 - src.modules.preparing._scrape_jra_odds - INFO - ダミーオッズデータを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\json\jra_odds\202305020811_snapshot_20251112T013310+0900_sha256=7b524002.json
+2025-11-12 01:33:10,916 - src.modules.preparing._scrape_jra_odds - INFO - メタデータをデータベースに保存しました: https://www.jra.go.jp/dummy/odds/202305020811
+2025-11-12 01:33:10,917 - __main__ - INFO - 当日バッチ処理が完了。
+2025-11-12 01:33:10,917 - __main__ - INFO - データベース接続をクローズしました。
+2025-11-12 01:33:10,918 - __main__ - INFO - スクレイピングパイプラインが終了しました。
+2025-11-12 01:42:19,109 - __main__ - INFO - スクレイピングパイプラインを開始します...
+2025-11-12 01:42:19,109 - __main__ - INFO - レース情報のスクレイピングを開始...
+2025-11-12 01:42:19,109 - src.modules.preparing._requests_utils - INFO - 開催日一覧のスクレイピングを開始します...
+2025-11-12 01:42:19,110 - src.modules.preparing._requests_utils - WARNING - scrape_kaisai_dates は現在モック実装です。
+2025-11-12 01:42:19,110 - src.modules.preparing._requests_utils - INFO - レースID一覧のスクレイピングを開始します...
+2025-11-12 01:42:19,110 - src.modules.preparing._requests_utils - WARNING - scrape_race_id_list は現在、単一の存在するレースIDを返すテスト実装です。
+2025-11-12 01:42:28,399 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/race/202305020811
+2025-11-12 01:42:28,402 - __main__ - INFO - race HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251112T014228+0900_sha256=a0b610ef.html
+2025-11-12 01:42:28,406 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/race/202305020811
+2025-11-12 01:42:34,046 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://race.netkeiba.com/race/shutuba.html?race_id=202305020811
+2025-11-12 01:42:34,048 - __main__ - INFO - shutuba HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251112T014234+0900_sha256=4cfeb609.html
+2025-11-12 01:42:34,050 - __main__ - INFO - メタデータをデータベースに保存しました: https://race.netkeiba.com/race/shutuba.html?race_id=202305020811
+2025-11-12 01:42:34,050 - __main__ - INFO - 出馬表から馬IDを取得...
+2025-11-12 01:42:34,050 - root - INFO - 出馬表パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251112T014234+0900_sha256=4cfeb609.html
+2025-11-12 01:42:34,592 - root - INFO - 出馬表パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251112T014234+0900_sha256=4cfeb609.html (16行)
+2025-11-12 01:42:34,593 - __main__ - INFO - 16頭のユニークな馬IDを取得しました。
+2025-11-12 01:42:34,593 - __main__ - INFO - 馬関連情報のスクレイピングを開始...
+2025-11-12 01:42:40,248 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/2019105565
+2025-11-12 01:42:40,250 - __main__ - INFO - horse HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2019105565_20251112T014240+0900_sha256=542a6e72.html
+2025-11-12 01:42:40,253 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/2019105565
+2025-11-12 01:42:43,548 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/ped/2019105565
+2025-11-12 01:42:43,549 - __main__ - INFO - ped HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019105565_20251112T014243+0900_sha256=ae3c09aa.html
+2025-11-12 01:42:43,553 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/ped/2019105565
+2025-11-12 01:42:51,671 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/2018104947
+2025-11-12 01:42:51,672 - __main__ - INFO - horse HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2018104947_20251112T014251+0900_sha256=314df973.html
+2025-11-12 01:42:51,675 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/2018104947
+2025-11-12 01:42:57,889 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/ped/2018104947
+2025-11-12 01:42:57,891 - __main__ - INFO - ped HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018104947_20251112T014257+0900_sha256=cdf0a167.html
+2025-11-12 01:42:57,894 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/ped/2018104947
+2025-11-12 01:43:00,711 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/2019105345
+2025-11-12 01:43:00,713 - __main__ - INFO - horse HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2019105345_20251112T014300+0900_sha256=7d86dcae.html
+2025-11-12 01:43:00,728 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/2019105345
+2025-11-12 01:43:07,685 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/ped/2019105345
+2025-11-12 01:43:07,687 - __main__ - INFO - ped HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019105345_20251112T014307+0900_sha256=a89f9b43.html
+2025-11-12 01:43:07,690 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/ped/2019105345
+2025-11-12 01:43:10,415 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/2018105233
+2025-11-12 01:43:10,417 - __main__ - INFO - horse HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2018105233_20251112T014310+0900_sha256=783a1ade.html
+2025-11-12 01:43:10,432 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/2018105233
+2025-11-12 01:43:14,423 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/ped/2018105233
+2025-11-12 01:43:14,424 - __main__ - INFO - ped HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018105233_20251112T014314+0900_sha256=42d45f78.html
+2025-11-12 01:43:14,428 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/ped/2018105233
+2025-11-12 01:43:19,384 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/2019105213
+2025-11-12 01:43:19,387 - __main__ - INFO - horse HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2019105213_20251112T014319+0900_sha256=61e11f3b.html
+2025-11-12 01:43:19,390 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/2019105213
+2025-11-12 01:43:27,118 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/ped/2019105213
+2025-11-12 01:43:27,120 - __main__ - INFO - ped HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019105213_20251112T014327+0900_sha256=5cad2df7.html
+2025-11-12 01:43:27,130 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/ped/2019105213
+2025-11-12 01:43:30,265 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/2018101871
+2025-11-12 01:43:30,268 - __main__ - INFO - horse HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2018101871_20251112T014330+0900_sha256=1cba9e50.html
+2025-11-12 01:43:30,272 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/2018101871
+2025-11-12 01:43:39,962 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/ped/2018101871
+2025-11-12 01:43:39,964 - __main__ - INFO - ped HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018101871_20251112T014339+0900_sha256=7568b270.html
+2025-11-12 01:43:39,968 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/ped/2018101871
+2025-11-12 01:43:48,920 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/2018105020
+2025-11-12 01:43:48,922 - __main__ - INFO - horse HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2018105020_20251112T014348+0900_sha256=0b9724d5.html
+2025-11-12 01:43:48,925 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/2018105020
+2025-11-12 01:43:56,405 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/ped/2018105020
+2025-11-12 01:43:56,407 - __main__ - INFO - ped HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018105020_20251112T014356+0900_sha256=76351b52.html
+2025-11-12 01:43:56,423 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/ped/2018105020
+2025-11-12 01:44:05,782 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/2019103753
+2025-11-12 01:44:05,783 - __main__ - INFO - horse HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2019103753_20251112T014405+0900_sha256=08e5e29f.html
+2025-11-12 01:44:05,785 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/2019103753
+2025-11-12 01:44:12,357 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/ped/2019103753
+2025-11-12 01:44:12,359 - __main__ - INFO - ped HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019103753_20251112T014412+0900_sha256=9980a381.html
+2025-11-12 01:44:12,361 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/ped/2019103753
+2025-11-12 01:44:17,124 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/2019104740
+2025-11-12 01:44:17,126 - __main__ - INFO - horse HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2019104740_20251112T014417+0900_sha256=fa0d0f00.html
+2025-11-12 01:44:17,139 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/2019104740
+2025-11-12 01:44:22,911 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/ped/2019104740
+2025-11-12 01:44:22,913 - __main__ - INFO - ped HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019104740_20251112T014422+0900_sha256=806213c3.html
+2025-11-12 01:44:22,916 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/ped/2019104740
+2025-11-12 01:44:32,568 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/2017103201
+2025-11-12 01:44:32,570 - __main__ - INFO - horse HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2017103201_20251112T014432+0900_sha256=f51bb7b6.html
+2025-11-12 01:44:32,573 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/2017103201
+2025-11-12 01:44:42,640 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/ped/2017103201
+2025-11-12 01:44:42,642 - __main__ - INFO - ped HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2017103201_20251112T014442+0900_sha256=3418a926.html
+2025-11-12 01:44:42,645 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/ped/2017103201
+2025-11-12 01:44:49,944 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/2017110144
+2025-11-12 01:44:49,946 - __main__ - INFO - horse HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2017110144_20251112T014449+0900_sha256=67708dbb.html
+2025-11-12 01:44:49,959 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/2017110144
+2025-11-12 01:44:57,838 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/ped/2017110144
+2025-11-12 01:44:57,839 - __main__ - INFO - ped HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2017110144_20251112T014457+0900_sha256=9728c2fe.html
+2025-11-12 01:44:57,842 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/ped/2017110144
+2025-11-12 01:45:04,178 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/2018105554
+2025-11-12 01:45:04,180 - __main__ - INFO - horse HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2018105554_20251112T014504+0900_sha256=79376e40.html
+2025-11-12 01:45:04,183 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/2018105554
+2025-11-12 01:45:11,219 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/ped/2018105554
+2025-11-12 01:45:11,221 - __main__ - INFO - ped HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018105554_20251112T014511+0900_sha256=9541867f.html
+2025-11-12 01:45:11,224 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/ped/2018105554
+2025-11-12 01:45:14,561 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/2019104982
+2025-11-12 01:45:14,563 - __main__ - INFO - horse HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2019104982_20251112T014514+0900_sha256=e9a71317.html
+2025-11-12 01:45:14,566 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/2019104982
+2025-11-12 01:45:17,798 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/ped/2019104982
+2025-11-12 01:45:17,800 - __main__ - INFO - ped HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019104982_20251112T014517+0900_sha256=0a060f4a.html
+2025-11-12 01:45:17,803 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/ped/2019104982
+2025-11-12 01:45:27,674 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/2018105355
+2025-11-12 01:45:27,676 - __main__ - INFO - horse HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2018105355_20251112T014527+0900_sha256=69c62960.html
+2025-11-12 01:45:27,679 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/2018105355
+2025-11-12 01:45:32,733 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/ped/2018105355
+2025-11-12 01:45:32,734 - __main__ - INFO - ped HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2018105355_20251112T014532+0900_sha256=50d71cd9.html
+2025-11-12 01:45:32,737 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/ped/2018105355
+2025-11-12 01:45:38,424 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/2019104057
+2025-11-12 01:45:38,426 - __main__ - INFO - horse HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2019104057_20251112T014538+0900_sha256=b40c555d.html
+2025-11-12 01:45:38,429 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/2019104057
+2025-11-12 01:45:45,564 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/ped/2019104057
+2025-11-12 01:45:45,566 - __main__ - INFO - ped HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2019104057_20251112T014545+0900_sha256=13515b3d.html
+2025-11-12 01:45:45,569 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/ped/2019104057
+2025-11-12 01:45:55,686 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/2017102294
+2025-11-12 01:45:55,688 - __main__ - INFO - horse HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2017102294_20251112T014555+0900_sha256=e4971c0e.html
+2025-11-12 01:45:55,691 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/2017102294
+2025-11-12 01:46:03,989 - src.modules.preparing._requests_utils - INFO - Successfully fetched HTML from https://db.netkeiba.com/horse/ped/2017102294
+2025-11-12 01:46:03,992 - __main__ - INFO - ped HTMLを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\ped_2017102294_20251112T014603+0900_sha256=85eaf494.html
+2025-11-12 01:46:03,994 - __main__ - INFO - メタデータをデータベースに保存しました: https://db.netkeiba.com/horse/ped/2017102294
+2025-11-12 01:46:03,995 - __main__ - INFO - 当日バッチ処理（オッズ取得）を開始...
+2025-11-12 01:46:03,995 - src.modules.preparing._scrape_jra_odds - INFO - JRAオッズのダミー生成を開始: 202305020811
+2025-11-12 01:46:03,997 - src.modules.preparing._scrape_jra_odds - INFO - ダミーオッズデータを保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\json\jra_odds\202305020811_snapshot_20251112T014603+0900_sha256=441d9ada.json
+2025-11-12 01:46:03,999 - src.modules.preparing._scrape_jra_odds - INFO - メタデータをデータベースに保存しました: https://www.jra.go.jp/dummy/odds/202305020811
+2025-11-12 01:46:04,000 - __main__ - INFO - 当日バッチ処理が完了。
+2025-11-12 01:46:04,000 - __main__ - INFO - データベース接続をクローズしました。
+2025-11-12 01:46:04,000 - __main__ - INFO - スクレイピングパイプラインが終了しました。
