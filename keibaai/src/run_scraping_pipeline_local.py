@@ -10,36 +10,29 @@ import sys
 import pandas as pd
 import argparse
 
-# --- ▼▼▼ 修正: パス解決ロジックを他のスクリプトと統一 ▼▼▼ ---
-# スクリプト(keibaai/src/run_scraping_pipeline_local.py) の
-# 1階層上が .../keibaai/src
-# 2階層上が .../keibaai
-# 3階層上が .../Keiba_AI_v2 (execution_root)
+# --- ▼▼▼ 修正: パス解決ロジックを train_mu_model.py と統一 ▼▼▼ ---
+# スクリプト(keibaai/src/run_scraping_pipeline_local.py) の3階層上が Keiba_AI_v2 (実行ルート)
 execution_root = Path(__file__).resolve().parent.parent.parent
 # keibaai/src を sys.path に追加
 src_root = execution_root / "keibaai" / "src"
 sys.path.append(str(src_root))
 # keibaai (プロジェクトルート) も追加 (設定ファイル読み込み用)
 project_root = execution_root / "keibaai"
-sys.path.append(str(project_root))
+# sys.path.append(str(project_root)) # 読み込みは project_root を起点にするため、path追加は不要
 # --- ▲▲▲ 修正ここまで ---
 
 try:
- # --- ▼▼▼ 修正: 'src.' プレフィックスを削除 ▼▼▼ ---
- # (src_root を sys.path に追加したため)
- # (また、'modules' ディレクトリは存在しないと仮定し、
- #  'preparing' と 'parsers' は src の直下にあると推測)
- 
- # (もし 'modules' が存在する構成なら 'from modules.preparing ...' にしてください)
- from preparing import _requests_utils, _scrape_jra_odds
+ # --- ▼▼▼ 修正: 'modules.' プレフィックスを追加 ▼▼▼ ---
+ # (src_root を sys.path に追加し、構造が src/modules/preparing であるため)
+ from modules.preparing import _requests_utils, _scrape_jra_odds
  import pipeline_core
  from utils import data_utils
- from parsers import shutuba_parser
+ from modules.parsers import shutuba_parser # 'modules.' を追加
  # --- ▲▲▲ 修正ここまで ---
 except ImportError as e:
  print(f"エラー: 必要なモジュールのインポートに失敗しました: {e}")
  print("プロジェクトルート（Keiba_AI_v2）から実行しているか、")
- print(f"keibaai/src/ 配下のディレクトリ構成 (preparing, parsers, utils) を確認してください。")
+ print(f"keibaai/src/modules/ 配下に 'preparing', 'parsers' が存在するか確認してください。")
  print(f"sys.path: {sys.path}")
  sys.exit(1)
 
@@ -62,6 +55,7 @@ def load_config():
  default_cfg['database']['path'] = str(data_root / 'metadata' / 'db.sqlite3')
 
  # --- 修正: ログパスの解決を project_root 基準に変更 ---
+ # (train_mu_model.py のロジックと合わせる)
  paths_config = default_cfg.get('paths', {})
  data_path_val_from_paths = paths_config.get('data_path', 'data')
 
@@ -122,7 +116,6 @@ def scrape_and_save_html(identifier: str, data_type: str, cfg: dict, conn: sqlit
  output_dir.mkdir(parents=True, exist_ok=True)
 
  try:
-  # --- 修正: scraping_cfg を渡す ---
   response = _requests_utils.fetch_html(url, cfg['scraping'])
  
   if response is None:
@@ -189,15 +182,14 @@ def main():
 
  # 2. 設定とロギング
  cfg = load_config()
- setup_logging(cfg["default"]["logging"]["log_file_template"]) # 修正: テンプレートパスを渡す
+ setup_logging(cfg["default"]["logging"]["log_file_template"])
  log = logging.getLogger(__name__)
  log.info("スクレイピングパイプラインを開始します...")
  log.info(f"対象期間: {args.from_date} - {args.to_date}")
 
- # --- 修正: db_path を project_root 基準で解決 ---
  db_path = Path(cfg["default"]["database"]["path"])
  db_path.parent.mkdir(parents=True, exist_ok=True)
- conn = None # 修正: finally のために先に定義
+ conn = None
  try:
   conn = sqlite3.connect(db_path)
 
@@ -255,7 +247,7 @@ def main():
   # --- 5. 馬関連情報のスクレイピング ---
   log.info("馬関連情報のスクレイピングを開始...")
   for i, horse_id in enumerate(list(horse_ids), 1):
-   if horse_id: # 修正: None や空文字を除外
+   if horse_id:
     log.info(f"--- 馬 {i}/{len(horse_ids)} ({horse_id}) ---")
     scrape_and_save_html(horse_id, "horse", cfg, conn)
     scrape_and_save_html(horse_id, "ped", cfg, conn)
@@ -268,7 +260,7 @@ def main():
     log.info(f"--- オッズ {i}/{len(race_ids)} ({race_id}) ---")
     _scrape_jra_odds.scrape_and_save_jra_odds(
      race_id, cfg, conn, cfg['default']['raw_data_path']
-    )
+  D   )
    log.info("当日バッチ処理が完了。")
   else:
    log.info("JRAオッズ取得はスキップされました（設定: fetch_jra_odds_in_pipeline=False）。")

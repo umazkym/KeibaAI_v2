@@ -8,24 +8,25 @@ from datetime import datetime
 import sys
 import pandas as pd
 
-# --- ▼▼▼ 修正: パス解決ロジックを他のスクリプトと統一 ▼▼▼ ---
+# --- ▼▼▼ 修正: パス解決ロジックを train_mu_model.py と統一 ▼▼▼ ---
+# スクリプト(keibaai/src/run_parsing_pipeline_local.py) の3階層上が Keiba_AI_v2 (実行ルート)
 execution_root = Path(__file__).resolve().parent.parent.parent
 # keibaai/src を sys.path に追加
 src_root = execution_root / "keibaai" / "src"
 sys.path.append(str(src_root))
 # keibaai (プロジェクトルート) も追加 (設定ファイル読み込み用)
 project_root = execution_root / "keibaai"
-sys.path.append(str(project_root))
+# sys.path.append(str(project_root)) # 読み込みは project_root を起点にするため、path追加は不要
 # --- ▲▲▲ 修正ここまで ---
 
 try:
-    # --- ▼▼▼ 修正: 'src.' プレフィックスと 'modules' を削除 ▼▼▼ ---
+    # --- ▼▼▼ 修正: 'modules.' プレフィックスを追加 ▼▼▼ ---
     import pipeline_core
-    from parsers import results_parser, shutuba_parser, horse_info_parser, pedigree_parser
+    from modules.parsers import results_parser, shutuba_parser, horse_info_parser, pedigree_parser
     # --- ▲▲▲ 修正ここまで ---
 except ImportError as e:
     print(f"エラー: 必要なモジュールのインポートに失敗しました: {e}")
-    print(f"keibaai/src/ 配下のディレクトリ構成 (parsers, utils) を確認してください。")
+    print(f"keibaai/src/modules/ 配下に 'parsers' が存在するか確認してください。")
     print(f"sys.path: {sys.path}")
     sys.exit(1)
 
