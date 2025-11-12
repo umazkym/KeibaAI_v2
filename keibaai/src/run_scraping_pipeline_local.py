@@ -260,7 +260,7 @@ def main():
     log.info(f"--- オッズ {i}/{len(race_ids)} ({race_id}) ---")
     _scrape_jra_odds.scrape_and_save_jra_odds(
      race_id, cfg, conn, cfg['default']['raw_data_path']
-  D   )
+     )
    log.info("当日バッチ処理が完了。")
   else:
    log.info("JRAオッズ取得はスキップされました（設定: fetch_jra_odds_in_pipeline=False）。")
