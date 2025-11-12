@@ -1,360 +1,315 @@
 #!/usr/bin/env python3
-# src/features/feature_engine.py
+# src/features/generate_features.py
 """
-特徴量生成エンジン
-仕様書 6.3章 に基づく実装
+特徴量生成 実行スクリプト
+指定された日付（または期間）のパース済みデータを読み込み、
+特徴量エンジニアリングを実行し、data/features/ に保存する。
+
+仕様書 17.2 に基づく実装
+
+実行例 (日付指定):
+python src/features/generate_features.py --date 2023-10-01
+
+実行例 (期間指定):
+python src/features/generate_features.py --start_date 2023-01-01 --end_date 2023-01-31
 """
+
+import argparse
 import logging
-from typing import Dict, List, Optional
+import sys
+from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Dict, Any
+
 import pandas as pd
-import numpy as np
 import yaml
 
-class FeatureEngine:
-    """特徴量生成エンジン"""
+# --- プロジェクトルート (keibaai/) を基準にする ---
+# generate_features.py は keibaai/src/features/ にあるため、2階層上が keibaai/src/、3階層上が keibaai/
+script_dir = Path(__file__).resolve().parent  # keibaai/src/features/
+src_dir = script_dir.parent  # keibaai/src/
+project_root = src_dir.parent  # keibaai/
+
+sys.path.insert(0, str(src_dir))  # keibaai/src を追加
+
+try:
+    from pipeline_core import setup_logging, load_config
+    from utils.data_utils import load_parquet_data_by_date
+    from features.feature_engine import FeatureEngine
+except ImportError as e:
+    print(f"エラー: 必要なモジュールのインポートに失敗しました: {e}")
+    print(f"sys.path: {sys.path}")
+    sys.exit(1)
+
+
+def load_data_for_features(
+    paths_config: Dict[str, Any],
+    start_dt: datetime,
+    end_dt: datetime,
+    project_root: Path
+) -> Dict[str, pd.DataFrame]:
+    """
+    特徴量生成に必要なデータをロードする
+    仕様書 17.2 に基づく
+    """
+    logging.info("特徴量生成用のデータをロード中...")
     
-    def __init__(self, config: Dict):
-        """
-        Args:
-            config: configs/features.yaml の内容
-        """
-        self.config = config
-        self.feature_names_ = []
-        logging.info("FeatureEngine (v1.0) が初期化されました")
+    # --- 修正: プロジェクトルート (keibaai/) を基準にパスを構築 ---
+    data_path_val = paths_config.get('data_path', 'data')
+    # 修正: 'data' が 'keibaai/data' ではなく 'data' そのものを指すように
+    parsed_base_dir = project_root / data_path_val / 'parsed' / 'parquet'
+    
+    logging.info(f"データ検索パス: {parsed_base_dir}")
+    
+    # 1. 出馬表 (対象期間)
+    shutuba_dir = parsed_base_dir / 'shutuba'
+    shutuba_df = load_parquet_data_by_date(
+        shutuba_dir, start_dt, end_dt, date_col='race_date'
+    )
+    
+    if shutuba_df.empty:
+        logging.warning(f"期間 {start_dt.strftime('%Y-%m-%d')} - {end_dt.strftime('%Y-%m-%d')} の出馬表データが見つかりません。処理を中止します。")
+        return {}
+        
+    # 2. 過去成績 (全期間 - 終了日まで)
+    results_history_dir = parsed_base_dir / 'races'
+    results_history_df = load_parquet_data_by_date(
+        results_history_dir, None, end_dt, date_col='race_date'
+    ) 
 
-    def generate_features(
-        self,
-        shutuba_df: pd.DataFrame,
-        results_history_df: pd.DataFrame,
-        horse_profiles_df: pd.DataFrame,
-        pedigree_df: pd.DataFrame
-    ) -> pd.DataFrame:
-        """
-        メインの特徴量生成関数
-        
-        Args:
-            shutuba_df (pd.DataFrame): 対象レースの出馬表データ (日付フィルタ済み)
-            results_history_df (pd.DataFrame): 過去の全レース結果
-            horse_profiles_df (pd.DataFrame): 全馬のプロフィール
-            pedigree_df (pd.DataFrame): 全馬の血統データ
+    # 3. 馬プロフィール (全期間)
+    horse_profiles_dir = parsed_base_dir / 'horses'
+    horse_profiles_df = load_parquet_data_by_date(
+        horse_profiles_dir, None, None, date_col='birth_date'
+    )
 
-        Returns:
-            pd.DataFrame: 特徴量が付加されたDataFrame
-        """
-        logging.info("特徴量生成開始...")
-        
-        # (1) ベースとなる出馬表データを使用
-        df = shutuba_df.copy()
-        
-        # (2) 馬のプロフィール情報をマージ (年齢、性別など)
-        if not horse_profiles_df.empty:
-            df = df.merge(
-                horse_profiles_df,
-                on='horse_id',
-                how='left',
-                suffixes=('', '_profile')
-            )
-        
-        # (3) 基本特徴量の生成 (仕様書 6.2 basic_features)
-        df = self._add_basic_features(df)
-        
-        # (4) 過去走集約 (仕様書 6.2 past_performance_aggregation)
-        if not results_history_df.empty:
-            df = self._add_past_performance_features(df, results_history_df)
+    # 4. 血統 (全期間)
+    pedigree_dir = parsed_base_dir / 'pedigrees'
+    pedigree_df = load_parquet_data_by_date(
+        pedigree_dir, None, None, date_col=None
+    )
+    
+    logging.info("データロード完了")
+    
+    return {
+        "shutuba_df": shutuba_df,
+        "results_history_df": results_history_df,
+        "horse_profiles_df": horse_profiles_df,
+        "pedigree_df": pedigree_df
+    }
 
-        # (5) 血統特徴量 (仕様書 6.2 pedigree_features)
-        if not pedigree_df.empty:
-            df = self._add_pedigree_features(df, pedigree_df, results_history_df)
 
-        # (6) 騎手・調教師特徴量 (仕様書 6.2 jockey_trainer_features)
-        if not results_history_df.empty:
-             df = self._add_jockey_trainer_features(df, results_history_df)
+def main():
+    """メイン実行関数"""
+    parser = argparse.ArgumentParser(description='Keiba AI 特徴量生成パイプライン')
+    parser.add_argument(
+        '--date',
+        type=str,
+        help='処理対象日 (YYYY-MM-DD)。指定しない場合は期間指定が必須。'
+    )
+    parser.add_argument(
+        '--start_date',
+        type=str,
+        help='処理開始日 (YYYY-MM-DD)'
+    )
+    parser.add_argument(
+        '--end_date',
+        type=str,
+        help='処理終了日 (YYYY-MM-DD)'
+    )
+    parser.add_argument(
+        '--config',
+        type=str,
+        default='configs/default.yaml',
+        help='設定ファイルパス'
+    )
+    parser.add_argument(
+        '--features_config',
+        type=str,
+        default='configs/features.yaml',
+        help='特徴量設定ファイルパス'
+    )
+    parser.add_argument(
+        '--log_level',
+        type=str,
+        default='INFO',
+        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+        help='ログレベル'
+    )
 
-        # (7) レース内正規化 (仕様書 6.2 within_race_normalization)
-        df = self._add_relative_features(df)
-        
-        # (8) 欠損値処理 (仕様書 6.2 missing_value_strategy)
-        df = self._handle_missing_values(df)
+    args = parser.parse_args()
 
-        # (9) 特徴量リストの確定
-        self.feature_names_ = self._select_features(df)
-        
-        logging.info(f"特徴量生成完了: {len(self.feature_names_)}個の特徴量を生成")
-        
-        # 必要なカラム + 特徴量のみを返す
-        key_cols = ['race_id', 'horse_id', 'jockey_id', 'trainer_id', 'horse_number', 'race_date']
-        # (学習に必要な目的変数も残す)
-        target_cols = ['finish_position', 'finish_time_seconds', 'win_odds', 'popularity']
-        
-        final_cols = key_cols + [col for col in target_cols if col in df.columns] + self.feature_names_
-        # 重複を除外
-        final_cols = list(dict.fromkeys(final_cols))
-        
-        return df[final_cols]
+    # --- プロジェクトルート (keibaai/) を取得 ---
+    # 修正: generate_features.py は keibaai/src/features にあるため、
+    # 3階層上が Keiba_AI_v2 (実行場所)
+    project_root = Path(__file__).resolve().parent.parent.parent
 
-    def _add_basic_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        仕様書 6.2 basic_features に基づく基本特徴量の生成
-        (例: カテゴリ変数のOne-Hotエンコーディング)
-        """
-        logging.debug("基本特徴量を追加中...")
+    # --- 0. 設定とロギング ---
+    paths_config = {}
+    try:
+        # 設定ファイルのパスを keibaai/ からの相対パスとして解決
+        config_path = project_root / args.config
+        features_config_path = project_root / args.features_config
         
-        # (1) 性別 (One-Hot)
-        if 'sex' in df.columns:
-            sex_dummies = pd.get_dummies(df['sex'], prefix='sex', dtype=int)
-            df = pd.concat([df, sex_dummies], axis=1)
-
-        # (2) 斤量
-        # (basis_weight は shutuba_parser.py ですでに数値化されている)
+        logging.info(f"設定ファイルパス: {config_path}")
         
-        # (3) レース基本情報 (distance_m, track_surface, head_count, bracket_number, horse_number)
-        if 'track_surface' in df.columns:
-             track_dummies = pd.get_dummies(df['track_surface'], prefix='track', dtype=int)
-             df = pd.concat([df, track_dummies], axis=1)
-
-        # (4) 枠番 (内枠・中枠・外枠)
-        if 'bracket_number' in df.columns:
-            df['bracket_is_inner'] = df['bracket_number'].isin([1, 2, 3]).astype(int)
-            df['bracket_is_middle'] = df['bracket_number'].isin([4, 5, 6]).astype(int)
-            df['bracket_is_outer'] = df['bracket_number'].isin([7, 8]).astype(int)
-
-        return df
-
-    def _add_past_performance_features(self, df: pd.DataFrame, history_df: pd.DataFrame) -> pd.DataFrame:
-        """
-        仕様書 6.2 past_performance_aggregation に基づく過去走集約
-        """
-        logging.debug("過去走集約特徴量を追加中...")
+        default_config = load_config(str(config_path))
         
-        history = history_df.copy()
+        # data_path を取得
+        data_path_val = default_config.get('data_path', 'data')
+        paths_config = default_config.copy()
         
-        # horse_id と race_date が必要
-        if 'horse_id' not in history.columns or 'race_date' not in history.columns:
-            logging.warning("history_df に 'horse_id' または 'race_date' がないため、過去走集約をスキップします。")
-            return df
+        # ${data_path} を置換
+        for key, value in paths_config.items():
+            if isinstance(value, str):
+                paths_config[key] = value.replace('${data_path}', data_path_val)
+        
+        # ログパステンプレートを取得
+        logs_path_base = paths_config.get('logs_path', 'data/logs')
+        log_path_template = default_config.get('logging', {}).get('log_file', 'data/logs/{YYYY}/{MM}/{DD}/features.log')
+        log_path_with_base = log_path_template.replace('${logs_path}', logs_path_base)
+        
+        now = datetime.now()
+        log_path = log_path_with_base.format(YYYY=now.year, MM=f"{now.month:02}", DD=f"{now.day:02}")
+        
+        # ログファイルパスを絶対パスに変換
+        log_path_abs = project_root / log_path
+        log_path_abs.parent.mkdir(parents=True, exist_ok=True)
+
+        logging.basicConfig(
+            level=args.log_level.upper(),
+            format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+            handlers=[
+                logging.FileHandler(log_path_abs, encoding='utf-8'),
+                logging.StreamHandler(sys.stdout)
+            ],
+            force=True # 修正: 既存のロガー設定を上書き
+        )
             
-        history['race_date'] = pd.to_datetime(history['race_date']).dt.tz_localize(None)
-        
-        # 集約対象カラム
-        agg_cols = self.config.get('past_performance_aggregation', {}).get('columns', [
-            'finish_position', 'finish_time_seconds', 'margin_seconds', 'last_3f_time'
-        ])
-        
-        # 集約ウィンドウ
-        windows = self.config.get('past_performance_aggregation', {}).get('windows', [1, 3, 5])
-        
-        # horse_id ごとに過去走をソート
-        history = history.sort_values(by=['horse_id', 'race_date'], ascending=[True, False])
-        
-        # --- グローバル集約 ---
-        grouped = history.groupby('horse_id')
-        
-        for col in agg_cols:
-            if col not in history.columns:
-                continue
-            
-            # (1) Rolling Mean
-            # shift(1) を使い、今走を含めない過去N走の集約を行う
-            for w in windows:
-                feat_name = f'past_{w}_{col}_mean'
-                df[feat_name] = grouped[col].rolling(window=w, min_periods=1).mean().shift(1).reset_index(level=0, drop=True)
-
-            # (2) Total Win Rate
-            if col == 'finish_position':
-                 history['is_win'] = (history['finish_position'] == 1).astype(int)
-                 df['career_win_rate'] = grouped['is_win'].expanding().mean().shift(1).reset_index(level=0, drop=True)
-        
-        # (3) Days Since Last Race
-        df['days_since_last_race'] = grouped['race_date'].diff().dt.days.abs().shift(1).reset_index(level=0, drop=True)
-
-        return df
-
-    def _add_pedigree_features(self, df: pd.DataFrame, pedigree_df: pd.DataFrame, history_df: pd.DataFrame) -> pd.DataFrame:
-        """
-        仕様書 6.2 pedigree_features に基づく血統特徴量
-        (簡易版: Target Encoding)
-        """
-        logging.debug("血統特徴量を追加中...")
-        
-        if not self.config.get('pedigree_features', {}).get('enabled', False):
-            return df
-
-        # (1) history_df に pedigree_df をマージ
-        if 'horse_id' not in history_df.columns or 'horse_id' not in pedigree_df.columns:
-            logging.warning("血統特徴量の生成に必要な horse_id がありません。")
-            return df
-            
-        # 目的変数 (例: 賞金)
-        if 'prize_money' not in history_df.columns:
-             logging.warning("血統特徴量の生成に必要な 'prize_money' がないためスキップします。")
-             return df
-             
-        history_with_ped = history_df.merge(pedigree_df, on='horse_id', how='left')
-
-        # (2) sire_id (父) ごとに集約
-        if 'sire_id' in history_with_ped.columns:
-            sire_encoding = history_with_ped.groupby('sire_id')['prize_money'].mean().reset_index()
-            sire_encoding = sire_encoding.rename(columns={'prize_money': 'sire_target_encoding'})
-            
-            # (3) 元の df (shutuba_df) にマージ
-            #    (shutuba_df にも pedigree_df をマージしておく必要がある)
-            if 'sire_id' not in df.columns:
-                 df = df.merge(pedigree_df[['horse_id', 'sire_id', 'damsire_id']], on='horse_id', how='left')
-                 
-            df = df.merge(sire_encoding, on='sire_id', how='left')
-
-        return df
-
-    def _add_jockey_trainer_features(self, df: pd.DataFrame, history_df: pd.DataFrame) -> pd.DataFrame:
-        """
-        仕様書 6.2 jockey_trainer_features に基づく騎手・調教師特徴量
-        (簡易版: 過去の勝率)
-        """
-        logging.debug("騎手・調教師特徴量を追加中...")
-        
-        if not self.config.get('jockey_trainer_features', {}).get('enabled', False):
-            return df
-            
-        if 'jockey_id' not in history_df.columns or 'trainer_id' not in history_df.columns:
-            logging.warning("騎手・調教師特徴量の生成に必要なIDがありません。")
-            return df
-
-        history_df['is_win'] = (history_df['finish_position'] == 1).astype(int)
-
-        # (1) 騎手勝率
-        jockey_win_rate = history_df.groupby('jockey_id')['is_win'].mean().reset_index()
-        jockey_win_rate = jockey_win_rate.rename(columns={'is_win': 'jockey_win_rate'})
-        
-        # (2) 調教師勝率
-        trainer_win_rate = history_df.groupby('trainer_id')['is_win'].mean().reset_index()
-        trainer_win_rate = trainer_win_rate.rename(columns={'is_win': 'trainer_win_rate'})
-
-        # (3) df (shutuba_df) にマージ
-        df = df.merge(jockey_win_rate, on='jockey_id', how='left')
-        df = df.merge(trainer_win_rate, on='trainer_id', how='left')
-
-        return df
-
-    def _add_relative_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        仕様書 6.2 within_race_normalization に基づくレース内正規化
-        (例: Z-score)
-        """
-        logging.debug("レース内正規化特徴量を追加中...")
-        
-        if 'race_id' not in df.columns:
-             return df
-             
-        grouped = df.groupby('race_id')
-        
-        zscore_cols = self.config.get('within_race_normalization', {}).get('zscore_columns', [
-             'horse_weight', 'basis_weight'
-        ])
-        
-        for col in zscore_cols:
-            if col in df.columns:
-                feat_name = f'{col}_zscore'
-                # transform を使ってレース内のZ-scoreを計算
-                df[feat_name] = grouped[col].transform(
-                    lambda x: (x - x.mean()) / (x.std() + 1e-6)
-                )
-        
-        return df
-
-    def _handle_missing_values(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        仕様書 6.2 missing_value_strategy に基づく欠損値処理
-        """
-        logging.debug("欠損値を処理中...")
-        
-        strategy = self.config.get('missing_value_strategy', {})
-        num_strategy = strategy.get('numerical', {}).get('method', 'median')
-        
-        # 数値カラムのみを対象
-        num_cols = df.select_dtypes(include=np.number).columns
-        
-        for col in num_cols:
-            if col in ['race_id', 'horse_id', 'horse_number', 'finish_position']:
-                continue
-                
-            if num_strategy == 'median':
-                median_val = df[col].median()
-                df[col] = df[col].fillna(median_val)
-            elif num_strategy == 'mean':
-                mean_val = df[col].mean()
-                df[col] = df[col].fillna(mean_val)
-            elif num_strategy == 'zero':
-                 df[col] = df[col].fillna(0)
-        
-        return df
-
-    def _select_features(self, df: pd.DataFrame) -> List[str]:
-        """
-        最終的に使用する特徴量のリストを確定する
-        """
-        all_cols = df.columns
-        
-        # 元データ由来のカラム (キー、ターゲット、ID、文字列など)
-        exclude_cols = [
-            'race_id', 'horse_id', 'horse_number', 'horse_name', 'jockey_id', 'jockey_name',
-            'trainer_id', 'trainer_name', 'owner_name', 'sire_id', 'sire_name',
-            'dam_id', 'dam_name', 'damsire_id', 'damsire_name',
-            'finish_position', 'finish_time_str', 'margin_str', 'passing_order',
-            'race_date', 'race_date_str', 'year', 'month', 'day',
-            'sex', 'track_surface', 'track_condition', 'weather', 'sex_age', 'birth_date',
-            'coat_color', 'breeder_name', 'producing_area'
-        ]
-        
-        # 過去走集約で生成された中間カラム (shift前のもの)
-        # (この簡易実装では中間カラムは生成していない)
-
-        feature_cols = [
-            col for col in all_cols 
-            if col not in exclude_cols 
-            and not col.endswith('_profile') # マージ時の重複カラム
-        ]
-        
-        return feature_cols
-
-    def save_features(
-        self,
-        features_df: pd.DataFrame,
-        output_dir: str,
-        partition_cols: List[str]
-    ):
-        """
-        生成した特徴量をParquet形式で保存
-        """
-        output_path = Path(output_dir)
-        output_path.mkdir(parents=True, exist_ok=True)
-        
+    except Exception as e:
+        print(f"ロギングと設定の初期化に失敗しました: {e}")
+        logging.basicConfig(level=args.log_level.upper(), format='%(asctime)s [%(levelname)s] %(name)s: %(message)s')
         try:
-            # (仕様書 17.2 の実装に合わせてパーティション保存)
-            if partition_cols and all(c in features_df.columns for c in partition_cols):
-                 features_df.to_parquet(
-                    output_path,
-                    engine='pyarrow',
-                    compression='snappy',
-                    partition_cols=partition_cols,
-                    existing_data_behavior='overwrite_or_ignore'
-                )
-            else:
-                # パーティションキーがない場合は単一ファイルで保存
-                 features_df.to_parquet(
-                    output_path / "features.parquet",
-                    engine='pyarrow',
-                    compression='snappy'
-                )
-            logging.info(f"特徴量を {output_path} に保存しました")
+            with open(config_path, 'r', encoding='utf-8') as f:
+                paths_config_raw = yaml.safe_load(f)
+                
+            data_path_val = paths_config_raw.get('data_path', 'data')
+            paths_config = paths_config_raw.copy()
+            for key, value in paths_config.items():
+                if isinstance(value, str):
+                    paths_config[key] = value.replace('${data_path}', data_path_val)
 
-            # 特徴量リストを保存
-            features_list_path = output_path / "feature_names.yaml"
-            with open(features_list_path, 'w', encoding='utf-8') as f:
-                yaml.dump(self.feature_names_, f)
-            logging.info(f"特徴量リストを {features_list_path} に保存しました")
+        except FileNotFoundError:
+            logging.error(f"設定ファイルが見つかりません: {config_path}")
+            sys.exit(1)
+        except Exception as ex:
+            logging.error(f"フォールバック設定のロード中にエラー: {ex}")
+            sys.exit(1)
 
+
+    logging.info("=" * 60)
+    logging.info("Keiba AI 特徴量生成パイプライン開始")
+    logging.info("=" * 60)
+
+    try:
+        # --- 修正: encoding='utf-8' を追加 ---
+        with open(features_config_path, 'r', encoding='utf-8') as f:
+            features_config = yaml.safe_load(f)
+    except FileNotFoundError:
+        logging.error(f"特徴量設定ファイルが見つかりません: {features_config_path}")
+        sys.exit(1)
+
+    # --- 1. 日付範囲の決定 ---
+    try:
+        if args.date:
+            start_dt = datetime.strptime(args.date, '%Y-%m-%d')
+            end_dt = start_dt
+        elif args.start_date and args.end_date:
+            start_dt = datetime.strptime(args.start_date, '%Y-%m-%d')
+            end_dt = datetime.strptime(args.end_date, '%Y-%m-%d')
+        else:
+            logging.error("日付 (--date) または期間 (--start_date, --end_date) を指定してください")
+            sys.exit(1)
+            
+        logging.info(f"処理対象期間: {start_dt.strftime('%Y-%m-%d')} - {end_dt.strftime('%Y-%m-%d')}")
+            
+    except ValueError as e:
+        logging.error(f"日付フォーマットエラー: {e}")
+        sys.exit(1)
+
+    # --- 2. データロード ---
+    # 修正: project_root を渡す
+    data = load_data_for_features(paths_config, start_dt, end_dt, project_root)
+    
+    if not data:
+        logging.warning("ロード対象のデータがありませんでした。処理を終了します。")
+        logging.info("=" * 60)
+        logging.info("Keiba AI 特徴量生成パイプライン完了 (対象なし)")
+        logging.info("=" * 60)
+        sys.exit(0)
+
+    # --- 3. 特徴量エンジン初期化 ---
+    engine = FeatureEngine(config=features_config)
+
+    # --- 4. 特徴量生成 ---
+    features_df = pd.DataFrame()
+    if data:
+        try:
+            features_df = engine.generate_features(
+                shutuba_df=data["shutuba_df"],
+                results_history_df=data["results_history_df"],
+                horse_profiles_df=data["horse_profiles_df"],
+                pedigree_df=data["pedigree_df"]
+            )
         except Exception as e:
-            logging.error(f"特徴量のParquet保存に失敗: {e}")
-            if "partition_cols" in str(e):
-                 logging.error("ヒント: パーティションカラム (year, month) がDataFrameに存在するか確認してください。")
+            logging.error(f"特徴量生成中にエラーが発生しました: {e}", exc_info=True)
+            sys.exit(1)
+        
+    
+    if features_df.empty:
+        logging.warning("特徴量生成の結果が空です。")
+    else:
+        # --- 5. 特徴量保存 ---
+        output_dir_base = paths_config.get('features_path', 'data/features')
+        output_dir = project_root / output_dir_base / 'parquet'
+        partition_cols = features_config.get('output', {}).get('partition_by', ['year', 'month'])
+        
+        # 保存のために 'race_date' からパーティションカラムを生成
+        if 'race_date' in features_df.columns:
+            features_df['race_date'] = pd.to_datetime(features_df['race_date'])
+            features_df['year'] = features_df['race_date'].dt.year
+            features_df['month'] = features_df['race_date'].dt.month
+            features_df['day'] = features_df['race_date'].dt.day
+        else:
+            logging.warning("race_date カラムが特徴量にありません。パーティション分割が不正確になる可能性があります。")
+            if 'race_id' in features_df.columns:
+                try:
+                    features_df['race_date_str'] = features_df['race_id'].astype(str).str[:8]
+                    features_df['race_date'] = pd.to_datetime(features_df['race_date_str'], format='%Y%m%d', errors='coerce')
+                    
+                    if features_df['race_date'].isnull().any():
+                        logging.warning("race_id から日付への変換に失敗したレコードがあります。")
+                        valid_dates = features_df['race_date'].notnull()
+                        features_df.loc[valid_dates, 'year'] = features_df.loc[valid_dates, 'race_date'].dt.year
+                        features_df.loc[valid_dates, 'month'] = features_df.loc[valid_dates, 'race_date'].dt.month
+                        features_df.loc[valid_dates, 'day'] = features_df.loc[valid_dates, 'race_date'].dt.day
+                    else:
+                        features_df['year'] = features_df['race_date'].dt.year
+                        features_df['month'] = features_df['race_date'].dt.month
+                        features_df['day'] = features_df['race_date'].dt.day
+                         
+                except Exception as ex_date:
+                    logging.error(f"race_id から日付を復元できませんでした: {ex_date}")
+            
+        engine.save_features(
+            features_df=features_df,
+            output_dir=str(output_dir),
+            partition_cols=partition_cols
+        )
+
+    logging.info("=" * 60)
+    logging.info("Keiba AI 特徴量生成パイプライン完了")
+    logging.info("=" * 60)
+
+if __name__ == '__main__':
+    main()

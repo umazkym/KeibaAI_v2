@@ -23,17 +23,19 @@ import pandas as pd
 import numpy as np
 import yaml
 import joblib
+import json
 
-# プロジェクトルートをパスに追加
-project_root = Path(__file__).resolve().parent.parent
-sys.path.append(str(project_root))
+# --- 修正: プロジェクトルートの定義変更 ---
+execution_root = Path(__file__).resolve().parent.parent.parent.parent
+sys.path.append(str(execution_root / "keibaai" / "src"))
+# --- 修正ここまで ---
 
 try:
-    from src.pipeline_core import setup_logging, load_config
-    from src.utils.data_utils import load_parquet_data_by_date
-    from src.models.model_train import MuEstimator
-    from src.models.sigma_estimator import SigmaEstimator
-    from src.models.nu_estimator import NuEstimator
+    from pipeline_core import setup_logging, load_config
+    from utils.data_utils import load_parquet_data_by_date
+    from models.model_train import MuEstimator
+    from models.sigma_estimator import SigmaEstimator
+    from models.nu_estimator import NuEstimator
 except ImportError as e:
     print(f"エラー: 必要なモジュールのインポートに失敗しました: {e}")
     print("プロジェクトルートが正しく設定されているか確認してください。")
@@ -43,35 +45,42 @@ except ImportError as e:
 
 def load_model_safely(model_class, config, model_path_str):
     """モデルをロードする（クラスラッパーを使用）"""
-    model_path = Path(model_path_str)
-    if not model_path.exists():
-        logging.error(f"モデルディレクトリが見つかりません: {model_path}")
-        raise FileNotFoundError(f"モデルディレクトリが見つかりません: {model_path}")
+    # 修正: model_path_str は execution_root からの相対パスと見なす
+    model_path_abs = execution_root / model_path_str
+    if not model_path_abs.exists():
+        logging.error(f"モデルディレクトリが見つかりません: {model_path_abs}")
+        raise FileNotFoundError(f"モデルディレクトリが見つかりません: {model_path_abs}")
         
     model = model_class(config)
-    model.load_model(str(model_path))
+    model.load_model(str(model_path_abs))
     return model
 
 def load_plain_model(model_path_str, meta_path_str):
     """
     プレーンなLGBMモデルファイルとメタデータ（特徴量リスト）をロードする
-    (train_sigma_nu_models.pyの実装に合わせたロード方法)
     """
-    model_file = Path(model_path_str)
-    meta_file = Path(meta_path_str)
+    # 修正: パスを execution_root 基準で解決
+    model_file_abs = execution_root / model_path_str
+    meta_file_abs = execution_root / meta_path_str
     
-    if not model_file.exists():
-        raise FileNotFoundError(f"モデルファイルが見つかりません: {model_file}")
-    if not meta_file.exists():
-        raise FileNotFoundError(f"メタファイル（特徴量リスト）が見つかりません: {meta_file}")
+    if not model_file_abs.exists():
+        raise FileNotFoundError(f"モデルファイルが見つかりません: {model_file_abs}")
+    if not meta_file_abs.exists():
+        raise FileNotFoundError(f"メタファイル（特徴量リスト）が見つかりません: {meta_file_abs}")
 
-    model = joblib.load(model_file)
+    model = joblib.load(model_file_abs)
     
-    with open(meta_file, 'r', encoding='utf-8') as f:
-        meta_data = yaml.safe_load(f)
-        if isinstance(meta_data, dict): # 仕様書 7.7.2 の場合
+    with open(meta_file_abs, 'r', encoding='utf-8') as f:
+        try:
+            meta_data = json.load(f)
+        except json.JSONDecodeError:
+            logging.warning(f"メタファイル {meta_file_abs} はJSONではありませんでした。YAMLとして再試行します。")
+            f.seek(0)
+            meta_data = yaml.safe_load(f)
+
+        if isinstance(meta_data, dict):
             feature_names = meta_data.get('feature_names', [])
-        else: # 仕様書 13.4 (train_sigma_nu_models.py) の場合
+        else:
             feature_names = meta_data 
             
     return model, feature_names
@@ -90,18 +99,18 @@ def main():
         '--model_dir',
         type=str,
         required=True,
-        help='学習済みモデルが格納されているディレクトリ (例: data/models/latest)'
+        help='学習済みモデルが格納されているディレクトリ (例: keibaai/data/models/latest)'
     )
     parser.add_argument(
         '--config',
         type=str,
-        default='configs/default.yaml',
+        default='keibaai/configs/default.yaml', # 修正: 実行場所からの相対パス
         help='設定ファイルパス'
     )
     parser.add_argument(
         '--models_config',
         type=str,
-        default='configs/models.yaml',
+        default='keibaai/configs/models.yaml', # 修正: 実行場所からの相対パス
         help='モデル設定ファイルパス'
     )
     parser.add_argument(
@@ -120,32 +129,47 @@ def main():
 
     args = parser.parse_args()
 
-    # --- 0. 設定とロギング ---
+    # --- 0. 設定とロギング (修正: パス解決) ---
     try:
-        config = load_config(args.config)
+        config_path = execution_root / args.config
+        models_config_path = execution_root / args.models_config
+
+        config = load_config(str(config_path))
         paths = config.get('paths', {})
         
-        with open(args.models_config, 'r') as f:
+        with open(models_config_path, 'r', encoding='utf-8') as f:
             models_config = yaml.safe_load(f)
 
-        # ログ設定 (簡易版)
+        # ログパスの ${logs_path} を解決
+        logs_path_base = paths.get('logs_path', 'data/logs')
         log_path_template = config.get('logging', {}).get('log_file', 'data/logs/{YYYY}/{MM}/{DD}/predict.log')
+        log_path_with_base = log_path_template.replace('${logs_path}', logs_path_base)
+
         now = datetime.now()
-        log_path = log_path_template.format(YYYY=now.year, MM=f"{now.month:02}", DD=f"{now.day:02}")
-        Path(log_path).parent.mkdir(parents=True, exist_ok=True)
+        log_path = log_path_with_base.format(YYYY=now.year, MM=f"{now.month:02}", DD=f"{now.day:02}")
+        
+        # ログファイルパスを execution_root からの相対パスとして解決
+        log_path_abs = execution_root / log_path
+        log_path_abs.parent.mkdir(parents=True, exist_ok=True)
 
         logging.basicConfig(
             level=args.log_level.upper(),
             format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
             handlers=[
-                logging.FileHandler(log_path, encoding='utf-8'),
+                logging.FileHandler(log_path_abs, encoding='utf-8'),
                 logging.StreamHandler(sys.stdout)
-            ]
+            ],
+            force=True
         )
             
     except FileNotFoundError as e:
         logging.error(f"設定ファイルが見つかりません: {e}")
         sys.exit(1)
+    except KeyError as e:
+        print(f"設定ファイル（{args.config}）の読み込み中にキーエラーが発生しました: {e}")
+        print("default.yaml に 'paths' や 'logging' の設定が含まれているか確認してください。")
+        sys.exit(1)
+    # --- 修正ここまで ---
 
 
     logging.info("=" * 60)
@@ -160,42 +184,43 @@ def main():
         logging.error(f"日付フォーマットエラー: {e}")
         sys.exit(1)
 
-    # --- 2. 特徴量データのロード ---
-    features_dir = Path(paths.get('features_path', 'data/features')) / 'parquet'
+    # --- 2. 特徴量データのロード (修正: パス解決) ---
+    features_dir = execution_root / paths.get('features_path', 'keibaai/data/features') / 'parquet'
     features_df = load_parquet_data_by_date(features_dir, target_dt, target_dt, date_col='race_date')
     
     if features_df.empty:
         logging.warning(f"{args.date} の特徴量データが見つかりません。処理を終了します。")
         sys.exit(0)
 
-    # --- 3. モデルのロード ---
-    model_dir_path = Path(args.model_dir)
+    # --- 3. モデルのロード (修正: パス解決) ---
+    # args.model_dir (例: keibaai/data/models/mu_model_v1) を execution_root 基準で解決
+    model_dir_path_str = args.model_dir
     
     try:
-        # 3.1 μ (mu) モデル (クラスラッパーごとロード)
+        # 3.1 μ (mu) モデル
         logging.info("μモデルをロード中...")
         mu_model_config = models_config.get('mu_estimator', {})
         mu_model = load_model_safely(
             MuEstimator, 
             mu_model_config, 
-            str(model_dir_path / 'mu_model') # 'mu_model' サブディレクトリを想定
+            str(Path(model_dir_path_str) / 'mu_model') # 'mu_model' サブディレクトリ
         )
 
-        # 3.2 σ (sigma) モデル (プレーンなLGBMモデルをロード)
+        # 3.2 σ (sigma) モデル
         logging.info("σモデルをロード中...")
         sigma_model, sigma_features = load_plain_model(
-            str(model_dir_path / 'sigma_model.pkl'),
-            str(model_dir_path / 'sigma_features.json')
+            str(Path(model_dir_path_str) / 'sigma_model.pkl'),
+            str(Path(model_dir_path_str) / 'sigma_features.json')
         )
-        sigma_model.feature_names_ = sigma_features # 特徴量リストをアタッチ
+        sigma_model.feature_names_ = sigma_features 
 
-        # 3.3 ν (nu) モデル (プレーンなLGBMモデルをロード)
+        # 3.3 ν (nu) モデル
         logging.info("νモデルをロード中...")
         nu_model, nu_features = load_plain_model(
-            str(model_dir_path / 'nu_model.pkl'),
-            str(model_dir_path / 'nu_features.json')
+            str(Path(model_dir_path_str) / 'nu_model.pkl'),
+            str(Path(model_dir_path_str) / 'nu_features.json')
         )
-        nu_model.feature_names_ = nu_features # 特徴量リストをアタッチ
+        nu_model.feature_names_ = nu_features
         
         logging.info("全モデルのロード完了")
 
@@ -222,7 +247,6 @@ def main():
         try:
             X_sigma = race_features_df[sigma_model.feature_names_]
             sigma_pred = sigma_model.predict(X_sigma)
-            # (train_sigma_nu_models.pyは分散を予測するのでsqrtする)
             sigma_pred = np.sqrt(np.maximum(sigma_pred, 0.0)) 
         except Exception as e:
             logging.warning(f"レース {race_id} のσ予測に失敗: {e}。グローバル値 (1.0) で代替します。")
@@ -230,7 +254,6 @@ def main():
         
         # 4.3 ν の予測
         try:
-            # レース単位の特徴量 (1行目) を使用
             X_nu = race_features_df[nu_model.feature_names_].iloc[0:1] 
             nu_pred = nu_model.predict(X_nu)[0]
         except Exception as e:
@@ -244,7 +267,7 @@ def main():
             'horse_number': race_features_df['horse_number'],
             'mu': mu_pred,
             'sigma': sigma_pred,
-            'nu': nu_pred # このレースの全馬に同じν値を適用
+            'nu': nu_pred
         })
         
         predictions_list.append(result_df)
@@ -257,17 +280,15 @@ def main():
     
     logging.info(f"{len(predictions_df)}件の推論結果を生成")
 
-    # --- 5. 推論結果の保存 ---
-    output_dir = Path(paths.get('predictions_path', 'data/predictions')) / 'parquet'
+    # --- 5. 推論結果の保存 (修正: パス解決) ---
+    output_dir = execution_root / paths.get('predictions_path', 'keibaai/data/predictions') / 'parquet'
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    # パーティション用カラム
     predictions_df['year'] = target_dt.year
     predictions_df['month'] = target_dt.month
     predictions_df['day'] = target_dt.day
     
     try:
-        # 仕様書 17.3 に従い、日付でパーティション分割
         predictions_df.to_parquet(
             output_dir,
             engine='pyarrow',
@@ -277,7 +298,6 @@ def main():
         )
         logging.info(f"推論結果をパーティション形式で {output_dir} に保存しました")
 
-        # 同時に、σ/ν学習用の単一ファイルも保存 (train_sigma_nu_models.py のため)
         single_file_path = output_dir / args.output_filename
         predictions_df[['horse_id', 'mu']].to_parquet(
             single_file_path,

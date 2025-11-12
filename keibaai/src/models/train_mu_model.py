@@ -19,14 +19,17 @@ from pathlib import Path
 import yaml
 import pandas as pd
 
-# プロジェクトルートをパスに追加
-project_root = Path(__file__).resolve().parent.parent
-sys.path.append(str(project_root))
+# --- 修正: プロジェクトルートの定義変更 ---
+# スクリプト(keibaai/src/models/train_mu_model.py) の4階層上が Keiba_AI_v2 (実行ルート)
+execution_root = Path(__file__).resolve().parent.parent.parent.parent
+# keibaai/src を sys.path に追加
+sys.path.append(str(execution_root / "keibaai" / "src"))
+# --- 修正ここまで ---
 
 try:
-    from src.pipeline_core import setup_logging, load_config
-    from src.utils.data_utils import load_parquet_data_by_date
-    from src.models.model_train import MuEstimator
+    from pipeline_core import setup_logging, load_config
+    from utils.data_utils import load_parquet_data_by_date
+    from models.model_train import MuEstimator
 except ImportError as e:
     print(f"エラー: 必要なモジュールのインポートに失敗しました: {e}")
     print("プロジェクトルートが正しく設定されているか確認してください。")
@@ -57,19 +60,19 @@ def main():
     parser.add_argument(
         '--config',
         type=str,
-        default='configs/default.yaml',
+        default='keibaai/configs/default.yaml', # 修正: 実行場所からの相対パス
         help='基本設定ファイルパス'
     )
     parser.add_argument(
         '--models_config',
         type=str,
-        default='configs/models.yaml',
+        default='keibaai/configs/models.yaml', # 修正: 実行場所からの相対パス
         help='モデル設定ファイルパス'
     )
     parser.add_argument(
         '--features_config',
         type=str,
-        default='configs/features.yaml',
+        default='keibaai/configs/features.yaml', # 修正: 実行場所からの相対パス
         help='特徴量設定ファイルパス'
     )
     parser.add_argument(
@@ -82,35 +85,54 @@ def main():
 
     args = parser.parse_args()
 
-    # --- 0. 設定とロギング ---
+    # --- 0. 設定とロギング (修正: パス解決) ---
     try:
-        config = load_config(args.config)
+        # コマンド引数のパス (例: keibaai/configs/default.yaml) は実行場所(execution_root)からの相対パスとして解決
+        config_path = execution_root / args.config
+        models_config_path = execution_root / args.models_config
+        features_config_path = execution_root / args.features_config
+        
+        config = load_config(str(config_path))
         paths = config.get('paths', {})
         
-        with open(args.models_config, 'r') as f:
+        with open(models_config_path, 'r', encoding='utf-8') as f:
             models_config = yaml.safe_load(f)
         
-        with open(args.features_config, 'r') as f:
+        with open(features_config_path, 'r', encoding='utf-8') as f:
             features_config = yaml.safe_load(f)
 
-        # ログ設定 (簡易版)
+        # ログパスの ${logs_path} を解決
+        logs_path_base = paths.get('logs_path', 'data/logs')
         log_path_template = config.get('logging', {}).get('log_file', 'data/logs/{YYYY}/{MM}/{DD}/training.log')
+        log_path_with_base = log_path_template.replace('${logs_path}', logs_path_base)
+        
         now = datetime.now()
-        log_path = log_path_template.format(YYYY=now.year, MM=f"{now.month:02}", DD=f"{now.day:02}")
-        Path(log_path).parent.mkdir(parents=True, exist_ok=True)
+        log_path = log_path_with_base.format(YYYY=now.year, MM=f"{now.month:02}", DD=f"{now.day:02}")
+        
+        # ログファイルパスを execution_root からの相対パスとして解決
+        # (configのパス例: "keibaai/data/logs/...")
+        log_path_abs = execution_root / log_path
+        log_path_abs.parent.mkdir(parents=True, exist_ok=True)
 
         logging.basicConfig(
             level=args.log_level.upper(),
             format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
             handlers=[
-                logging.FileHandler(log_path, encoding='utf-8'),
+                logging.FileHandler(log_path_abs, encoding='utf-8'),
                 logging.StreamHandler(sys.stdout)
-            ]
+            ],
+            force=True
         )
             
     except FileNotFoundError as e:
         logging.error(f"設定ファイルが見つかりません: {e}")
         sys.exit(1)
+    except KeyError as e:
+        print(f"設定ファイル（{args.config}）の読み込み中にキーエラーが発生しました: {e}")
+        print("default.yaml に 'paths' や 'logging' の設定が含まれているか確認してください。")
+        sys.exit(1)
+    # --- 修正ここまで ---
+
 
     logging.info("=" * 60)
     logging.info("Keiba AI μモデル学習パイプライン開始")
@@ -125,12 +147,13 @@ def main():
         logging.error(f"日付フォーマットエラー: {e}")
         sys.exit(1)
 
-    # --- 2. 特徴量データのロード ---
-    features_dir = Path(paths.get('features_path', 'data/features')) / 'parquet'
+    # --- 2. 特徴量データのロード (修正: パス解決) ---
+    # default.yaml の 'features_path' (例: "keibaai/data/features") を execution_root 基準で解決
+    features_dir = execution_root / paths.get('features_path', 'keibaai/data/features') / 'parquet'
     
     # 特徴量リストを読み込む
     try:
-        with open(features_dir / "feature_names.yaml", 'r') as f:
+        with open(features_dir / "feature_names.yaml", 'r', encoding='utf-8') as f:
             feature_names = yaml.safe_load(f)
         logging.info(f"{len(feature_names)}個の特徴量をロードしました")
     except FileNotFoundError:
@@ -164,7 +187,6 @@ def main():
     try:
         estimator.train(
             features_df=features_df,
-            feature_names=feature_names,
             target_regressor='finish_time_seconds', # 仕様書 参照
             target_ranker='finish_position',     # 仕様書 参照
             group_col='race_id'
@@ -173,11 +195,11 @@ def main():
         logging.error(f"μモデルの学習中にエラーが発生しました: {e}", exc_info=True)
         sys.exit(1)
 
-    # --- 4. モデル保存 ---
+    # --- 4. モデル保存 (修正: パス解決) ---
     try:
-        estimator.save_model(args.output_dir)
-        
-        # (仕様書 3.4.2 に基づき、メタデータもDBに保存するのが望ましいが、ここではファイル保存のみ)
+        # 保存先パスを execution_root 基準で解決
+        output_path_abs = execution_root / args.output_dir
+        estimator.save_model(str(output_path_abs))
         
     except Exception as e:
         logging.error(f"学習済みμモデルの保存に失敗しました: {e}", exc_info=True)

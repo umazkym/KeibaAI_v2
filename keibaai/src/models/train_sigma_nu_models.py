@@ -19,6 +19,7 @@ import pickle
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
+import json
 
 import pandas as pd
 import numpy as np
@@ -26,26 +27,33 @@ import lightgbm as lgb
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error
 
-# プロジェクトルートをパスに追加
-project_root = Path(__file__).resolve().parent.parent
-sys.path.append(str(project_root))
+# --- 修正: プロジェクトルートの定義変更 ---
+execution_root = Path(__file__).resolve().parent.parent.parent.parent
+sys.path.append(str(execution_root / "keibaai" / "src"))
+# --- 修正ここまで ---
 
 try:
-    from src.utils.data_utils import load_parquet_data_by_date
+    from utils.data_utils import load_parquet_data_by_date
 except ImportError as e:
     print(f"エラー: 必要なモジュールのインポートに失敗しました: {e}")
     sys.exit(1)
 
 
-# ロギング設定
+# --- 修正: ログパスを execution_root 基準で解決 ---
+log_dir = execution_root / "keibaai" / "data" / "logs"
+log_dir.mkdir(parents=True, exist_ok=True)
+log_file_path = log_dir / "sigma_nu_training.log"
+
 logging.basicConfig(
     level=logging.INFO, 
     format='%(asctime)s [%(levelname)s] %(message)s',
     handlers=[
-        logging.FileHandler("data/logs/sigma_nu_training.log", encoding='utf-8'),
+        logging.FileHandler(log_file_path, encoding='utf-8'),
         logging.StreamHandler(sys.stdout)
-    ]
+    ],
+    force=True # 修正: 既存のロガー設定を上書き
 )
+# --- 修正ここまで ---
 
 def load_training_data(months: int):
     """
@@ -56,7 +64,8 @@ def load_training_data(months: int):
     end_date = datetime.now()
     start_date = end_date - timedelta(days=30*months)
     
-    results_path = project_root / "data" / "parsed" / "parquet" / "races"
+    # 修正: execution_root 基準でパスを解決
+    results_path = execution_root / "keibaai" / "data" / "parsed" / "parquet" / "races"
     
     if not results_path.exists():
         logging.error(f"レース結果ディレクトリが見つかりません: {results_path}")
@@ -165,11 +174,16 @@ def train_model_lgb(train_X, train_y, params=None):
 def main():
     parser = argparse.ArgumentParser(description="Train sigma and nu models (仕様書 13.4)")
     parser.add_argument("--training_window_months", type=int, default=12, help="学習に使用する過去月数")
-    parser.add_argument("--output_dir", type=str, default="data/models/latest", help="モデルの保存先ディレクトリ")
+    parser.add_argument(
+        "--output_dir", 
+        type=str, 
+        default="keibaai/data/models/latest", # 修正: 実行場所からの相対パス
+        help="モデルの保存先ディレクトリ"
+    )
     parser.add_argument(
         "--mu_predictions_path", 
         type=str, 
-        default="data/predictions/parquet/mu_predictions.parquet", 
+        default="keibaai/data/predictions/parquet/mu_predictions.parquet", # 修正: 実行場所からの相対パス
         help="μモデルの推論結果 (Parquet) のパス"
     )
     args = parser.parse_args()
@@ -179,8 +193,8 @@ def main():
     logging.info(f"モデル保存先: {args.output_dir}")
 
     try:
-        # --- 1. μ推論結果のロード ---
-        mu_preds_path = Path(args.mu_predictions_path)
+        # --- 1. μ推論結果のロード (修正: パス解決) ---
+        mu_preds_path = execution_root / args.mu_predictions_path
         if not mu_preds_path.exists():
             logging.error(f"μの推論結果ファイルが見つかりません: {mu_preds_path}")
             logging.error("先にμモデルで推論を実行し、 --mu_predictions_path で指定してください。")
@@ -189,7 +203,6 @@ def main():
         logging.info(f"μ推論結果をロード中: {mu_preds_path}")
         mu_preds_df = pd.read_parquet(mu_preds_path)
         
-        # Series (index=horse_id, value=mu) を作成
         if 'horse_id' not in mu_preds_df.columns or 'mu' not in mu_preds_df.columns:
              logging.error("μ推論ファイルには 'horse_id' と 'mu' カラムが必要です。")
              sys.exit(1)
@@ -239,28 +252,23 @@ def main():
         yn_pred = nu_model.predict(Xn_val)
         logging.info(f"νモデル RMSE (Validation): {mean_squared_error(yn_val, yn_pred, squared=False):.6f}")
 
-        # --- 5. 保存 ---
-        out_dir = Path(args.output_dir)
+        # --- 5. 保存 (修正: パス解決) ---
+        out_dir = execution_root / args.output_dir
         out_dir.mkdir(parents=True, exist_ok=True)
         
-        # σモデル (SigmaEstimator クラスのラッパーではなく、LGBMモデル本体を保存)
-        # (注: 仕様書 7.7.2 とは異なり、ここではモデル本体のみを保存)
         sigma_path = out_dir / "sigma_model.pkl"
         logging.info(f"σモデルを保存中: {sigma_path}")
         with open(sigma_path, "wb") as f:
             pickle.dump(sigma_model, f)
-        # 特徴量リストも保存
-        with open(out_dir / "sigma_features.json", "w") as f:
-             json.dump(sigma_feature_cols, f)
+        with open(out_dir / "sigma_features.json", "w", encoding='utf-8') as f:
+             json.dump(sigma_feature_cols, f, ensure_ascii=False, indent=2)
 
-        # νモデル (NuEstimator クラスのラッパーではなく、LGBMモデル本体を保存)
         nu_path = out_dir / "nu_model.pkl"
         logging.info(f"νモデルを保存中: {nu_path}")
         with open(nu_path, "wb") as f:
             pickle.dump(nu_model, f)
-        # 特徴量リストも保存
-        with open(out_dir / "nu_features.json", "w") as f:
-             json.dump(nu_feature_cols, f)
+        with open(out_dir / "nu_features.json", "w", encoding='utf-8') as f:
+             json.dump(nu_feature_cols, f, ensure_ascii=False, indent=2)
 
         logging.info("σ/ν モデル学習が完了しました。")
 
