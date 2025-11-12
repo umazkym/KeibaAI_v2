@@ -83,7 +83,7 @@ class FeatureEngine:
         logging.info(f"特徴量生成完了: {len(self.feature_names_)}個の特徴量を生成")
         
         # 必要なカラム + 特徴量のみを返す
-        key_cols = ['race_id', 'horse_id', 'horse_number', 'race_date']
+        key_cols = ['race_id', 'horse_id', 'jockey_id', 'trainer_id', 'horse_number', 'race_date']
         # (学習に必要な目的変数も残す)
         target_cols = ['finish_position', 'finish_time_seconds', 'win_odds', 'popularity']
         
