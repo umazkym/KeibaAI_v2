@@ -1,11 +1,16 @@
 """
-レース結果HTMLパーサ (修正版 v1.0.3)
+レース結果HTMLパーサ (修正版 v1.G.5)
 netkeiba.com のレース結果ページから情報を抽出
 
+v1.G.5 での修正点:
+1. tbody検索のロバスト化: 
+   - <table> 直下に <tbody> が存在しないケースに対応。
+   - <tbody> が見つからない場合は、<table> 自体から <tr> を検索するよう修正。
+v1.0.4 での修正点:
+1. テーブル検索: class_='RaceTable01' から class_='race_table_01' に変更
 v1.0.3 での修正点:
-1. テーブル検索: attrs={'summary': 'レース結果'} から class_='RaceTable01' に変更 (tbody が見つからないエラーの解決)
-2. 日付抽出: shutuba_parser.py (v1.0.1) の extract_race_date_from_html を移植 (1970-01-01 バグの解決)
-3. 依存関係: common_utils から parse_time_to_seconds, parse_margin_to_seconds 等をインポート
+1. 日付抽出: shutuba_parser.py (v1.0.1) の extract_race_date_from_html を移植
+2. 依存関係: common_utils から parse_time_to_seconds, parse_margin_to_seconds 等をインポート
 """
 
 import re
@@ -50,14 +55,14 @@ except ImportError:
         parse_sex_age = lambda x: (x[0], int(x[1:])) if x and len(x) > 1 else (None, None)
         parse_horse_weight = lambda x: (None, None)
         parse_time_to_seconds = lambda x: None
-        parse_margin_to_seconds = lambda x, y: None
+        parse_margin_to_seconds = lambda x: None # 引数修正
         parse_prize_money = lambda x: None
         normalize_owner_name = lambda x: x
 
 
 def parse_results_html(file_path: str, race_id: str = None) -> pd.DataFrame:
     """
-    レース結果HTMLをパースしてDataFrameを返す (v1.0.3)
+    レース結果HTMLをパースしてDataFrameを返す (v1.G.5)
     """
     logging.info(f"レース結果パース開始: {file_path}")
     
@@ -77,32 +82,36 @@ def parse_results_html(file_path: str, race_id: str = None) -> pd.DataFrame:
     
     soup = BeautifulSoup(html_text, 'lxml')
 
-    # --- ▼▼▼ 修正箇所 (日付抽出 v1.0.3) ▼▼▼ ---
+    # --- (v1.0.3) 日付抽出 ---
     race_date = extract_race_date_from_html(soup, race_id)
-    # --- ▲▲▲ 修正箇所 ▲▲▲ ---
     
-    # --- ▼▼▼ 修正箇所 (テーブル検索 v1.0.3) ▼▼▼ ---
-    # result_table = soup.find('table', attrs={'summary': 'レース結果'}) #
-    result_table = soup.find('table', class_='RaceTable01')
-    # --- ▲▲▲ 修正箇所 ▲▲▲ ---
+    # --- (v1.0.4) テーブル検索 ---
+    result_table = soup.find('table', class_='race_table_01')
     
     if not result_table:
-        logging.error(f"レース結果テーブル (class='RaceTable01') が見つかりません: {file_path}")
+        logging.error(f"レース結果テーブル (class='race_table_01') が見つかりません: {file_path}")
         return pd.DataFrame()
     
     rows = []
     
-    # tbody内のtrを走査
-    tbody = result_table.find('tbody')
-    if not tbody:
-        logging.error(f"tbody が見つかりません: {file_path}")
-        return pd.DataFrame()
+    # --- ▼▼▼ 修正箇所 (v1.G.5) ▼▼▼ ---
+    # tbody内のtrを走査 (tbody がなくても <table> から直接 tr を探す)
     
-    for tr in tbody.find_all('tr'):
+    tbody = result_table.find('tbody')
+    
+    # tbody が見つかれば tbody を、見つからなければ table 全体を検索対象にする
+    search_area = tbody if tbody else result_table
+    
+    rows_found = search_area.find_all('tr')
+    
+    if not rows_found:
+        logging.error(f"テーブル (class='race_table_01') 内に行 (tr) が見つかりません: {file_path}")
+        return pd.DataFrame()
+        
+    for tr in rows_found:
+    # --- ▲▲▲ 修正箇所 ▲▲▲ ---
         try:
-            # --- ▼▼▼ 修正箇所 (race_date を渡す v1.0.3) ▼▼▼ ---
             row_data = parse_result_row(tr, race_id, race_date)
-            # --- ▲▲▲ 修正箇所 ▲▲▲ ---
             if row_data:
                 rows.append(row_data)
         except Exception as e:
@@ -118,16 +127,14 @@ def parse_results_html(file_path: str, race_id: str = None) -> pd.DataFrame:
 
 def parse_result_row(tr, race_id: str, race_date: Optional[str]) -> Optional[Dict]:
     """
-    レース結果テーブルの1行をパース (v1.0.3)
+    レース結果テーブルの1行をパース (v1.G.5)
     """
     cells = tr.find_all('td')
     
-    if len(cells) < 15: # 最小限のカラム数
+    if len(cells) < 15: # 最小限のカラム数 (ヘッダ行などはここで弾かれる)
         return None
     
-    # --- ▼▼▼ 修正箇所 (race_date を初期化 v1.0.3) ▼▼▼ ---
     row_data = {'race_id': race_id, 'race_date': race_date}
-    # --- ▲▲▲ 修正箇所 ▲▲▲ ---
     
     # 着順
     finish_text = cells[0].get_text(strip=True)
@@ -188,8 +195,9 @@ def parse_result_row(tr, race_id: str, race_date: Optional[str]) -> Optional[Dic
     if row_data['finish_position'] == 1 and margin_text in ['---', '']:
         row_data['margin_seconds'] = 0.0
     else:
-        # common_utils v1.0.1 の呼び出し
-        row_data['margin_seconds'] = parse_margin_to_seconds(margin_text, row_data['finish_position'])
+        # --- ▼▼▼ 修正箇所 (v1.0.4) ▼▼▼ ---
+        row_data['margin_seconds'] = parse_margin_to_seconds(margin_text)
+        # --- ▲▲▲ 修正箇所 ▲▲▲ ---
 
     # 通過順
     passing_text = cells[10].get_text(strip=True)
@@ -270,22 +278,10 @@ def extract_race_id_from_filename(file_path: str) -> str:
     match = re.search(r'(\d{12})', filename)
     return match.group(1) if match else None
 
-# --- ▼▼▼ 修正箇所 (日付抽出関数を shutuba_parser.py v1.0.1 から移植 v1.0.3) ▼▼▼ ---
+# --- (v1.0.3) 日付抽出関数 ---
 def extract_race_date_from_html(soup: BeautifulSoup, race_id: str) -> Optional[str]:
     """
     HTMLからレース日付を抽出 (shutuba_parser.py v1.0.1 と同一ロジック)
-    
-    Args:
-        soup: BeautifulSoup オブジェクト
-        race_id: レースID (フォールバック用)
-    
-    Returns:
-        race_date (ISO8601形式: YYYY-MM-DD) または None
-    
-    抽出パターン (優先順):
-        1. <p class="smalltxt"> (レース結果ページ)
-        2. <p class="RaceData01"> (出馬表ページ)
-        3. <dd class="Active"> (カレンダーページなど)
     """
     try:
         # パターン1: <p class="smalltxt"> (レース結果ページ)
@@ -365,4 +361,3 @@ def extract_race_date_from_html(soup: BeautifulSoup, race_id: str) -> Optional[s
     except Exception as e:
         logging.error(f"レース日付の抽出に失敗: {e}")
         return None
-# --- ▲▲▲ 修正箇所 ▲▲▲ ---
