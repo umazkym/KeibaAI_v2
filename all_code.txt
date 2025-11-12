@@ -1,0 +1,4547 @@
+--- keibaai/configs/default.yaml ---
+
+# configs/default.yaml
+
+# 基本的なパス設定
+data_path: "data"
+raw_data_path: "${data_path}/raw"
+parsed_data_path: "${data_path}/parsed"
+features_path: "${data_path}/features"
+models_path: "${data_path}/models"
+logs_path: "${data_path}/logs"
+metadata_path: "${data_path}/metadata"
+
+# データベース設定
+database:
+  path: "${metadata_path}/db.sqlite3"
+
+# ログ設定
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  log_file: "${logs_path}/{YYYY}/{MM}/{DD}/pipeline.log"
+
+
+--- keibaai/configs/features.yaml ---
+
+# configs/features.yaml
+
+# 特徴量生成全般の設定
+feature_engine:
+  # 生成する特徴量のバージョン
+  version: "v1.0"
+
+  # 欠損値の処理方法
+  imputation_strategy:
+    numeric: "mean"  # or "median", "zero"
+    categorical: "most_frequent" # or "constant"
+
+# レースベースの特徴量
+race_features:
+  enabled: true
+
+# 馬ベースの特徴量
+horse_features:
+  enabled: true
+
+# 騎手ベースの特徴量
+jockey_features:
+  enabled: true
+
+# 調教師ベースの特徴量
+trainer_features:
+  enabled: true
+
+# 血統ベースの特徴量
+pedigree_features:
+  enabled: true
+
+
+--- keibaai/configs/models.yaml ---
+
+# configs/models.yaml
+
+# モデル学習全般の設定
+training:
+  # 学習に使用する特徴量のバージョン
+  feature_version: "v1.0"
+  
+  # 学習対象期間
+  train_period:
+    start: "2018-01-01"
+    end: "2023-12-31"
+    
+  # 検証期間
+  validation_period:
+    start: "2024-01-01"
+    end: "2024-12-31"
+
+  # 乱数シード
+  random_seed: 42
+
+# モデルごとの設定
+models:
+  # LightGBMによる平均順位予測モデル
+  lgbm_ranker:
+    model_type: "ranker"
+    objective: "lambdarank"
+    metric: "ndcg"
+    
+    # ハイパーパラメータ
+    hyperparameters:
+      boosting_type: "gbdt"
+      n_estimators: 2000
+      learning_rate: 0.01
+      num_leaves: 31
+      max_depth: -1
+      reg_alpha: 0.1
+      reg_lambda: 0.1
+      colsample_bytree: 0.8
+      subsample: 0.8
+      
+    # 学習時のコールバック
+    callbacks:
+      - type: "early_stopping"
+        patience: 100
+        verbose: true
+
+  # LightGBMによる確率的回帰モデル（例: タイム予測）
+  lgbm_regressor_time:
+    model_type: "regressor"
+    objective: "regression_l1"
+    metric: "mae"
+    
+    hyperparameters:
+      boosting_type: "gbdt"
+      n_estimators: 1000
+      learning_rate: 0.05
+      num_leaves: 64
+
+# 確率キャリブレーションの設定
+calibration:
+  method: "isotonic" # or "platt" (temperature scaling)
+  cv_folds: 5
+
+
+--- keibaai/configs/optimization.yaml ---
+
+# configs/optimization.yaml
+
+# ポートフォリオ最適化の設定
+optimizer:
+  # 最適化手法
+  method: "fractional_kelly" # or "equal_weight", "custom"
+
+  # Fractional Kelly の設定
+  fractional_kelly:
+    # 켈리比率に乗じる係数 (0.0 ~ 1.0)
+    # 1.0に近いほど積極的、0.0に近いほど保守的
+    fraction: 0.1
+
+  # 投資制約
+  constraints:
+    # 1レースあたりの最大投資額（円）
+    max_investment_per_race: 10000
+
+    # 1つの買い目あたりの最大投資額（円）
+    max_investment_per_bet: 1000
+
+    # 最小投資単位（円）
+    min_bet_unit: 100
+
+    # 期待値の閾値（この値より低い期待値の買い目は除外）
+    min_expected_value: 1.2
+
+# シミュレーション設定
+simulation:
+  # モンテカルロシミュレーションの試行回数
+  monte_carlo_trials: 1000
+
+  # バックテスト期間
+  backtest_period:
+    start: "2024-01-01"
+    end: "2024-12-31"
+
+# 発注実行の設定
+executor:
+  # 自動発注を有効にするか (true/false)
+  # 安全のため、デフォルトは false
+  auto_execute: false
+
+  # 発注ログの保存先
+  order_log_path: "${data_path}/orders/{YYYYMMDD}_orders.json"
+
+
+--- keibaai/configs/scraping.yaml ---
+
+# configs/scraping.yaml
+
+# スクレイピング全般の設定
+scraping:
+  # スクレイピング対象サイト
+  target_sites:
+    - "netkeiba"
+    - "jra"
+
+  # リクエスト間の遅延（秒）
+  delay_seconds:
+    min: 2.5
+    max: 10.0
+
+  # リトライ設定
+  retry:
+    max_attempts: 5
+    backoff_factor: 2 # 指数バックオフの係数
+
+  # User-Agentのローテーションリスト
+  user_agents:
+    - "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36"
+    - "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36"
+    - "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36"
+
+# netkeiba.com 固有の設定
+netkeiba:
+  base_url: "https://db.netkeiba.com"
+  # 取得対象とするデータ種別
+  data_types:
+    - "race"
+    - "shutuba"
+    - "horse_profile"
+    - "horse_performance"
+    - "pedigree"
+
+# JRA 固有の設定
+jra:
+  base_url: "https://www.jra.go.jp"
+  # オッズ取得の設定
+  odds:
+    # 締切何分前に取得するか
+    minutes_before_deadline: 5
+    # 取得対象の券種
+    ticket_types:
+      - "win"         # 単勝
+      - "place"       # 複勝
+      - "exacta"      # 馬単
+      - "quinella"    # 馬連
+      - "wide"        # ワイド
+      - "trifecta"    # 3連単
+      - "trio"        # 3連複
+
+
+--- keibaai/data/features/feature_names.yaml ---
+
+feature_names:
+- bracket_number
+- horse_name
+- sex_age
+- sex
+- age
+- basis_weight
+- jockey_name
+- jockey_id
+- trainer_name
+- trainer_id
+- horse_weight
+- horse_weight_change
+- owner_name
+- prize_total
+- morning_odds
+- morning_popularity
+- career_stats
+- career_starts
+- career_wins
+- career_places
+- last_5_finishes
+- finish_position
+- finish_time_seconds
+
+
+--- keibaai/data/features/parquet/feature_names.yaml ---
+
+- bracket_number
+- age
+- basis_weight
+- horse_weight
+- horse_weight_change
+- prize_total
+- morning_odds
+- morning_popularity
+- career_stats
+- career_starts
+- career_wins
+- career_places
+- last_5_finishes
+- "sex_\u725D"
+- bracket_is_inner
+- bracket_is_middle
+- bracket_is_outer
+- past_1_finish_position_mean
+- past_3_finish_position_mean
+- past_5_finish_position_mean
+- career_win_rate
+- past_1_finish_time_seconds_mean
+- past_3_finish_time_seconds_mean
+- past_5_finish_time_seconds_mean
+- past_1_margin_seconds_mean
+- past_3_margin_seconds_mean
+- past_5_margin_seconds_mean
+- past_1_last_3f_time_mean
+- past_3_last_3f_time_mean
+- past_5_last_3f_time_mean
+- days_since_last_race
+- horse_weight_zscore
+- basis_weight_zscore
+
+
+--- keibaai/infra/docker/docker-compose.yml ---
+
+
+
+--- keibaai/infra/docker/Dockerfile ---
+
+
+
+--- keibaai/infra/sched/cron_examples/daily_scraping.sh ---
+
+
+
+--- keibaai/infra/sched/cron_examples/weekly_training.sh ---
+
+
+
+--- keibaai/scripts/backup_data.sh ---
+
+
+
+--- keibaai/scripts/check_data_integrity.py ---
+
+
+
+--- keibaai/scripts/check_parquet.py ---
+
+import pandas as pd
+import os
+from pathlib import Path
+
+def check_parquet_files():
+    """
+    解析済みParquetファイルの中身を確認する
+    """
+    # このスクリプトが keibaai/scripts ディレクトリにあることを前提とする
+    project_root = Path(__file__).resolve().parent.parent
+    parsed_dir = project_root / 'data' / 'parsed' / 'parquet'
+    
+    files_to_check = {
+        "races": parsed_dir / 'races' / 'races.parquet',
+    }
+    
+    for name, path in files_to_check.items():
+        print(f"--- Checking: {name} ({path}) ---")
+        if not path.exists():
+            print("ファイルが見つかりません。")
+            print("\n" + "="*50 + "\n")
+            continue
+            
+        try:
+            df = pd.read_parquet(path)
+            print(f"Shape: {df.shape}")
+            print("\nInfo:")
+            df.info()
+            print("\nHead (first 5 rows):")
+            print(df.head(5).to_string())
+            print("\nTail (last 5 rows):")
+            print(df.tail(5).to_string())
+        except Exception as e:
+            print(f"ファイルの読み込み中にエラーが発生しました: {e}")
+        
+        print("\n" + "="*50 + "\n")
+
+if __name__ == '__main__':
+    check_parquet_files()
+
+--- keibaai/scripts/daily_operation.sh ---
+
+#!/bin/bash
+# scripts/daily_operation.sh
+# 日次運用スクリプト（完全版）
+# 仕様書 13.1 に基づく実装
+# 実行想定: 深夜〜午前のスケジュールで順次実行
+
+set -euo pipefail
+
+# --- ▼ 環境変数の設定 (必要に応じて変更) ---
+
+# プロジェクトのルートディレクトリ (このスクリプトの親の親)
+BASE_DIR=$(cd "$(dirname "$0")/.." && pwd)
+# Python実行環境 (venvなど)
+PYTHON_EXEC="$BASE_DIR/venv/bin/python" # venvを想定
+
+# --- ▲ 環境変数の設定 ---
+
+# 当日/対象日
+TARGET_DATE=$(date +%Y-%m-%d)
+YESTERDAY_DATE=$(date -d '1 day ago' +%Y-%m-%d)
+
+LOG_DIR="$BASE_DIR/data/logs/$(date +%Y)/$(date +%m)/$(date +%d)"
+mkdir -p "$LOG_DIR"
+exec &> >(tee -a "$LOG_DIR/daily_operation.log")
+
+echo "=========================================="
+echo "Keiba AI 日次運用開始"
+echo "対象日: ${TARGET_DATE}"
+echo "プロジェクトルート: ${BASE_DIR}"
+echo "=========================================="
+cd "$BASE_DIR"
+
+# (注: 仕様書 13.1 の深夜バッチは、仕様書 19.3.2 や 17.1 の実装とは
+# 　　 引数が異なるため、仕様書 17.x で作成したスクリプトの引数に合わせます)
+
+# ---- 深夜バッチ: 静的データ取得（03:00 実行想定） ----
+echo "[1/11] データ取得中 (過去データ / 静的データ)..."
+# (run_scraping_pipeline_local.py は日付引数を取らない設計だったため、そのまま実行)
+$PYTHON_EXEC src/run_scraping_pipeline_local.py
+# (※注: 仕様書の run_scraping_pipeline_local.py は日付引数を持つが、
+#   アップロードされたファイル(run_scraping_pipeline_local.py)は引数処理がないため、
+#   ここではファイルの実装に合わせて引数なしで呼び出します)
+
+echo "[2/11] データパース中..."
+# (仕様書 17.1 の parse_all.py を使う場合)
+# $PYTHON_EXEC src/parsers/parse_all.py --date ${TARGET_DATE}
+# (アップロードされた run_parsing_pipeline_local.py を使う場合)
+$PYTHON_EXEC src/run_parsing_pipeline_local.py
+
+echo "[3/11] 特徴量生成中..."
+# (仕様書 17.2 の generate_features.py を使用)
+$PYTHON_EXEC src/features/generate_features.py \
+    --date ${TARGET_DATE} \
+    --config "configs/default.yaml" \
+    --features_config "configs/features.yaml"
+
+# ---- 当日午前: JRAオッズ取得と最終推論 ----
+# (※注: 仕様書 13.1 ではJRAオッズ取得がここに入るが、
+#   run_scraping_pipeline_local.py [c.f: 90] が既にオッズ取得(ダミー)を
+#   実行しているため、ここでは推論から開始する)
+
+echo "[4/11] モデル推論（μ, σ, ν）実行中..."
+# (仕様書 17.3 の predict.py を使用)
+$PYTHON_EXEC src/models/predict.py \
+    --date ${TARGET_DATE} \
+    --model_dir "data/models/latest" \
+    --config "configs/default.yaml" \
+    --models_config "configs/models.yaml"
+
+echo "[5/11] シミュレーション（オッズ反映）実行..."
+# (仕様書 17.4 の simulate_daily_races.py を使用)
+$PYTHON_EXEC src/sim/simulate_daily_races.py \
+    --date ${TARGET_DATE} \
+    --K 1000 \
+    --model_id "latest" \
+    --config "configs/default.yaml"
+
+echo "[6/11] ポートフォリオ最適化中..."
+# (仕様書 17.5 の optimize_daily_races.py を使用)
+$PYTHON_EXEC src/optimizer/optimize_daily_races.py \
+    --date ${TARGET_DATE} \
+    --W_0 100000 \
+    --config "configs/default.yaml" \
+    --optimization_config "configs/optimization.yaml"
+
+# (仕様書 13.1 の残りのステップ)
+echo "[7/11] メトリクス更新（Brier, ECE, ROI 等）..."
+# (※注: src/monitoring/update_metrics.py は未作成のため、実行をコメントアウト)
+# $PYTHON_EXEC src/monitoring/update_metrics.py --date ${TARGET_DATE}
+
+echo "=========================================="
+echo "日次運用完了"
+echo "$(date '+%Y-%m-%d %H:%M:%S')"
+echo "=========================================="
+
+--- keibaai/scripts/initialize_db.py ---
+
+import sqlite3
+import os
+from pathlib import Path
+
+def initialize_database():
+    """
+    仕様書で定義されたスキーマに基づいてSQLiteデータベースを初期化する
+    """
+    # スクリプトの場所を基準にプロジェクトルート（keibaaiディレクトリ）を決定
+    project_root = Path(__file__).resolve().parent.parent
+    db_path = project_root / 'data' / 'metadata' / 'db.sqlite3'
+    
+    # ディレクトリが存在しない場合は作成
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    
+    # fetch_log テーブル
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS fetch_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        url TEXT NOT NULL,
+        file_path TEXT NOT NULL,
+        fetched_ts TEXT NOT NULL,  -- ISO8601+09:00
+        sha256 TEXT NOT NULL,
+        file_size INTEGER NOT NULL,
+        fetch_method TEXT NOT NULL,  -- 'requests' or 'selenium'
+        http_status INTEGER,
+        error_message TEXT,
+        UNIQUE(url, fetched_ts)
+    );
+    ''')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_fetch_log_url ON fetch_log(url);')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_fetch_log_sha256 ON fetch_log(sha256);')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_fetch_log_fetched_ts ON fetch_log(fetched_ts);')
+
+    # model_metadata テーブル
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS model_metadata (
+        model_id TEXT PRIMARY KEY,
+        model_type TEXT NOT NULL,  -- 'mu_regressor', 'mu_ranker', 'sigma', 'nu'
+        commit_hash TEXT NOT NULL,
+        training_start TEXT NOT NULL,  -- ISO8601+09:00
+        training_end TEXT NOT NULL,    -- ISO8601+09:00
+        hyperparams TEXT NOT NULL,     -- JSON
+        calibration_method TEXT,
+        data_version TEXT NOT NULL,
+        random_seed INTEGER NOT NULL,
+        library_versions TEXT NOT NULL,  -- JSON
+        performance_metrics TEXT,        -- JSON
+        created_ts TEXT NOT NULL,        -- ISO8601+09:00
+        notes TEXT
+    );
+    ''')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_model_metadata_created_ts ON model_metadata(created_ts);')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_model_metadata_model_type ON model_metadata(model_type);')
+
+    # data_versions テーブル
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS data_versions (
+        version_id TEXT PRIMARY KEY,
+        table_name TEXT NOT NULL,
+        schema_version TEXT NOT NULL,
+        record_count INTEGER NOT NULL,
+        start_date TEXT NOT NULL,  -- ISO8601+09:00
+        end_date TEXT NOT NULL,    -- ISO8601+09:00
+        file_paths TEXT NOT NULL,  -- JSON array
+        created_ts TEXT NOT NULL,  -- ISO8601+09:00
+        sha256_manifest TEXT NOT NULL,  -- JSON: {file_path: sha256}
+        notes TEXT
+    );
+    ''')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_data_versions_table_name ON data_versions(table_name);')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_data_versions_created_ts ON data_versions(created_ts);')
+
+    # parse_failures テーブル
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS parse_failures (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        parser_name TEXT NOT NULL,
+        source_file TEXT NOT NULL,
+        race_id TEXT,
+        horse_id TEXT,
+        error_type TEXT NOT NULL,
+        error_message TEXT,
+        stack_trace TEXT,
+        failed_ts TEXT NOT NULL,  -- ISO8601+09:00
+        retry_count INTEGER DEFAULT 0,
+        resolved BOOLEAN DEFAULT 0,
+        resolved_ts TEXT,
+        notes TEXT
+    );
+    ''')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_parse_failures_parser_name ON parse_failures(parser_name);')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_parse_failures_race_id ON parse_failures(race_id);')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_parse_failures_resolved ON parse_failures(resolved);')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_parse_failures_failed_ts ON parse_failures(failed_ts);')
+
+    conn.commit()
+    conn.close()
+    
+    print(f"データベース '{db_path}' が正常に初期化されました。")
+
+if __name__ == '__main__':
+    initialize_database()
+
+
+--- keibaai/scripts/setup_environment.sh ---
+
+
+
+--- keibaai/src/pipeline_core.py ---
+
+#!/usr/bin/env python3
+# src/pipeline_core.py
+"""
+パイプラインコアユーティリティ
+- atomic_write: ファイルの安全な書き込み
+- parse_with_error_handling: エラーハンドリング付きパーサ実行
+- setup_logging: ロギング設定
+- load_config: YAML設定ファイルの読み込み
+- get_db_connection: SQLiteデータベース接続の取得
+"""
+
+import os
+import tempfile
+import traceback
+import logging
+import json
+import sys
+import sqlite3
+from pathlib import Path
+from datetime import datetime, timezone, timedelta
+from typing import Dict, Any
+
+import yaml  # YAMLを扱うために追加
+
+
+def load_config(config_path: str) -> Dict[str, Any]:
+    """
+    YAML設定ファイルをロードする
+    """
+    logging.info(f"設定ファイルをロード中: {config_path}")
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f)
+        return config
+    except FileNotFoundError:
+        logging.error(f"設定ファイルが見つかりません: {config_path}")
+        raise
+    except yaml.YAMLError as e:
+        logging.error(f"設定ファイルのパースに失敗: {e}")
+        raise
+    except Exception as e:
+        logging.error(f"設定ファイルの読み込み中に予期せぬエラーが発生: {e}")
+        raise
+
+
+def setup_logging(
+    level: str = 'INFO',
+    log_file_template: str = 'data/logs/{YYYY}/{MM}/{DD}/default.log'
+):
+    """
+    ロギングを設定する
+    """
+    try:
+        # ログパスのプレースホルダを置換
+        now = datetime.now(timezone(timedelta(hours=9)))
+        log_path = log_file_template.format(
+            YYYY=now.year,
+            MM=f"{now.month:02}",
+            DD=f"{now.day:02}"
+        )
+        
+        log_dir = Path(log_path).parent
+        log_dir.mkdir(parents=True, exist_ok=True)
+        
+        # ロガー設定
+        logging.basicConfig(
+            level=level.upper(),
+            format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+            handlers=[
+                logging.FileHandler(log_path, encoding='utf-8'),
+                logging.StreamHandler(sys.stdout)
+            ],
+            force=True  # 既存の設定を上書き
+        )
+        logging.info("ロギングが正常に設定されました")
+        
+    except Exception as e:
+        # フォールバック (簡易ロギング)
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s [%(levelname)s] %(name)s: %(message)s'
+        )
+        logging.error(f"ロギングの初期化に失敗しました: {e}")
+        logging.info("簡易フォールバックロギングを使用します")
+
+
+def get_db_connection(db_path: str) -> sqlite3.Connection:
+    """
+    SQLiteデータベース接続を取得する
+    """
+    logging.info(f"データベースに接続中: {db_path}")
+    try:
+        db_dir = Path(db_path).parent
+        db_dir.mkdir(parents=True, exist_ok=True)
+        
+        conn = sqlite3.connect(db_path)
+        conn.execute('PRAGMA journal_mode=WAL;')  # Write-Ahead Loggingを有効化
+        conn.execute('PRAGMA busy_timeout = 5000;') # タイムアウト設定
+        logging.info("データベース接続成功")
+        return conn
+    except sqlite3.Error as e:
+        logging.error(f"データベース接続に失敗: {e}")
+        raise
+
+
+def atomic_write(path: str, data: bytes):
+    """
+    一時ファイルに書き込み、完了後にリネームすることで
+    書き込み中のファイル破損を防ぐ
+    """
+    dir_path = os.path.dirname(path)
+    os.makedirs(dir_path, exist_ok=True)
+    
+    # 一時ファイル作成
+    fd, tmp_path = tempfile.mkstemp(
+        dir=dir_path,
+        prefix='.tmp_',
+        suffix=os.path.basename(path)
+    )
+    
+    try:
+        # データ書き込み
+        with os.fdopen(fd, 'wb') as f:
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+        
+        # アトミックリネーム
+        os.replace(tmp_path, path)
+        
+    except Exception as e:
+        # エラー時は一時ファイルを削除
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+        raise e
+
+
+def parse_with_error_handling(
+    file_path: str,
+    parser_name: str,
+    parse_func,
+    db_conn
+):
+    """
+    エラーハンドリング付きパーサ実行
+    
+    Args:
+        file_path: 対象ファイルパス
+        parser_name: パーサ名
+        parse_func: パース関数
+        db_conn: SQLite接続
+    
+    Returns:
+        パース結果（成功時）またはNone（失敗時）
+    """
+    
+    try:
+        result = parse_func(file_path)
+        return result
+    
+    except Exception as e:
+        # エラーログ記録
+        error_message = str(e)
+        stack_trace = traceback.format_exc()
+        
+        logging.error(f"パースエラー ({parser_name}): {file_path} - {error_message}")
+        
+        # データベースに記録
+        try:
+            cursor = db_conn.cursor()
+            cursor.execute('''
+                INSERT INTO parse_failures (
+                    parser_name, source_file, error_type, 
+                    error_message, stack_trace, failed_ts
+                ) VALUES (?, ?, ?, ?, ?, ?)
+            ''', (
+                parser_name,
+                file_path,
+                type(e).__name__,
+                error_message,
+                stack_trace,
+                datetime.now(timezone.utc).isoformat()
+            ))
+            db_conn.commit()
+        except Exception as db_e:
+            logging.error(f"パースエラーのDB記録に失敗: {db_e}")
+
+        
+        # エラー詳細をJSONに保存
+        try:
+            error_dir = Path(f'data/errors/parse_failures/{parser_name}')
+            error_dir.mkdir(parents=True, exist_ok=True)
+            
+            error_file = error_dir / f"{Path(file_path).stem}_error.json"
+            
+            error_data = {
+                'file_path': file_path,
+                'parser_name': parser_name,
+                'error_type': type(e).__name__,
+                'error_message': error_message,
+                'stack_trace': stack_trace,
+                'failed_ts': datetime.now(timezone.utc).isoformat()
+            }
+            
+            with open(error_file, 'w', encoding='utf-8') as f:
+                json.dump(error_data, f, ensure_ascii=False, indent=2)
+        except Exception as json_e:
+            logging.error(f"パースエラーのJSON保存に失敗: {json_e}")
+
+        return None
+
+--- keibaai/src/run_parsing_pipeline_local.py ---
+
+# keibaai/src/run_parsing_pipeline_local.py
+
+import logging
+import sqlite3
+from pathlib import Path
+import yaml
+from datetime import datetime
+import sys
+import pandas as pd
+
+# プロジェクトルートをsys.pathに追加
+project_root = Path(__file__).resolve().parent.parent
+sys.path.append(str(project_root))
+
+from src import pipeline_core
+from src.modules.parsers import results_parser, shutuba_parser, horse_info_parser, pedigree_parser
+
+def load_config():
+    """設定ファイルをロードする"""
+    config_path = Path(__file__).resolve().parent.parent / "configs"
+    with open(config_path / "default.yaml", "r", encoding="utf-8") as f:
+        default_cfg = yaml.safe_load(f)
+    
+    data_root = Path(__file__).resolve().parent.parent / default_cfg['data_path']
+    default_cfg['raw_data_path'] = str(data_root / 'raw')
+    default_cfg['parsed_data_path'] = str(data_root / 'parsed')
+    default_cfg['database']['path'] = str(data_root / 'metadata' / 'db.sqlite3')
+    default_cfg['logging']['log_file'] = str(data_root / 'logs' / '{YYYY}' / '{MM}' / '{DD}' / 'parsing.log')
+
+    config = {"default": default_cfg}
+    return config
+
+def setup_logging(log_path_template: str):
+    """ログ設定を行う"""
+    now = datetime.now()
+    log_path = log_path_template.format(YYYY=now.year, MM=f"{now.month:02}", DD=f"{now.day:02}")
+    Path(log_path).parent.mkdir(parents=True, exist_ok=True)
+    
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        handlers=[
+            logging.FileHandler(log_path, encoding='utf-8'),
+            logging.StreamHandler()
+        ]
+    )
+
+def main():
+    """
+    生のHTMLデータをパースし、Parquet形式で保存するパイプライン
+    """
+    cfg = load_config()
+    setup_logging(cfg["default"]["logging"]["log_file"])
+    
+    log = logging.getLogger(__name__)
+    log.info("データ整形パイプラインを開始します...")
+
+    db_path = Path(cfg["default"]["database"]["path"])
+    conn = sqlite3.connect(db_path)
+
+    try:
+        # --- 1. レース結果HTMLのパース ---
+        log.info("レース結果HTMLのパース処理を開始します。")
+        raw_race_html_dir = Path(cfg["default"]["raw_data_path"]) / "html" / "race"
+        parsed_race_parquet_dir = Path(cfg["default"]["parsed_data_path"]) / "parquet" / "races"
+        parsed_race_parquet_dir.mkdir(parents=True, exist_ok=True)
+        race_html_files = list(raw_race_html_dir.glob("*.html"))
+        log.info(f"{len(race_html_files)}件のレース結果HTMLファイルが見つかりました。")
+        all_results_df = []
+        for html_file in race_html_files:
+            df = pipeline_core.parse_with_error_handling(str(html_file), "results_parser", results_parser.parse_results_html, conn)
+            if df is not None and not df.empty:
+                all_results_df.append(df)
+        if all_results_df:
+            final_results_df = pd.concat(all_results_df, ignore_index=True)
+            output_path = parsed_race_parquet_dir / "races.parquet"
+            final_results_df.to_parquet(output_path, index=False)
+            log.info(f"レース結果のパース結果をParquetファイルとして保存しました: {output_path} ({len(final_results_df)}レコード)")
+        else:
+            log.warning("処理できるレース結果データがありませんでした。")
+
+        # --- 2. 出馬表HTMLのパース ---
+        log.info("出馬表HTMLのパース処理を開始します。")
+        raw_shutuba_html_dir = Path(cfg["default"]["raw_data_path"]) / "html" / "shutuba"
+        parsed_shutuba_parquet_dir = Path(cfg["default"]["parsed_data_path"]) / "parquet" / "shutuba"
+        parsed_shutuba_parquet_dir.mkdir(parents=True, exist_ok=True)
+        shutuba_html_files = list(raw_shutuba_html_dir.glob("*.html"))
+        log.info(f"{len(shutuba_html_files)}件の出馬表HTMLファイルが見つかりました。")
+        all_shutuba_df = []
+        for html_file in shutuba_html_files:
+            df = pipeline_core.parse_with_error_handling(str(html_file), "shutuba_parser", shutuba_parser.parse_shutuba_html, conn)
+            if df is not None and not df.empty:
+                all_shutuba_df.append(df)
+        if all_shutuba_df:
+            final_shutuba_df = pd.concat(all_shutuba_df, ignore_index=True)
+            output_path = parsed_shutuba_parquet_dir / "shutuba.parquet"
+            final_shutuba_df.to_parquet(output_path, index=False)
+            log.info(f"出馬表のパース結果をParquetファイルとして保存しました: {output_path} ({len(final_shutuba_df)}レコード)")
+        else:
+            log.warning("処理できる出馬表データがありませんでした。")
+
+        # --- 3. 馬プロフィールHTMLのパース ---
+        log.info("馬プロフィールHTMLのパース処理を開始します。")
+        raw_horse_html_dir = Path(cfg["default"]["raw_data_path"]) / "html" / "horse"
+        parsed_horse_parquet_dir = Path(cfg["default"]["parsed_data_path"]) / "parquet" / "horses"
+        parsed_horse_parquet_dir.mkdir(parents=True, exist_ok=True)
+        horse_html_files = list(raw_horse_html_dir.glob("*.html"))
+        log.info(f"{len(horse_html_files)}件の馬プロフィールHTMLファイルが見つかりました。")
+        all_horses_data = []
+        for html_file in horse_html_files:
+            data = pipeline_core.parse_with_error_handling(str(html_file), "horse_info_parser", horse_info_parser.parse_horse_profile, conn)
+            if data:
+                all_horses_data.append(data)
+        if all_horses_data:
+            final_horses_df = pd.DataFrame(all_horses_data)
+            output_path = parsed_horse_parquet_dir / "horses.parquet"
+            final_horses_df.to_parquet(output_path, index=False)
+            log.info(f"馬プロフィールのパース結果をParquetファイルとして保存しました: {output_path} ({len(final_horses_df)}レコード)")
+        else:
+            log.warning("処理できる馬プロフィールデータがありませんでした。")
+
+        # --- 4. 血統HTMLのパース ---
+        log.info("血統HTMLのパース処理を開始します。")
+        raw_ped_html_dir = Path(cfg["default"]["raw_data_path"]) / "html" / "ped"
+        parsed_ped_parquet_dir = Path(cfg["default"]["parsed_data_path"]) / "parquet" / "pedigrees"
+        parsed_ped_parquet_dir.mkdir(parents=True, exist_ok=True)
+        ped_html_files = list(raw_ped_html_dir.glob("*.html"))
+        log.info(f"{len(ped_html_files)}件の血統HTMLファイルが見つかりました。")
+        all_pedigrees_df = []
+        for html_file in ped_html_files:
+            df = pipeline_core.parse_with_error_handling(str(html_file), "pedigree_parser", pedigree_parser.parse_pedigree_html, conn)
+            if df is not None and not df.empty:
+                all_pedigrees_df.append(df)
+        if all_pedigrees_df:
+            final_pedigrees_df = pd.concat(all_pedigrees_df, ignore_index=True)
+            output_path = parsed_ped_parquet_dir / "pedigrees.parquet"
+            final_pedigrees_df.to_parquet(output_path, index=False)
+            log.info(f"血統のパース結果をParquetファイルとして保存しました: {output_path} ({len(final_pedigrees_df)}レコード)")
+        else:
+            log.warning("処理できる血統データがありませんでした。")
+
+    except Exception as e:
+        log.error(f"パイプラインの実行中にエラーが発生しました: {e}", exc_info=True)
+    finally:
+        conn.close()
+        log.info("データベース接続をクローズしました。")
+
+    log.info("データ整形パイプラインが終了しました。")
+
+if __name__ == "__main__":
+    main()
+
+
+--- keibaai/src/run_scraping_pipeline_local.py ---
+
+#!/usr/bin/env python3
+# src/run_scraping_pipeline_local.py
+
+import logging
+import sqlite3
+from pathlib import Path
+import yaml
+from datetime import datetime
+import sys
+import pandas as pd
+import argparse # 修正: argparse をインポート
+
+# --- ▼▼▼ 修正: パス解決ロジックを他のスクリプトと統一 ---
+# スクリプト(keibaai/src/run_scraping_pipeline_local.py) の2階層上が keibaai (プロジェクトルート)
+project_root = Path(__file__).resolve().parent.parent
+# keibaai (プロジェクトルート) を sys.path に追加
+sys.path.append(str(project_root))
+# --- ▲▲▲ 修正ここまで ---
+
+try:
+  # --- ▼▼▼ 修正: 'src.modules' からの絶対パスでインポート ---
+  from src.modules.preparing import _requests_utils, _scrape_jra_odds
+  from src import pipeline_core
+  from src.utils import data_utils
+  from src.modules.parsers import shutuba_parser
+  # --- ▲▲▲ 修正ここまで ---
+except ImportError as e:
+  print(f"エラー: 必要なモジュールのインポートに失敗しました: {e}")
+  print("プロジェクトルート（Keiba_AI_v2）から実行しているか、")
+  print("keibaai/src/ 配下に 'modules' フォルダ (preparing, parsers を含む) が存在するか確認してください。")
+  print(f"sys.path: {sys.path}")
+  sys.exit(1)
+
+def load_config():
+  """設定ファイルをロードする"""
+  # --- ▼▼▼ 修正: パス解決に project_root (keibaai/) を使用 ---
+  config_path = project_root / "configs" # 修正
+  with open(config_path / "default.yaml", "r", encoding="utf-8") as f:
+    default_cfg = yaml.safe_load(f)
+  with open(config_path / "scraping.yaml", "r", encoding="utf-8") as f:
+    scraping_cfg_raw = yaml.safe_load(f)
+ 
+  # default.yaml の data_path (例: data) を project_root 基準で解決
+  # (注: default.yaml の data_path は "data" であり、"keibaai/data" ではないと仮定)
+  data_path_val = default_cfg.get('data_path', 'data')
+  data_root = project_root / data_path_val
+  # --- ▲▲▲ 修正ここまで ---
+ 
+  default_cfg['raw_data_path'] = str(data_root / 'raw')
+  default_cfg['parsed_data_path'] = str(data_root / 'parsed')
+  default_cfg['database']['path'] = str(data_root / 'metadata' / 'db.sqlite3')
+
+  # --- 修正: ログパスの解決を project_root 基準に変更 ---
+  # (他のスクリプトのログ解決ロジックと統一)
+ 
+  # default.yaml の 'paths' セクションを取得 (存在しない場合は data_path から構築)
+  # (注: train_mu_model.py のロジックと合わせる)
+  paths_config = default_cfg.get('paths', {})
+  data_path_val_from_paths = paths_config.get('data_path', 'data')
+  
+  logs_path_base = paths_config.get('logs_path', 'data/logs')
+  # ${data_path} を置換
+  logs_path_base = logs_path_base.replace('${data_path}', data_path_val_from_paths)
+   
+  log_path_template = default_cfg.get('logging', {}).get('log_file', 'data/logs/{YYYY}/{MM}/{DD}/pipeline.log')
+  # ${logs_path} を置換
+  log_path_template = log_path_template.replace('${logs_path}', logs_path_base)
+ 
+  default_cfg['logging']['log_file_template'] = log_path_template # テンプレートを保持
+  # --- 修正ここまで ---
+
+  config = {
+    "default": default_cfg,
+    "scraping": scraping_cfg_raw['scraping']
+  }
+  return config
+
+def setup_logging(log_path_template: str):
+  """ログ設定を行う"""
+  now = datetime.now()
+  log_path = log_path_template.format(YYYY=now.year, MM=f"{now.month:02}", DD=f"{now.day:02}")
+ 
+  # --- 修正: project_root (keibaai/) からの絶対パスとして解決 ---
+  log_path_abs = project_root / log_path
+  log_path_abs.parent.mkdir(parents=True, exist_ok=True)
+  # --- 修正ここまで ---
+ 
+  logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[
+      logging.FileHandler(log_path_abs, encoding='utf-8'), # 修正: 絶対パスを使用
+      logging.StreamHandler(sys.stdout) # 修正: stdout に変更
+    ],
+    force=True # 修正: 既存のハンドラを上書き
+  )
+
+def scrape_and_save_html(identifier: str, data_type: str, cfg: dict, conn: sqlite3.Connection):
+  """指定されたデータ種別のHTMLを取得して保存する"""
+  log = logging.getLogger(__name__)
+ 
+  # cfg['default']['raw_data_path'] は load_config で絶対パス解決済み
+  raw_data_path = Path(cfg['default']['raw_data_path'])
+ 
+  url_map = {
+    "race": (f"https://db.netkeiba.com/race/{identifier}", raw_data_path / "html" / "race"),
+    "shutuba": (f"https://race.netkeiba.com/race/shutuba.html?race_id={identifier}", raw_data_path / "html" / "shutuba"),
+    "horse": (f"https://db.netkeiba.com/horse/{identifier}", raw_data_path / "html" / "horse"),
+    "ped": (f"https://db.netkeiba.com/horse/ped/{identifier}", raw_data_path / "html" / "ped"),
+  }
+
+  if data_type not in url_map:
+    log.warning(f"未対応のデータ種別です: {data_type}")
+    return None
+
+  url, output_dir = url_map[data_type]
+  output_dir.mkdir(parents=True, exist_ok=True)
+
+  try:
+    # --- 修正: scraping_cfg を渡す ---
+    response = _requests_utils.fetch_html(url, cfg['scraping'])
+   
+    if response is None:
+      log.info(f"ID {identifier} ({data_type}) のHTML取得をスキップ (キャッシュ/設定/エラー)")
+      return None
+     
+    # 修正: レスポンスがNoneでないことを確認してから .content にアクセス
+    if response.content is None:
+      log.warning(f"ID {identifier} ({data_type}) のレスポンスボディが空です。")
+      return None
+   
+    file_name = data_utils.construct_filename(
+      base_name=data_type,
+      identifier=identifier,
+      data=response.content,
+      extension="html"
+    )
+    file_path = output_dir / file_name
+   
+    pipeline_core.atomic_write(str(file_path), response.content)
+    log.info(f"{data_type} HTMLを保存しました: {file_path}")
+   
+    data_utils.save_fetch_metadata(
+      db_conn=conn, url=url, file_path=str(file_path), data=response.content,
+      http_status=response.status_code, fetch_method='requests', error_message=None
+    )
+    log.info(f"メタデータをデータベースに保存しました: {url}")
+    return file_path
+  except Exception as e:
+    log.error(f"ID {identifier} ({data_type}) の処理中にエラーが発生しました: {e}", exc_info=False)
+    try:
+      status_code = response.status_code if 'response' in locals() and hasattr(response, 'status_code') else 500
+      data_utils.save_fetch_metadata(
+        db_conn=conn, url=url, file_path=str(output_dir / f"{identifier}_error.html"), data=b"",
+        http_status=status_code,
+        fetch_method='requests', error_message=str(e)
+      )
+    except Exception as db_e:
+      log.error(f"エラーメタデータの保存に失敗: {db_e}")
+    return None
+
+# --- ▼▼▼ 修正: argparse を使った main 関数 ---
+def main():
+  """設定に基づいてスクレイピングパイプラインを実行する"""
+ 
+  # 1. 引数パーサーを追加
+  parser = argparse.ArgumentParser(description='Keiba AI スクレイピングパイプライン')
+  parser.add_argument(
+    '--from_date',
+    type=str,
+    required=True,
+    help='スクレイピング開始日 (YYYY-MM-DD)'
+  )
+  parser.add_argument(
+    '--to_date',
+    type=str,
+    required=True,
+    help='スクレイピング終了日 (YYYY-MM-DD)'
+  )
+  # (仕様書[Source 420] に合わせるため skip_race_html も追加)
+  parser.add_argument(
+    '--skip_race_html',
+    action='store_true',
+    help='レース結果(race)HTMLの取得をスキップする'
+  )
+  args = parser.parse_args()
+
+  # 2. 設定とロギング
+  cfg = load_config()
+  setup_logging(cfg["default"]["logging"]["log_file_template"]) # 修正: テンプレートパスを渡す
+  log = logging.getLogger(__name__)
+  log.info("スクレイピングパイプラインを開始します...")
+  log.info(f"対象期間: {args.from_date} - {args.to_date}")
+ 
+  # --- 修正: db_path を project_root 基準で解決 ---
+  db_path = Path(cfg["default"]["database"]["path"])
+  db_path.parent.mkdir(parents=True, exist_ok=True)
+  conn = None # 修正: finally のために先に定義
+  try:
+    conn = sqlite3.connect(db_path)
+
+    # --- 3. レース情報のスクレイピング ---
+    log.info("レース情報のスクレイピングを開始...")
+   
+    # --- 修正: cfg['scraping'] を渡す ---
+    all_kaisai_dates = _requests_utils.scrape_kaisai_dates(cfg['scraping'])
+   
+    try:
+      start_dt = datetime.strptime(args.from_date, '%Y-%m-%d').date()
+      end_dt = datetime.strptime(args.to_date, '%Y-%m-%d').date()
+     
+      target_kaisai_dates = [
+        d for d in all_kaisai_dates
+        if start_dt <= datetime.strptime(d, '%Y-%m-%d').date() <= end_dt
+      ]
+      log.info(f"対象開催日数: {len(target_kaisai_dates)}日 (全{len(all_kaisai_dates)}日中)")
+    except ValueError as e:
+      log.error(f"日付フォーマットエラー: {e}")
+      sys.exit(1)
+     
+    if not target_kaisai_dates:
+      log.warning("対象期間の開催日が見つかりません。")
+      if conn:
+        conn.close()
+      return # 修正: finally の外なのでここで return
+
+    # --- 修正: cfg['scraping'] を渡す ---
+    race_ids = _requests_utils.scrape_race_id_list(target_kaisai_dates, cfg['scraping'])
+    log.info(f"対象レースID数: {len(race_ids)}件")
+   
+    shutuba_html_paths = []
+    for i, race_id in enumerate(race_ids, 1):
+      log.info(f"--- レース {i}/{len(race_ids)} ({race_id}) ---")
+      if not args.skip_race_html:
+        scrape_and_save_html(race_id, "race", cfg, conn)
+     
+      shutuba_path = scrape_and_save_html(race_id, "shutuba", cfg, conn)
+      if shutuba_path:
+        shutuba_html_paths.append(shutuba_path)
+   
+    # --- 4. 出馬表から馬IDを取得 ---
+    log.info("出馬表から馬IDを取得...")
+    horse_ids = set()
+    for html_file in shutuba_html_paths:
+      try:
+        # 修正: race_id を渡す
+        # (ファイル名が {base_name}_{identifier}_{data_version}.{extension} と想定)
+        race_id_from_file = Path(html_file).name.split('_')[1]
+        df = shutuba_parser.parse_shutuba_html(str(html_file), race_id=race_id_from_file)
+        if df is not None and not df.empty and 'horse_id' in df.columns:
+          horse_ids.update(df['horse_id'].dropna().unique())
+      except Exception as e:
+        log.error(f"出馬表パースエラー ({html_file}): {e}", exc_info=True)
+   
+    log.info(f"{len(horse_ids)}頭のユニークな馬IDを取得しました。")
+
+    # --- 5. 馬関連情報のスクレイピング ---
+    log.info("馬関連情報のスクレイピングを開始...")
+    for i, horse_id in enumerate(list(horse_ids), 1):
+      if horse_id: # 修正: None や空文字を除外
+        log.info(f"--- 馬 {i}/{len(horse_ids)} ({horse_id}) ---")
+        scrape_and_save_html(horse_id, "horse", cfg, conn)
+        scrape_and_save_html(horse_id, "ped", cfg, conn)
+
+    # --- 6. 当日オッズ情報の取得 (仕様書 13.1 では別スクリプト) ---
+    fetch_odds_config = cfg.get("scraping", {}).get("fetch_jra_odds_in_pipeline", False)
+    if fetch_odds_config:
+      log.info("当日バッチ処理（オッズ取得）を開始...")
+      for i, race_id in enumerate(race_ids, 1):
+        log.info(f"--- オッズ {i}/{len(race_ids)} ({race_id}) ---")
+        # --- 修正: cfg (全体) と cfg['default']['raw_data_path'] を渡す ---
+        _scrape_jra_odds.scrape_and_save_jra_odds(
+          race_id, cfg, conn, cfg['default']['raw_data_path']
+        )
+      log.info("当日バッチ処理が完了。")
+    else:
+      log.info("JRAオッズ取得はスキップされました（設定: fetch_jra_odds_in_pipeline=False）。")
+
+  except Exception as e:
+    log.error(f"パイプラインの実行中にエラーが発生しました: {e}", exc_info=True)
+  finally:
+    if conn:
+      conn.close()
+      log.info("データベース接続をクローズしました。")
+
+  log.info("スクレイピングパイプラインが終了しました。")
+
+if __name__ == "__main__":
+  main()
+
+--- keibaai/src/features/feature_engine.py ---
+
+#!/usr/bin/env python3
+# src/features/feature_engine.py
+"""
+特徴量生成エンジン
+仕様書 6.3 に基づく FeatureEngine クラスの定義
+"""
+
+import logging
+from typing import Dict, List, Optional
+from pathlib import Path
+import pandas as pd
+import numpy as np
+import yaml
+
+class FeatureEngine:
+  """特徴量生成エンジン"""
+ 
+  def __init__(self, config: Dict):
+    """
+    Args:
+      config: 特徴量設定 (configs/features.yaml)
+    """
+    self.config = config
+    self.feature_names = []
+
+  def generate_features(
+    self,
+    shutuba_df: pd.DataFrame,
+    results_history_df: pd.DataFrame,
+    horse_profiles_df: pd.DataFrame,
+    pedigree_df: pd.DataFrame,
+    jockey_stats_df: Optional[pd.DataFrame] = None,
+    trainer_stats_df: Optional[pd.DataFrame] = None
+  ) -> pd.DataFrame:
+    """
+    特徴量生成のメイン関数
+    仕様書 6.3 のフロー
+    """
+    logging.info("特徴量生成開始")
+   
+    # shutuba_df をベースに特徴量を追加
+    df = shutuba_df.copy()
+   
+    # config の存在を安全にチェック
+    basic_config = self.config.get('basic_features', {})
+    past_perf_config = self.config.get('past_performance_aggregation', {})
+    adjusted_speed_config = self.config.get('adjusted_speed', {})
+    pedigree_config = self.config.get('pedigree_features', {})
+    jockey_trainer_config = self.config.get('jockey_trainer_features', {})
+    temporal_config = self.config.get('temporal_features', {})
+    within_race_norm_config = self.config.get('within_race_normalization', {})
+
+    # --- 特徴量生成メソッド呼び出し ---
+    # (注: 仕様書に詳細実装がないため、スタブメソッドを呼び出します)
+
+    df = self._add_basic_features(df, basic_config)
+    df = self._add_past_performance_features(df, results_history_df, past_perf_config)
+   
+    if adjusted_speed_config.get("enabled", False):
+      df = self._add_adjusted_speed(df, results_history_df, adjusted_speed_config)
+   
+    if pedigree_config.get("enabled", False):
+      df = self._add_pedigree_features(df, pedigree_df, results_history_df, pedigree_config)
+   
+    if jockey_trainer_config.get("enabled", False):
+      df = self._add_jockey_trainer_features(df, results_history_df, jockey_stats_df, trainer_stats_df, jockey_trainer_config)
+   
+    if temporal_config.get("enabled", False):
+      df = self._add_temporal_features(df, results_history_df, temporal_config)
+   
+    if within_race_norm_config.get("enabled", False):
+      df = self._add_relative_features(df, within_race_norm_config)
+   
+    # --- ▼▼▼ 修正 ▼▼▼ ---
+    # 欠損値処理をここで呼び出す (dropnaエラー回避のため)
+    df = self._handle_missing_values(df)
+    # --- ▲▲▲ 修正 ▲▲▲ ---
+   
+    # --- 特徴量名リストの確定 ---
+    # (キーと日付カラムを除外)
+    base_columns = ["race_id", "horse_id", "horse_number", "race_date", "year", "month", "day"]
+    self.feature_names = [
+      c for c in df.columns if c not in base_columns and not pd.api.types.is_datetime64_any_dtype(df[c])
+    ]
+   
+    logging.info(f"特徴量生成完了: {len(self.feature_names)}個の特徴量を生成しました")
+    return df
+
+  # =========================================================================
+  # 特徴量生成スタブメソッド
+  # (仕様書に詳細実装が定義されていないため、エラー回避用に空の関数を定義)
+  # (将来的にはこれらの関数内に個別の特徴量エンジニアリングを実装してください)
+  # =========================================================================
+
+  def _add_basic_features(self, df: pd.DataFrame, config: Dict) -> pd.DataFrame:
+    logging.debug("STUB: _add_basic_features 実行")
+    # 例: df['age'] = df['age'].fillna(df['age'].median())
+    return df
+
+  def _add_past_performance_features(self, df: pd.DataFrame, results_history_df: pd.DataFrame, config: Dict) -> pd.DataFrame:
+    logging.debug("STUB: _add_past_performance_features 実行")
+    return df
+
+  def _add_adjusted_speed(self, df: pd.DataFrame, results_history_df: pd.DataFrame, config: Dict) -> pd.DataFrame:
+    logging.debug("STUB: _add_adjusted_speed 実行")
+    return df
+
+  def _add_pedigree_features(self, df: pd.DataFrame, pedigree_df: pd.DataFrame, results_history_df: pd.DataFrame, config: Dict) -> pd.DataFrame:
+    logging.debug("STUB: _add_pedigree_features 実行")
+    return df
+
+  def _add_jockey_trainer_features(
+    self,
+    df: pd.DataFrame,
+    results_history_df: pd.DataFrame,
+    jockey_stats_df: Optional[pd.DataFrame],
+    trainer_stats_df: Optional[pd.DataFrame],
+    config: Dict
+  ) -> pd.DataFrame:
+    logging.debug("STUB: _add_jockey_trainer_features 実行")
+    return df
+
+  def _add_temporal_features(self, df: pd.DataFrame, results_history_df: pd.DataFrame, config: Dict) -> pd.DataFrame:
+    logging.debug("STUB: _add_temporal_features 実行")
+    return df
+
+  def _add_relative_features(self, df: pd.DataFrame, config: Dict) -> pd.DataFrame:
+    logging.debug("STUB: _add_relative_features 実行")
+    return df
+
+  # --- ▼▼▼ 修正: train_mu_model.py の dropna エラーを回避するため、欠損値処理を実装 ---
+  def _handle_missing_values(self, df: pd.DataFrame) -> pd.DataFrame:
+    logging.debug("欠損値処理 (fillna) を実行中")
+    
+    # (注: 本来は configs/features.yaml の imputation_strategy に基づくべきだが、
+    #   スタブ実装のため、ここでは安全な方法で埋める)
+    
+    # 1. 数値カラム (float, int) は 0 で埋める
+    numeric_cols = df.select_dtypes(include=np.number).columns
+    df[numeric_cols] = df[numeric_cols].fillna(0)
+    
+    # 2. カテゴリ/テキストカラム (object) は "missing" で埋める
+    categorical_cols = df.select_dtypes(exclude=np.number).columns
+    # (ただし、datetime型は除外)
+    for col in categorical_cols:
+      if not pd.api.types.is_datetime64_any_dtype(df[col]):
+        df[col] = df[col].fillna("missing")
+       
+    logging.debug("欠損値処理完了")
+    return df
+  # --- ▲▲▲ 修正ここまで ---
+
+  # =========================================================================
+  # 保存メソッド (generate_features.py から呼び出されるため)
+  # =========================================================================
+ 
+  def save_features(
+    self,
+    features_df: pd.DataFrame,
+    output_dir: str,
+    partition_cols: Optional[List[str]] = None
+  ):
+    """
+    特徴量をParquet形式で保存
+    仕様書 6.6 および 17.2 に基づく
+    """
+    logging.info(f"特徴量を {output_dir} に保存中...")
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+   
+    if features_df.empty:
+      logging.warning("保存対象の特徴量データが空です。")
+      return
+
+    try:
+      # Parquet保存
+      features_df.to_parquet(
+        output_path,
+        engine='pyarrow',
+        compression='snappy',
+        partition_cols=partition_cols,
+        existing_data_behavior='overwrite_or_ignore'
+      )
+      logging.info(f"{len(features_df)}行を {output_dir} に保存しました")
+     
+      # 特徴量リストを保存 (仕様書 6.6)
+      # Parquet の親ディレクトリ (e.g., data/features/) に保存
+      feature_names_path = output_path.parent / 'feature_names.yaml'
+      feature_data = {'feature_names': self.feature_names}
+     
+      with open(feature_names_path, 'w', encoding='utf-8') as f:
+        yaml.dump(feature_data, f, allow_unicode=True)
+      logging.info(f"特徴量リストを {feature_names_path} に保存しました")
+
+    except Exception as e:
+      logging.error(f"特徴量のParquet保存に失敗: {e}", exc_info=True)
+
+--- keibaai/src/features/generate_features.py ---
+
+#!/usr/bin/env python3
+# src/features/generate_features.py
+"""
+特徴量生成 実行スクリプト
+指定された日付（または期間）のパース済みデータを読み込み、
+特徴量エンジニアリングを実行し、data/features/ に保存する。
+
+仕様書 17.2 に基づく実装
+
+実行例 (日付指定):
+python src/features/generate_features.py --date 2023-10-01
+
+実行例 (期間指定):
+python src/features/generate_features.py --start_date 2023-01-01 --end_date 2023-01-31
+"""
+
+import argparse
+import logging
+import sys
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Dict, Any
+
+import pandas as pd
+import yaml
+import pyarrow as pa
+import pyarrow.parquet as pq
+
+# --- ▼▼▼ 修正 ▼▼▼ ---
+# スクリプト(keibaai/src/features/generate_features.py) の4階層上が Keiba_AI_v2 (実行ルート)
+execution_root = Path(__file__).resolve().parent.parent.parent.parent
+# keibaai/src を sys.path に追加
+sys.path.append(str(execution_root / "keibaai" / "src"))
+# --- ▲▲▲ 修正 ▲▲▲ ---
+
+try:
+    from pipeline_core import setup_logging, load_config
+    from utils.data_utils import load_parquet_data_by_date
+    from features.feature_engine import FeatureEngine
+except ImportError as e:
+    print(f"エラー: 必要なモジュールのインポートに失敗しました: {e}")
+    print(f"sys.path: {sys.path}")
+    sys.exit(1)
+
+
+def load_data_for_features(
+    paths_config: Dict[str, Any],
+    start_dt: datetime,
+    end_dt: datetime,
+    execution_root: Path
+) -> Dict[str, pd.DataFrame]:
+    """
+    特徴量生成に必要なデータをロードする
+    仕様書 17.2 に基づく
+    """
+    logging.info("特徴量生成用のデータをロード中...")
+    
+    # --- 修正: プロジェクトルート (keibaai/) を基準にパスを構築 ---
+    # default.yaml の 'parsed_parquet_path' (例: "keibaai/data/parsed/parquet") を execution_root 基準で解決
+    parsed_base_dir = execution_root / paths_config.get('parsed_parquet_path', 'keibaai/data/parsed/parquet')
+    
+    logging.info(f"データ検索パス: {parsed_base_dir}")
+    
+    # 1. 出馬表 (対象期間)
+    shutuba_dir = parsed_base_dir / 'shutuba'
+    shutuba_df = load_parquet_data_by_date(
+        shutuba_dir, start_dt, end_dt, date_col='race_date'
+    )
+    
+    if shutuba_df.empty:
+        logging.warning(f"期間 {start_dt.strftime('%Y-%m-%d')} - {end_dt.strftime('%Y-%m-%d')} の出馬表データが見つかりません。処理を中止します。")
+        return {}
+        
+    # 2. 過去成績 (全期間 - 終了日まで)
+    # --- ▼▼▼ 修正 ▼▼▼ ---
+    # ★★★ 修正: 'results' (仕様書) ではなく、run_parsing_pipeline_local.py の
+    #             実装に合わせ 'races' ディレクトリを読み込む ★★★
+    results_history_dir = parsed_base_dir / 'races' # 'results' から 'races' に変更
+    results_history_df = load_parquet_data_by_date(
+        results_history_dir, None, end_dt, date_col='race_date'
+    )
+    
+    # ★追加: レース結果がロードできたか確認
+    if results_history_df.empty:
+        logging.warning(f"レース結果(races)データが {results_history_dir} からロードできませんでした。")
+        logging.warning("run_parsing_pipeline_local.py が実行されているか確認してください。")
+        # 目的変数なしで続行するが、マージ時に警告が出る
+    else:
+        logging.info(f"{len(results_history_df)} 行のレース結果(races)をロードしました。")
+    # --- ▲▲▲ 修正 ▲▲▲ ---
+
+    # 3. 馬プロフィール (全期間)
+    horse_profiles_dir = parsed_base_dir / 'horses'
+    horse_profiles_df = load_parquet_data_by_date(
+        horse_profiles_dir, None, None, date_col='birth_date'
+    )
+
+    # 4. 血統 (全期間)
+    pedigree_dir = parsed_base_dir / 'pedigrees'
+    pedigree_df = load_parquet_data_by_date(
+        pedigree_dir, None, None, date_col=None
+    )
+    
+    logging.info("データロード完了")
+    
+    return {
+        "shutuba_df": shutuba_df,
+        "results_history_df": results_history_df,
+        "horse_profiles_df": horse_profiles_df,
+        "pedigree_df": pedigree_df
+    }
+
+
+def main():
+    """メイン実行関数"""
+    parser = argparse.ArgumentParser(description='Keiba AI 特徴量生成パイプライン')
+    parser.add_argument(
+        '--date',
+        type=str,
+        help='処理対象日 (YYYY-MM-DD)。指定しない場合は期間指定が必須。'
+    )
+    parser.add_argument(
+        '--start_date',
+        type=str,
+        help='処理開始日 (YYYY-MM-DD)'
+    )
+    parser.add_argument(
+        '--end_date',
+        type=str,
+        help='処理終了日 (YYYY-MM-DD)'
+    )
+    parser.add_argument(
+        '--config',
+        type=str,
+        default='keibaai/configs/default.yaml', # ★修正
+        help='設定ファイルパス'
+    )
+    parser.add_argument(
+        '--features_config',
+        type=str,
+        default='keibaai/configs/features.yaml', # ★修正
+        help='特徴量設定ファイルパス'
+    )
+    parser.add_argument(
+        '--log_level',
+        type=str,
+        default='INFO',
+        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+        help='ログレベル'
+    )
+
+    args = parser.parse_args()
+
+    # --- 修正 (train_mu_model.py とロジックを統一) ---
+    # 実行ルート (Keiba_AI_v2/) を取得
+    execution_root = Path(__file__).resolve().parent.parent.parent.parent
+
+    # --- 0. 設定とロギング ---
+    paths_config = {}
+    try:
+        # コマンド引数のパス (例: keibaai/configs/default.yaml) は実行場所(execution_root)からの相対パスとして解決
+        config_path = execution_root / args.config
+        features_config_path = execution_root / args.features_config
+        
+        logging.info(f"設定ファイルパス: {config_path}")
+        
+        default_config = load_config(str(config_path))
+        
+        # 'paths' セクションを取得
+        paths = default_config.get('paths', {})
+        paths_config = paths.copy()
+
+        # data_path を取得 (default.yaml に基づく)
+        data_path_val = paths_config.get('data_path', 'keibaai/data')
+        
+        # ${data_path} を置換
+        for key, value in paths_config.items():
+            if isinstance(value, str):
+                paths_config[key] = value.replace('${data_path}', data_path_val)
+        
+        # ログパステンプレートを取得
+        logs_path_base = paths_config.get('logs_path', 'keibaai/data/logs')
+        log_path_template = default_config.get('logging', {}).get('log_file', 'keibaai/data/logs/{YYYY}/{MM}/{DD}/features.log')
+        log_path_with_base = log_path_template.replace('${logs_path}', logs_path_base)
+        
+        now = datetime.now()
+        log_path = log_path_with_base.format(YYYY=now.year, MM=f"{now.month:02}", DD=f"{now.day:02}")
+        
+        # ログファイルパスを絶対パスに変換
+        log_path_abs = execution_root / log_path
+        log_path_abs.parent.mkdir(parents=True, exist_ok=True)
+
+        logging.basicConfig(
+            level=args.log_level.upper(),
+            format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+            handlers=[
+                logging.FileHandler(log_path_abs, encoding='utf-8'),
+                logging.StreamHandler(sys.stdout)
+            ],
+            force=True
+        )
+            
+    except Exception as e:
+        # この時点ではロギングが失敗している可能性があるため print を使用
+        print(f"ロギングと設定の初期化に失敗しました: {e}")
+        logging.basicConfig(level=args.log_level.upper(), format='%(asctime)s [%(levelname)s] %(name)s: %(message)s')
+        try:
+            # フォールバック（設定ファイルの手動読み込み試行）
+            with open(config_path, 'r', encoding='utf-8') as f:
+                paths_config_raw = yaml.safe_load(f).get('paths', {})
+                
+            data_path_val = paths_config_raw.get('data_path', 'keibaai/data')
+            paths_config = paths_config_raw.copy()
+            for key, value in paths_config.items():
+                if isinstance(value, str):
+                    paths_config[key] = value.replace('${data_path}', data_path_val)
+
+        except FileNotFoundError:
+            logging.error(f"設定ファイルが見つかりません: {config_path}")
+            sys.exit(1)
+        except Exception as ex:
+            logging.error(f"フォールバック設定のロード中にエラー: {ex}")
+            sys.exit(1)
+    # --- 修正ここまで ---
+
+
+    logging.info("=" * 60)
+    logging.info("Keiba AI 特徴量生成パイプライン開始")
+    logging.info("=" * 60)
+
+    try:
+        with open(features_config_path, 'r', encoding='utf-8') as f:
+            features_config = yaml.safe_load(f)
+    except FileNotFoundError:
+        logging.error(f"特徴量設定ファイルが見つかりません: {features_config_path}")
+        sys.exit(1)
+
+    # --- 1. 日付範囲の決定 ---
+    try:
+        if args.date:
+            start_dt = datetime.strptime(args.date, '%Y-%m-%d')
+            end_dt = start_dt
+        elif args.start_date and args.end_date:
+            start_dt = datetime.strptime(args.start_date, '%Y-%m-%d')
+            end_dt = datetime.strptime(args.end_date, '%Y-%m-%d')
+        else:
+            logging.error("日付 (--date) または期間 (--start_date, --end_date) を指定してください")
+            sys.exit(1)
+            
+        logging.info(f"処理対象期間: {start_dt.strftime('%Y-%m-%d')} - {end_dt.strftime('%Y-%m-%d')}")
+            
+    except ValueError as e:
+        logging.error(f"日付フォーマットエラー: {e}")
+        sys.exit(1)
+
+    # --- 2. データロード ---
+    data = load_data_for_features(paths_config, start_dt, end_dt, execution_root) # ★修正
+    
+    if not data:
+        logging.warning("ロード対象のデータがありませんでした。処理を終了します。")
+        logging.info("=" * 60)
+        logging.info("Keiba AI 特徴量生成パイプライン完了 (対象なし)")
+        logging.info("=" * 60)
+        sys.exit(0)
+
+    # --- 3. 特徴量エンジン初期化 ---
+    engine = FeatureEngine(config=features_config)
+
+    # --- 4. 特徴量生成 ---
+    features_df = pd.DataFrame()
+    if data:
+        try:
+            # --- ▼▼▼ 修正 ▼▼▼ ---
+            # 目的変数 (finish_position等) を shutuba_df にマージする
+            shutuba_df = data["shutuba_df"]
+            results_df = data["results_history_df"] # results_history_df には全期間の結果が含まれる
+
+            target_cols = ['race_id', 'horse_id', 'finish_position', 'finish_time_seconds']
+            
+            # ★修正: results_df が空でないか、カラムが存在するかをチェック
+            if results_df.empty:
+                logging.warning("レース結果(results)データが空のため、目的変数をマージできません。")
+            elif not all(col in results_df.columns for col in target_cols):
+                missing_cols = [col for col in target_cols if col not in results_df.columns]
+                logging.warning(f"レース結果(results)に目的変数カラム {missing_cols} が不足しているため、マージをスキップします。")
+            else:
+                # マージキーの型を合わせる
+                shutuba_df['race_id'] = shutuba_df['race_id'].astype(str)
+                shutuba_df['horse_id'] = shutuba_df['horse_id'].astype(str)
+                results_df['race_id'] = results_df['race_id'].astype(str)
+                results_df['horse_id'] = results_df['horse_id'].astype(str)
+
+                # shutuba_df (対象期間) に、対応するレース結果 (全期間から) をマージ
+                shutuba_df = shutuba_df.merge(
+                    results_df[target_cols],
+                    on=['race_id', 'horse_id'],
+                    how='left' # 出馬表がベース
+                )
+                logging.info("特徴量生成のため、出馬表にレース結果（目的変数）をマージしました。")
+            
+            features_df = engine.generate_features(
+                shutuba_df=shutuba_df, # ★修正: マージ済みの shutuba_df を渡す
+                results_history_df=data["results_history_df"],
+                horse_profiles_df=data["horse_profiles_df"],
+                pedigree_df=data["pedigree_df"]
+            )
+            # --- ▲▲▲ 修正 ▲▲▲ ---
+            
+        except Exception as e:
+            logging.error(f"特徴量生成中にエラーが発生しました: {e}", exc_info=True)
+            sys.exit(1)
+        
+    
+    if features_df.empty:
+        logging.warning("特徴量生成の結果が空です。")
+    else:
+        # --- 5. 特徴量保存 ---
+        # --- 修正 ---
+        output_dir_base = paths_config.get('features_path', 'keibaai/data/features')
+        output_dir = execution_root / output_dir_base / 'parquet' 
+        # --- 修正ここまで ---
+        
+        partition_cols = features_config.get('output', {}).get('partition_by', ['year', 'month'])
+        
+        # 保存のために 'race_date' からパーティションカラムを生成
+        if 'race_date' in features_df.columns:
+            features_df['race_date'] = pd.to_datetime(features_df['race_date'])
+            features_df['year'] = features_df['race_date'].dt.year
+            features_df['month'] = features_df['race_date'].dt.month
+            features_df['day'] = features_df['race_date'].dt.day
+        else:
+            logging.warning("race_date カラムが特徴量にありません。パーティション分割が不正確になる可能性があります。")
+            if 'race_id' in features_df.columns:
+                try:
+                    features_df['race_date_str'] = features_df['race_id'].astype(str).str[:8]
+                    features_df['race_date'] = pd.to_datetime(features_df['race_date_str'], format='%Y%m%d', errors='coerce')
+                    
+                    if features_df['race_date'].isnull().any():
+                        logging.warning("race_id から日付への変換に失敗したレコードがあります。")
+                        valid_dates = features_df['race_date'].notnull()
+                        features_df.loc[valid_dates, 'year'] = features_df.loc[valid_dates, 'race_date'].dt.year
+                        features_df.loc[valid_dates, 'month'] = features_df.loc[valid_dates, 'race_date'].dt.month
+                        features_df.loc[valid_dates, 'day'] = features_df.loc[valid_dates, 'race_date'].dt.day
+                    else:
+                        features_df['year'] = features_df['race_date'].dt.year
+                        features_df['month'] = features_df['race_date'].dt.month
+                        features_df['day'] = features_df['race_date'].dt.day
+                        
+                except Exception as ex_date:
+                    logging.error(f"race_id から日付を復元できませんでした: {ex_date}")
+        
+        # ★修正: engine.save_features は仕様書になく、実装もないため、ここで直接保存する
+        try:
+            # --- ▼▼▼ 修正: pandas.to_parquet から pyarrow.write_to_dataset に変更 ▼▼▼
+            output_dir.mkdir(parents=True, exist_ok=True)
+            
+            # DataFrame を Arrow Table に変換
+            table = pa.Table.from_pandas(features_df, preserve_index=False)
+            
+            pq.write_to_dataset(
+                table,
+                root_path=output_dir,
+                partition_cols=partition_cols,
+                existing_data_behavior='delete_matching' # 'overwrite_or_ignore' から変更
+            )
+            # --- ▲▲▲ 修正 ▲▲▲
+            
+            logging.info(f"{len(features_df)}行を {output_dir} に保存しました")
+
+            # 特徴量リストを保存 (仕様書 6.6)
+            feature_names_path = execution_root / output_dir_base / 'feature_names.yaml' # ★修正
+            feature_names_data = {'feature_names': engine.feature_names}
+            with open(feature_names_path, 'w', encoding='utf-8') as f:
+                yaml.dump(feature_names_data, f, allow_unicode=True)
+            logging.info(f"特徴量リストを {feature_names_path} に保存しました")
+
+        except Exception as e:
+            logging.error(f"特徴量の保存に失敗: {e}", exc_info=True)
+
+    logging.info("=" * 60)
+    logging.info("Keiba AI 特徴量生成パイプライン完了")
+    logging.info("=" * 60)
+
+if __name__ == '__main__':
+    main()
+
+--- keibaai/src/models/model_train.py ---
+
+#!/usr/bin/env python3
+# src/models/model_train.py
+"""
+src/models/model_train.py (MuEstimator)
+μ（馬の基礎能力）を推定するモデルクラス
+仕様書 7.7.1章 に基づく実装
+"""
+
+import logging
+from typing import Dict, List, Optional
+from pathlib import Path
+import pandas as pd
+import numpy as np
+import lightgbm as lgb
+import joblib
+import json
+
+class MuEstimator:
+    """
+    μ（馬の基礎能力スコア）推定モデル
+    
+    仕様書に基づき、LightGBMのRegressor（基礎スコア）とRanker（順位）を
+    内部に持つアンサンブルモデルとして実装（ただし運用はRegressor主体でも可）。
+   
+    """
+    
+    def __init__(self, config: Dict):
+        """
+        Args:
+            config: configs/models.yaml の 'mu_estimator' セクション
+        """
+        self.config = config
+        self.regressor_params = config.get('regressor_params', {})
+        self.ranker_params = config.get('ranker_params', {})
+        
+        self.model_regressor: Optional[lgb.LGBMRegressor] = None
+        self.model_ranker: Optional[lgb.LGBMRanker] = None
+        
+        self.feature_names: List[str] = []
+
+    def train(
+        self,
+        features_df: pd.DataFrame,
+        feature_names: List[str],
+        target_regressor: str = 'finish_time_seconds', # 回帰ターゲット
+        target_ranker: str = 'finish_position',     # ランクターゲット
+        group_col: str = 'race_id'
+    ):
+        """
+        μモデル（RegressorとRanker）を学習
+        
+        Args:
+            features_df: 学習用特徴量DataFrame
+            feature_names: 使用する特徴量のリスト
+            target_regressor: 回帰（スコア）の目的変数名
+            target_ranker: ランキング（順位）の目的変数名
+            group_col: レースID（グループ）のカラム名
+        """
+        logging.info("μモデルの学習開始...")
+        
+        self.feature_names = feature_names
+        
+        X = features_df[self.feature_names]
+        
+        # 1. Regressor (基礎スコア) の学習
+        logging.info(f"Regressor (LGBMRegressor) を '{target_regressor}' で学習中...")
+        y_reg = features_df[target_regressor]
+        self.model_regressor = lgb.LGBMRegressor(**self.regressor_params)
+        self.model_regressor.fit(X, y_reg)
+        logging.info("Regressor の学習完了")
+        
+        # 2. Ranker (順位) の学習
+        logging.info(f"Ranker (LGBMRanker) を '{target_ranker}' で学習中...")
+        y_rank = features_df[target_ranker]
+        
+        # グループ（レースごと）のサンプル数を計算
+        # group_col でソートされている必要があるため、ソートを実行
+        features_df_sorted = features_df.sort_values(by=group_col)
+        X_rank = features_df_sorted[self.feature_names]
+        y_rank_sorted = features_df_sorted[target_ranker]
+        group_counts = features_df_sorted.groupby(group_col).size().values
+        
+        self.model_ranker = lgb.LGBMRanker(**self.ranker_params)
+        self.model_ranker.fit(X_rank, y_rank_sorted, group=group_counts)
+        logging.info("Ranker の学習完了")
+
+    def predict(
+        self,
+        features_df: pd.DataFrame,
+        ensemble_weight_regressor: float = 0.5,
+        ensemble_weight_ranker: float = 0.5
+    ) -> np.ndarray:
+        """
+        μスコアを予測
+        
+        Args:
+            features_df: 予測対象の特徴量DataFrame
+            ensemble_weight_regressor: Regressorの予測値の重み
+            ensemble_weight_ranker: Rankerの予測値の重み
+        
+        Returns:
+            μスコアの配列
+        """
+        if self.model_regressor is None or self.model_ranker is None:
+            raise RuntimeError("モデルが学習されていません。 train() または load_model() を呼び出してください。")
+            
+        if not self.feature_names:
+             raise RuntimeError("特徴量リストがロードされていません。")
+
+        X = features_df[self.feature_names]
+        
+        # 1. Regressor 予測
+        # Regressor (例: タイム予測) は値が小さいほど良い
+        pred_regressor = self.model_regressor.predict(X)
+        # スコア化 (値が大きいほど良いように反転)
+        score_regressor = -pred_regressor
+        
+        # 2. Ranker 予測
+        # Ranker はスコアを直接出力 (値が大きいほど順位が良い)
+        score_ranker = self.model_ranker.predict(X)
+        
+        # 3. アンサンブル (Z-score正規化後に加重平均)
+        # レースごとの正規化ではなく、バッチ全体で正規化
+        score_regressor_norm = (score_regressor - np.mean(score_regressor)) / (np.std(score_regressor) + 1e-6)
+        score_ranker_norm = (score_ranker - np.mean(score_ranker)) / (np.std(score_ranker) + 1e-6)
+        
+        final_score = (
+            score_regressor_norm * ensemble_weight_regressor +
+            score_ranker_norm * ensemble_weight_ranker
+        )
+        
+        return final_score
+
+    def save_model(self, model_dir: str):
+        """
+        学習済みモデルと特徴量リストを保存
+        
+        Args:
+            model_dir: 保存先ディレクトリ (例: data/models/mu_model)
+        """
+        output_path = Path(model_dir)
+        output_path.mkdir(parents=True, exist_ok=True)
+        
+        # モデル保存
+        joblib.dump(self.model_regressor, output_path / 'regressor.pkl')
+        joblib.dump(self.model_ranker, output_path / 'ranker.pkl')
+        
+        # 特徴量リスト保存
+        features_path = output_path / 'feature_names.json'
+        with open(features_path, 'w', encoding='utf-8') as f:
+            json.dump(self.feature_names, f, ensure_ascii=False, indent=2)
+            
+        logging.info(f"μモデルを {model_dir} に保存しました")
+
+    def load_model(self, model_dir: str):
+        """
+        モデルと特徴量リストをロード
+        
+        Args:
+            model_dir: ロード元ディレクトリ
+        """
+        model_path = Path(model_dir)
+        
+        if not model_path.exists():
+            raise FileNotFoundError(f"モデルディレクトリが見つかりません: {model_dir}")
+            
+        self.model_regressor = joblib.load(model_path / 'regressor.pkl')
+        self.model_ranker = joblib.load(model_path / 'ranker.pkl')
+        
+        features_path = model_path / 'feature_names.json'
+        with open(features_path, 'r', encoding='utf-8') as f:
+            self.feature_names = json.load(f)
+            
+        logging.info(f"μモデルを {model_dir} からロードしました")
+
+--- keibaai/src/models/nu_estimator.py ---
+
+#!/usr/bin/env python3
+# src/models/nu_estimator.py
+"""
+src/models/nu_estimator.py (NuEstimator)
+ν（レース荒れ度）を推定するモデルクラス
+仕様書 7.7.3章 に基づく実装
+"""
+
+import logging
+from typing import Dict, List, Optional
+from pathlib import Path
+import pandas as pd
+import numpy as np
+import lightgbm as lgb
+import joblib
+import json
+
+class NuEstimator:
+    """
+    ν（レース全体の荒れ度）推定モデル
+    
+    仕様書 13.4章 (train_sigma_nu_models.py) に基づき、
+    LGBMRegressor を使用してレース単位の分散（例: 着順の標準偏差）を予測する。
+    """
+    
+    def __init__(self, config: Dict):
+        """
+        Args:
+            config: configs/models.yaml の 'nu_estimator' セクション
+        """
+        self.config = config
+        self.params = config.get('params', {
+            'objective': 'regression',
+            'metric': 'rmse',
+            'boosting_type': 'gbdt'
+        })
+        
+        self.model: Optional[lgb.LGBMRegressor] = None
+        self.feature_names: List[str] = []
+        self.global_nu: float = 1.0 # フォールバック用のグローバル平均
+
+    def train(
+        self,
+        features_df: pd.DataFrame,
+        feature_names: List[str],
+        target_nu: str = 'nu_target' # 目的変数 (例: finish_position の std)
+    ):
+        """
+        νモデルを学習
+        
+        Args:
+            features_df: 学習用特徴量DataFrame (レース単位で集約済みを想定)
+            feature_names: 使用する特徴量リスト
+            target_nu: レース荒れ度のターゲットカラム名
+        """
+        logging.info("νモデルの学習開始...")
+        
+        self.feature_names = feature_names
+        
+        X = features_df[self.feature_names]
+        y = features_df[target_nu]
+        
+        # グローバル平均を計算（予測失敗時のフォールバック用）
+        self.global_nu = y.mean()
+        
+        self.model = lgb.LGBMRegressor(**self.params)
+        self.model.fit(X, y)
+        logging.info("νモデルの学習完了")
+
+    def predict(
+        self,
+        features_df: pd.DataFrame
+    ) -> np.ndarray:
+        """
+        ν（レース荒れ度）を予測
+        
+        Args:
+            features_df: 予測対象の特徴量DataFrame (レース単位)
+        
+        Returns:
+            ν（荒れ度スコア）の配列
+        """
+        
+        if self.model is None:
+            raise RuntimeError("モデルが学習されていません。 train() または load_model() を呼び出してください。")
+            
+        X = features_df[self.feature_names]
+        
+        predicted_nu = self.model.predict(X)
+        
+        # 異常値をグローバル平均で置換
+        predicted_nu = np.nan_to_num(predicted_nu, nan=self.global_nu)
+        
+        # 負の値をクリップ
+        return np.maximum(predicted_nu, 0.0)
+
+    def save_model(self, model_path: str):
+        """
+        学習済みモデルと特徴量リストを保存
+        
+        Args:
+            model_path: 保存先パス (例: data/models/nu_model.pkl)
+        """
+        output_path = Path(model_path)
+        output_dir = output_path.parent
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # モデル本体を保存
+        joblib.dump(self.model, output_path)
+        
+        # メタデータを同階層に保存
+        meta_data = {
+            'feature_names': self.feature_names,
+            'global_nu': self.global_nu
+        }
+        meta_path = output_dir / f"{output_path.stem}_metadata.json"
+        with open(meta_path, 'w', encoding='utf-8') as f:
+            json.dump(meta_data, f, ensure_ascii=False, indent=2)
+            
+        logging.info(f"νモデルを {output_path} に保存しました")
+
+    def load_model(self, model_path: str):
+        """
+        モデルと特徴量リストをロード
+        
+        Args:
+            model_path: ロード元パス
+        """
+        model_file = Path(model_path)
+
+        if not model_file.exists():
+            raise FileNotFoundError(f"モデルファイルが見つかりません: {model_path}")
+
+        self.model = joblib.load(model_file)
+        
+        meta_path = model_file.parent / f"{model_file.stem}_metadata.json"
+        try:
+            with open(meta_path, 'r', encoding='utf-8') as f:
+                meta_data = json.load(f)
+                self.feature_names = meta_data['feature_names']
+                self.global_nu = meta_data['global_nu']
+        except FileNotFoundError:
+            logging.warning(f"メタファイルが見つかりません: {meta_path}。グローバル値がデフォルトになります。")
+            self.feature_names = self.model.feature_name_
+            self.global_nu = 1.0
+            
+        logging.info(f"νモデルを {model_path} からロードしました")
+
+--- keibaai/src/models/predict.py ---
+
+#!/usr/bin/env python3
+# src/models/predict.py
+"""
+モデル推論 実行スクリプト
+指定された日付の特徴量を読み込み、
+学習済みモデル（μ, σ, ν）で推論を実行し、
+結果を data/predictions/ に保存する。
+
+仕様書 17.3章 に基づく実装
+
+実行例:
+python src/models/predict.py --date 2023-10-01 --model_dir data/models/latest
+"""
+
+import argparse
+import logging
+import sys
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, Any
+
+import pandas as pd
+import numpy as np
+import yaml
+import joblib
+import json
+
+# --- 修正: プロジェクトルートの定義変更 ---
+execution_root = Path(__file__).resolve().parent.parent.parent.parent
+sys.path.append(str(execution_root / "keibaai" / "src"))
+# --- 修正ここまで ---
+
+try:
+    from pipeline_core import setup_logging, load_config
+    from utils.data_utils import load_parquet_data_by_date
+    from models.model_train import MuEstimator
+    from models.sigma_estimator import SigmaEstimator
+    from models.nu_estimator import NuEstimator
+except ImportError as e:
+    print(f"エラー: 必要なモジュールのインポートに失敗しました: {e}")
+    print("プロジェクトルートが正しく設定されているか確認してください。")
+    print(f"sys.path: {sys.path}")
+    sys.exit(1)
+
+
+def load_model_safely(model_class, config, model_path_str):
+    """モデルをロードする（クラスラッパーを使用）"""
+    # 修正: model_path_str は execution_root からの相対パスと見なす
+    model_path_abs = execution_root / model_path_str
+    if not model_path_abs.exists():
+        logging.error(f"モデルディレクトリが見つかりません: {model_path_abs}")
+        raise FileNotFoundError(f"モデルディレクトリが見つかりません: {model_path_abs}")
+        
+    model = model_class(config)
+    model.load_model(str(model_path_abs))
+    return model
+
+def load_plain_model(model_path_str, meta_path_str):
+    """
+    プレーンなLGBMモデルファイルとメタデータ（特徴量リスト）をロードする
+    """
+    # 修正: パスを execution_root 基準で解決
+    model_file_abs = execution_root / model_path_str
+    meta_file_abs = execution_root / meta_path_str
+    
+    if not model_file_abs.exists():
+        raise FileNotFoundError(f"モデルファイルが見つかりません: {model_file_abs}")
+    if not meta_file_abs.exists():
+        raise FileNotFoundError(f"メタファイル（特徴量リスト）が見つかりません: {meta_file_abs}")
+
+    model = joblib.load(model_file_abs)
+    
+    with open(meta_file_abs, 'r', encoding='utf-8') as f:
+        try:
+            meta_data = json.load(f)
+        except json.JSONDecodeError:
+            logging.warning(f"メタファイル {meta_file_abs} はJSONではありませんでした。YAMLとして再試行します。")
+            f.seek(0)
+            meta_data = yaml.safe_load(f)
+
+        if isinstance(meta_data, dict):
+            feature_names = meta_data.get('feature_names', [])
+        else:
+            feature_names = meta_data 
+            
+    return model, feature_names
+
+
+def main():
+    """メイン実行関数"""
+    parser = argparse.ArgumentParser(description='Keiba AI モデル推論パイプライン')
+    parser.add_argument(
+        '--date',
+        type=str,
+        required=True,
+        help='推論対象日 (YYYY-MM-DD)'
+    )
+    parser.add_argument(
+        '--model_dir',
+        type=str,
+        required=True,
+        help='学習済みモデルが格納されているディレクトリ (例: keibaai/data/models/latest)'
+    )
+    parser.add_argument(
+        '--config',
+        type=str,
+        default='keibaai/configs/default.yaml', # 修正: 実行場所からの相対パス
+        help='設定ファイルパス'
+    )
+    parser.add_argument(
+        '--models_config',
+        type=str,
+        default='keibaai/configs/models.yaml', # 修正: 実行場所からの相対パス
+        help='モデル設定ファイルパス'
+    )
+    parser.add_argument(
+        '--log_level',
+        type=str,
+        default='INFO',
+        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+        help='ログレベル'
+    )
+    parser.add_argument(
+        '--output_filename',
+        type=str,
+        default='mu_predictions.parquet',
+        help='μモデルの推論結果の出力ファイル名（σ/ν学習用）'
+    )
+
+    args = parser.parse_args()
+
+    # --- 0. 設定とロギング (修正: パス解決) ---
+    try:
+        config_path = execution_root / args.config
+        models_config_path = execution_root / args.models_config
+
+        config = load_config(str(config_path))
+        paths = config.get('paths', {})
+        
+        with open(models_config_path, 'r', encoding='utf-8') as f:
+            models_config = yaml.safe_load(f)
+
+        # ログパスの ${logs_path} を解決
+        logs_path_base = paths.get('logs_path', 'data/logs')
+        log_path_template = config.get('logging', {}).get('log_file', 'data/logs/{YYYY}/{MM}/{DD}/predict.log')
+        log_path_with_base = log_path_template.replace('${logs_path}', logs_path_base)
+
+        now = datetime.now()
+        log_path = log_path_with_base.format(YYYY=now.year, MM=f"{now.month:02}", DD=f"{now.day:02}")
+        
+        # ログファイルパスを execution_root からの相対パスとして解決
+        log_path_abs = execution_root / log_path
+        log_path_abs.parent.mkdir(parents=True, exist_ok=True)
+
+        logging.basicConfig(
+            level=args.log_level.upper(),
+            format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+            handlers=[
+                logging.FileHandler(log_path_abs, encoding='utf-8'),
+                logging.StreamHandler(sys.stdout)
+            ],
+            force=True
+        )
+            
+    except FileNotFoundError as e:
+        logging.error(f"設定ファイルが見つかりません: {e}")
+        sys.exit(1)
+    except KeyError as e:
+        print(f"設定ファイル（{args.config}）の読み込み中にキーエラーが発生しました: {e}")
+        print("default.yaml に 'paths' や 'logging' の設定が含まれているか確認してください。")
+        sys.exit(1)
+    # --- 修正ここまで ---
+
+
+    logging.info("=" * 60)
+    logging.info("Keiba AI モデル推論パイプライン開始")
+    logging.info("=" * 60)
+    logging.info(f"対象日: {args.date}, モデル: {args.model_dir}")
+
+    # --- 1. 日付範囲の決定 ---
+    try:
+        target_dt = datetime.strptime(args.date, '%Y-%m-%d')
+    except ValueError as e:
+        logging.error(f"日付フォーマットエラー: {e}")
+        sys.exit(1)
+
+    # --- 2. 特徴量データのロード (修正: パス解決) ---
+    features_dir = execution_root / paths.get('features_path', 'keibaai/data/features') / 'parquet'
+    features_df = load_parquet_data_by_date(features_dir, target_dt, target_dt, date_col='race_date')
+    
+    if features_df.empty:
+        logging.warning(f"{args.date} の特徴量データが見つかりません。処理を終了します。")
+        sys.exit(0)
+
+    # --- 3. モデルのロード (修正: パス解決) ---
+    # args.model_dir (例: keibaai/data/models/mu_model_v1) を execution_root 基準で解決
+    model_dir_path_str = args.model_dir
+    
+    try:
+        # 3.1 μ (mu) モデル
+        logging.info("μモデルをロード中...")
+        mu_model_config = models_config.get('mu_estimator', {})
+        mu_model = load_model_safely(
+            MuEstimator, 
+            mu_model_config, 
+            str(Path(model_dir_path_str) / 'mu_model') # 'mu_model' サブディレクトリ
+        )
+
+        # 3.2 σ (sigma) モデル
+        logging.info("σモデルをロード中...")
+        sigma_model, sigma_features = load_plain_model(
+            str(Path(model_dir_path_str) / 'sigma_model.pkl'),
+            str(Path(model_dir_path_str) / 'sigma_features.json')
+        )
+        sigma_model.feature_names_ = sigma_features 
+
+        # 3.3 ν (nu) モデル
+        logging.info("νモデルをロード中...")
+        nu_model, nu_features = load_plain_model(
+            str(Path(model_dir_path_str) / 'nu_model.pkl'),
+            str(Path(model_dir_path_str) / 'nu_features.json')
+        )
+        nu_model.feature_names_ = nu_features
+        
+        logging.info("全モデルのロード完了")
+
+    except Exception as e:
+        logging.error(f"モデルのロード中にエラーが発生しました: {e}", exc_info=True)
+        sys.exit(1)
+        
+    # --- 4. 推論実行 ---
+    logging.info("推論実行中...")
+    
+    predictions_list = []
+    race_ids = features_df['race_id'].unique()
+    
+    for race_id in race_ids:
+        race_features_df = features_df[features_df['race_id'] == race_id].copy().reset_index(drop=True)
+        
+        if race_features_df.empty:
+            continue
+            
+        # 4.1 μ の予測
+        mu_pred = mu_model.predict(race_features_df)
+        
+        # 4.2 σ の予測
+        try:
+            X_sigma = race_features_df[sigma_model.feature_names_]
+            sigma_pred = sigma_model.predict(X_sigma)
+            sigma_pred = np.sqrt(np.maximum(sigma_pred, 0.0)) 
+        except Exception as e:
+            logging.warning(f"レース {race_id} のσ予測に失敗: {e}。グローバル値 (1.0) で代替します。")
+            sigma_pred = np.full(len(race_features_df), 1.0)
+        
+        # 4.3 ν の予測
+        try:
+            X_nu = race_features_df[nu_model.feature_names_].iloc[0:1] 
+            nu_pred = nu_model.predict(X_nu)[0]
+        except Exception as e:
+            logging.warning(f"レース {race_id} のν予測に失敗: {e}。グローバル値 (1.0) で代替します。")
+            nu_pred = 1.0
+        
+        # 結果を格納
+        result_df = pd.DataFrame({
+            'race_id': race_id,
+            'horse_id': race_features_df['horse_id'],
+            'horse_number': race_features_df['horse_number'],
+            'mu': mu_pred,
+            'sigma': sigma_pred,
+            'nu': nu_pred
+        })
+        
+        predictions_list.append(result_df)
+        
+    if not predictions_list:
+        logging.error("推論結果がありません。")
+        sys.exit(1)
+        
+    predictions_df = pd.concat(predictions_list, ignore_index=True)
+    
+    logging.info(f"{len(predictions_df)}件の推論結果を生成")
+
+    # --- 5. 推論結果の保存 (修正: パス解決) ---
+    output_dir = execution_root / paths.get('predictions_path', 'keibaai/data/predictions') / 'parquet'
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    predictions_df['year'] = target_dt.year
+    predictions_df['month'] = target_dt.month
+    predictions_df['day'] = target_dt.day
+    
+    try:
+        predictions_df.to_parquet(
+            output_dir,
+            engine='pyarrow',
+            compression='snappy',
+            partition_cols=['year', 'month', 'day'],
+            existing_data_behavior='overwrite_or_ignore'
+        )
+        logging.info(f"推論結果をパーティション形式で {output_dir} に保存しました")
+
+        single_file_path = output_dir / args.output_filename
+        predictions_df[['horse_id', 'mu']].to_parquet(
+            single_file_path,
+            engine='pyarrow',
+            compression='snappy'
+        )
+        logging.info(f"σ/ν学習用のμ推論結果を {single_file_path} に保存しました")
+
+    except Exception as e:
+        logging.error(f"推論結果のParquet保存に失敗: {e}", exc_info=True)
+
+    logging.info("=" * 60)
+    logging.info("Keiba AI モデル推論パイプライン完了")
+    logging.info("=" * 60)
+
+if __name__ == '__main__':
+    main()
+
+--- keibaai/src/models/sigma_estimator.py ---
+
+#!/usr/bin/env python3
+# src/models/sigma_estimator.py
+"""
+src/models/sigma_estimator.py (SigmaEstimator)
+σ（馬固有の残差分散）を推定するモデルクラス
+仕様書 7.7.2章 に基づく実装
+"""
+
+import logging
+from typing import Dict, List, Optional
+from pathlib import Path
+import pandas as pd
+import numpy as np
+import lightgbm as lgb
+import joblib
+import json
+
+class SigmaEstimator:
+    """
+    σ（馬固有の残差分散）推定モデル
+    
+    仕様書 13.4章 (train_sigma_nu_models.py) に基づき、
+    LGBMRegressor を使用して残差の分散（または標準偏差）を予測する。
+    """
+    
+    def __init__(self, config: Dict):
+        """
+        Args:
+            config: configs/models.yaml の 'sigma_estimator' セクション
+        """
+        self.config = config
+        self.params = config.get('params', {
+            'objective': 'regression',
+            'metric': 'rmse',
+            'boosting_type': 'gbdt'
+        })
+        
+        self.model: Optional[lgb.LGBMRegressor] = None
+        self.feature_names: List[str] = []
+        self.global_sigma: float = 1.0 # フォールバック用のグローバル平均
+
+    def train(
+        self,
+        features_df: pd.DataFrame,
+        feature_names: List[str],
+        target_sigma: str = 'sigma_target' # 目的変数 (例: squared_error の平均)
+    ):
+        """
+        σモデルを学習
+        
+        Args:
+            features_df: 学習用特徴量DataFrame (馬単位で集約済みを想定)
+            feature_names: 使用する特徴量リスト
+            target_sigma: 残差分散のターゲットカラム名
+        """
+        logging.info("σモデルの学習開始...")
+        
+        self.feature_names = feature_names
+        
+        X = features_df[self.feature_names]
+        y = features_df[target_sigma]
+        
+        # グローバル平均を計算（予測失敗時のフォールバック用）
+        self.global_sigma = np.sqrt(y.mean()) # ターゲットが分散の場合、標準偏差を保存
+        
+        self.model = lgb.LGBMRegressor(**self.params)
+        self.model.fit(X, y)
+        logging.info("σモデルの学習完了")
+
+    def predict(
+        self,
+        features_df: pd.DataFrame
+    ) -> np.ndarray:
+        """
+        σ（残差の標準偏差）を予測
+        
+        Args:
+            features_df: 予測対象の特徴量DataFrame (レース・馬単位)
+        
+        Returns:
+            σ（標準偏差）の配列
+        """
+        if self.model is None:
+            raise RuntimeError("モデルが学習されていません。 train() または load_model() を呼び出してください。")
+            
+        X = features_df[self.feature_names]
+        
+        # 予測 (予測ターゲットは分散 'sigma_target' を想定)
+        predicted_variance = self.model.predict(X)
+        
+        # 負の分散をクリップし、標準偏差（σ）に変換
+        predicted_sigma = np.sqrt(np.maximum(predicted_variance, 0.0))
+        
+        # 異常値をグローバル平均で置換
+        predicted_sigma = np.nan_to_num(predicted_sigma, nan=self.global_sigma)
+        predicted_sigma[predicted_sigma == 0] = self.global_sigma
+        
+        return predicted_sigma
+
+    def save_model(self, model_dir: str):
+        """
+        学習済みモデルと特徴量リストを保存
+        
+        Args:
+            model_dir: 保存先ディレクトリ (例: data/models/sigma_model)
+        """
+        output_path = Path(model_dir)
+        output_path.mkdir(parents=True, exist_ok=True)
+        
+        joblib.dump(self.model, output_path / 'model.pkl')
+        
+        meta_data = {
+            'feature_names': self.feature_names,
+            'global_sigma': self.global_sigma
+        }
+        meta_path = output_path / 'metadata.json'
+        with open(meta_path, 'w', encoding='utf-8') as f:
+            json.dump(meta_data, f, ensure_ascii=False, indent=2)
+            
+        logging.info(f"σモデルを {model_dir} に保存しました")
+
+    def load_model(self, model_dir: str):
+        """
+        モデルと特徴量リストをロード
+        
+        Args:
+            model_dir: ロード元ディレクトリ
+        """
+        model_path = Path(model_dir)
+
+        if not model_path.exists():
+            raise FileNotFoundError(f"モデルディレクトリが見つかりません: {model_dir}")
+
+        self.model = joblib.load(model_path / 'model.pkl')
+        
+        meta_path = model_path / 'metadata.json'
+        with open(meta_path, 'r', encoding='utf-8') as f:
+            meta_data = json.load(f)
+            self.feature_names = meta_data['feature_names']
+            self.global_sigma = meta_data['global_sigma']
+            
+        logging.info(f"σモデルを {model_dir} からロードしました")
+
+--- keibaai/src/models/train_mu_model.py ---
+
+#!/usr/bin/env python3
+# src/models/train_mu_model.py
+"""
+μモデル (MuEstimator) 学習実行スクリプト
+仕様書 13.3章, 19.3.2章 に基づく実装
+
+実行例:
+python src/models/train_mu_model.py \
+  --start_date 2020-01-01 \
+  --end_date 2023-12-31 \
+  --output_dir data/models/mu_model_v1
+"""
+
+import argparse
+import logging
+import sys
+from datetime import datetime
+from pathlib import Path
+import yaml
+import pandas as pd
+
+# --- 修正: プロジェクトルートの定義変更 ---
+# スクリプト(keibaai/src/models/train_mu_model.py) の4階層上が Keiba_AI_v2 (実行ルート)
+execution_root = Path(__file__).resolve().parent.parent.parent.parent
+# keibaai/src を sys.path に追加
+sys.path.append(str(execution_root / "keibaai" / "src"))
+# --- 修正ここまで ---
+
+try:
+  from pipeline_core import setup_logging, load_config
+  from utils.data_utils import load_parquet_data_by_date
+  from models.model_train import MuEstimator
+except ImportError as e:
+  print(f"エラー: 必要なモジュールのインポートに失敗しました: {e}")
+  print("プロジェクトルートが正しく設定されているか確認してください。")
+  print(f"sys.path: {sys.path}")
+  sys.exit(1)
+
+def main():
+  """メイン実行関数"""
+  parser = argparse.ArgumentParser(description='Keiba AI μモデル学習パイプライン')
+  parser.add_argument(
+    '--start_date',
+    type=str,
+    required=True,
+    help='学習開始日 (YYYY-MM-DD)'
+  )
+  parser.add_argument(
+    '--end_date',
+    type=str,
+    required=True,
+    help='学習終了日 (YYYY-MM-DD)'
+  )
+  parser.add_argument(
+    '--output_dir',
+    type=str,
+    required=True,
+    help='学習済みモデルの保存先ディレクトリ (例: data/models/mu_model_v1)'
+  )
+  parser.add_argument(
+    '--config',
+    type=str,
+    default='keibaai/configs/default.yaml', # 修正: 実行場所からの相対パス
+    help='基本設定ファイルパス'
+  )
+  parser.add_argument(
+    '--models_config',
+    type=str,
+    default='keibaai/configs/models.yaml', # 修正: 実行場所からの相対パス
+    help='モデル設定ファイルパス'
+  )
+  parser.add_argument(
+    '--features_config',
+    type=str,
+    default='keibaai/configs/features.yaml', # 修正: 実行場所からの相対パス
+    help='特徴量設定ファイルパス'
+  )
+  parser.add_argument(
+    '--log_level',
+    type=str,
+    default='INFO',
+    choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+    help='ログレベル'
+  )
+
+  args = parser.parse_args()
+
+  # --- 0. 設定とロギング (修正: パス解決) ---
+  try:
+    # コマンド引数のパス (例: keibaai/configs/default.yaml) は実行場所(execution_root)からの相対パスとして解決
+    config_path = execution_root / args.config
+    models_config_path = execution_root / args.models_config
+    features_config_path = execution_root / args.features_config
+   
+    config = load_config(str(config_path))
+   
+    # --- ▼▼▼ 修正: 'paths' セクションの取得と解決 ▼▼▼ ---
+    paths = config.get('paths', {})
+    paths_config = paths.copy()
+
+    # data_path を取得 (default.yaml に基づく)
+    data_path_val = paths_config.get('data_path', 'keibaai/data')
+   
+    # ${data_path} を置換
+    for key, value in paths_config.items():
+      if isinstance(value, str):
+        paths_config[key] = value.replace('${data_path}', data_path_val)
+    # --- ▲▲▲ 修正 ▲▲▲ ---
+
+    with open(models_config_path, 'r', encoding='utf-8') as f:
+      models_config = yaml.safe_load(f)
+   
+    with open(features_config_path, 'r', encoding='utf-8') as f:
+      features_config = yaml.safe_load(f)
+
+    # ログパスの ${logs_path} を解決
+    logs_path_base = paths_config.get('logs_path', 'keibaai/data/logs') # ★修正
+    log_path_template = config.get('logging', {}).get('log_file', 'keibaai/data/logs/{YYYY}/{MM}/{DD}/training.log') # ★修正
+    log_path_with_base = log_path_template.replace('${logs_path}', logs_path_base)
+   
+    now = datetime.now()
+    log_path = log_path_with_base.format(YYYY=now.year, MM=f"{now.month:02}", DD=f"{now.day:02}")
+   
+    # ログファイルパスを execution_root からの相対パスとして解決
+    log_path_abs = execution_root / log_path # ★修正
+    log_path_abs.parent.mkdir(parents=True, exist_ok=True)
+
+    logging.basicConfig(
+      level=args.log_level.upper(),
+      format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+      handlers=[
+        logging.FileHandler(log_path_abs, encoding='utf-8'),
+        logging.StreamHandler(sys.stdout)
+      ],
+      force=True
+    )
+     
+  except FileNotFoundError as e:
+    logging.error(f"設定ファイルが見つかりません: {e}")
+    sys.exit(1)
+  except KeyError as e:
+    print(f"設定ファイル（{args.config}）の読み込み中にキーエラーが発生しました: {e}")
+    print("default.yaml に 'paths' や 'logging' の設定が含まれているか確認してください。")
+    sys.exit(1)
+  # --- 修正ここまで ---
+
+
+  logging.info("=" * 60)
+  logging.info("Keiba AI μモデル学習パイプライン開始")
+  logging.info("=" * 60)
+  logging.info(f"学習期間: {args.start_date} - {args.end_date}")
+
+  # --- 1. 日付範囲の決定 ---
+  try:
+    start_dt = datetime.strptime(args.start_date, '%Y-%m-%d')
+    end_dt = datetime.strptime(args.end_date, '%Y-%m-%d')
+  except ValueError as e:
+    logging.error(f"日付フォーマットエラー: {e}")
+    sys.exit(1)
+
+  # --- 2. 特徴量データのロード (修正: パス解決) ---
+  # default.yaml の 'features_path' (例: "keibaai/data/features") を execution_root 基準で解決
+ 
+  # ★★★ 修正: 特徴量リスト (feature_names.yaml) のパス ★★★
+  features_base_dir = execution_root / paths_config.get('features_path', 'keibaai/data/features') # ★修正
+  # ★★★ 修正: Parquetデータ本体 (パーティションルート) のパス ★★★
+  features_parquet_dir = features_base_dir / 'parquet'
+ 
+  # 特徴量リストを読み込む
+  feature_names_list = []
+  try:
+    # ★★★ 修正: 正しいパスから読み込む (parquet ディレクトリの上) ★★★
+    feature_names_yaml_path = features_base_dir / "feature_names.yaml"
+    with open(feature_names_yaml_path, 'r', encoding='utf-8') as f:
+      # YAMLファイルは {'feature_names': [...]} という構造を想定
+      feature_names_config = yaml.safe_load(f)
+      feature_names_list = feature_names_config.get('feature_names', [])
+     
+    if not feature_names_list:
+      logging.error(f"特徴量リスト (feature_names.yaml) の中身が空です: {feature_names_yaml_path}")
+      sys.exit(1)
+      
+    logging.info(f"{len(feature_names_list)}個の特徴量をロードしました")
+   
+  except FileNotFoundError:
+    logging.error(f"特徴量リスト (feature_names.yaml) が見つかりません: {feature_names_yaml_path}")
+    sys.exit(1)
+  except Exception as e:
+    logging.error(f"特徴量リスト (feature_names.yaml) の読み込みに失敗: {e}")
+    sys.exit(1)
+
+
+  # 学習データをロード
+  # ★★★ 修正: Parquetデータ本体のパスを渡す ★★★
+  features_df = load_parquet_data_by_date(features_parquet_dir, start_dt, end_dt, date_col='race_date')
+ 
+  if features_df.empty:
+    logging.error(f"期間 {args.start_date} - {args.end_date} の特徴量データが見つかりません。")
+    logging.error(f"検索パス: {features_parquet_dir}")
+    sys.exit(1)
+   
+ 
+  # --- ▼▼▼ 修正: 目的変数マージ処理を削除 ▼▼▼ ---
+  # (generate_features.py で実施済みの前提)
+  # --- ▲▲▲ 修正 ▲▲▲ ---
+
+
+  # 欠損値を含む行を削除 (学習のため)
+  required_cols = feature_names_list + ['finish_position', 'finish_time_seconds', 'race_id']
+  # 存在しないカラムを要求リストから除外 (安全のため)
+  required_cols = [col for col in required_cols if col in features_df.columns]
+ 
+  # ★修正: ログ出力用に original_rows をここで定義
+  original_rows = len(features_df)
+ 
+  # ★修正: 目的変数が features.parquet に含まれているか最終チェック
+  if 'finish_position' not in features_df.columns or 'finish_time_seconds' not in features_df.columns:
+    logging.error("features.parquet に目的変数 (finish_position, finish_time_seconds) が含まれていません。")
+    logging.error("generate_features.py が正しく 'results' テーブルとマージしたか確認してください。")
+    # どのカラムが欠けているか詳細ログ
+    if 'finish_position' not in features_df.columns:
+      logging.error("カラム 'finish_position' がありません。")
+    if 'finish_time_seconds' not in features_df.columns:
+      logging.error("カラム 'finish_time_seconds' がありません。")
+    sys.exit(1)
+
+
+  # --- ▼▼▼ 修正: dropna は feature_engine.py で実施済みのため、ここでは実施しない ---
+  # (もし feature_engine.py が NaN を "missing" で埋めた場合、
+  # ここで dropna を呼ぶと、 'missing' は NaN ではないので行は削除されない)
+  # features_df = features_df.dropna(subset=required_cols)
+  # rows_dropped = original_rows - len(features_df)
+  #
+  # logging.info(f"欠損値除去: {rows_dropped}行を除去しました。 (元の行数: {original_rows})")
+  # --- ▲▲▲ 修正 ▲▲▲ ---
+  
+  # (feature_engine.py の修正により、ここのチェックは不要になるはずだが、ログ出力のため残す)
+  # (もし feature_engine.py の fillna が不十分だった場合、ここで検出できる)
+  
+  # 学習に必要なカラム (feature_names_list + 目的変数) に
+  # それでも NaN が残っているかチェック
+  nan_check_cols = [col for col in required_cols if col in features_df.columns]
+  nan_rows = features_df[nan_check_cols].isnull().any(axis=1)
+  rows_with_nan = nan_rows.sum()
+  
+  if rows_with_nan > 0:
+    logging.warning(f"feature_engine での欠損値処理後も {rows_with_nan} 行に NaN が残っています。これらの行を学習から除外します。")
+    features_df = features_df[~nan_rows]
+    rows_dropped = rows_with_nan
+  else:
+    rows_dropped = 0
+  
+  logging.info(f"最終的な欠損値除去: {rows_dropped}行を除去しました。 (元の行数: {original_rows})")
+  logging.info(f"{len(features_df)}行のデータで学習します。")
+
+  if features_df.empty:
+    logging.error("欠損値を除去した結果、学習データが0行になりました。")
+    sys.exit(1)
+
+  # --- 3. モデル学習 ---
+  mu_model_config = models_config.get('mu_estimator', {})
+  estimator = MuEstimator(mu_model_config)
+ 
+  # (元のコード: estimator.feature_names = feature_names_list)
+ 
+  try:
+    # --- ▼▼▼ 修正: feature_names_list を引数として渡す ---
+    estimator.train(
+      features_df=features_df,
+      feature_names=feature_names_list,
+      target_regressor='finish_time_seconds', # 仕様書 参照
+      target_ranker='finish_position',  # 仕様書 参照
+      group_col='race_id'
+    )
+    # --- ▲▲▲ 修正ここまで ---
+   
+  except Exception as e:
+    logging.error(f"μモデルの学習中にエラーが発生しました: {e}", exc_info=True)
+    sys.exit(1)
+
+  # --- 4. モデル保存 (修正: パス解決) ---
+  try:
+    # 保存先パスを execution_root 基準で解決
+    output_path_abs = execution_root / args.output_dir
+    estimator.save_model(str(output_path_abs))
+   
+  except Exception as e:
+    logging.error(f"学習済みμモデルの保存に失敗しました: {e}", exc_info=True)
+    sys.exit(1)
+
+  logging.info("=" * 60)
+  logging.info(f"Keiba AI μモデル学習完了。モデルは {args.output_dir} に保存されました。")
+  logging.info("=" * 60)
+
+if __name__ == '__main__':
+  main()
+
+--- keibaai/src/models/train_sigma_nu_models.py ---
+
+#!/usr/bin/env python3
+# src/models/train_sigma_nu_models.py
+"""
+σ/ν モデル再学習スクリプト
+仕様書 13.4章 に基づく完全実装
+
+- 入力: parsed/results, features, mu_predictions
+- 出力: sigma_model.pkl, nu_model.pkl を output_dir に保存
+- 引数:
+    --training_window_months: 過去何ヶ月分のデータで学習するか
+    --output_dir: 保存先
+    --mu_predictions_path: 事前に計算したμモデルの推論結果パス
+"""
+
+import argparse
+import logging
+import os
+import pickle
+import sys
+from datetime import datetime, timedelta
+from pathlib import Path
+import json
+
+import pandas as pd
+import numpy as np
+import lightgbm as lgb
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error
+
+# --- 修正: プロジェクトルートの定義変更 ---
+execution_root = Path(__file__).resolve().parent.parent.parent.parent
+sys.path.append(str(execution_root / "keibaai" / "src"))
+# --- 修正ここまで ---
+
+try:
+    from utils.data_utils import load_parquet_data_by_date
+except ImportError as e:
+    print(f"エラー: 必要なモジュールのインポートに失敗しました: {e}")
+    sys.exit(1)
+
+
+# --- 修正: ログパスを execution_root 基準で解決 ---
+log_dir = execution_root / "keibaai" / "data" / "logs"
+log_dir.mkdir(parents=True, exist_ok=True)
+log_file_path = log_dir / "sigma_nu_training.log"
+
+logging.basicConfig(
+    level=logging.INFO, 
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    handlers=[
+        logging.FileHandler(log_file_path, encoding='utf-8'),
+        logging.StreamHandler(sys.stdout)
+    ],
+    force=True # 修正: 既存のロガー設定を上書き
+)
+# --- 修正ここまで ---
+
+def load_training_data(months: int):
+    """
+    データ読み込み
+    - parsed/results/ に過去レースの結果が格納されている前提
+    """
+    logging.info(f"過去 {months} ヶ月分のレース結果データをロード中...")
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=30*months)
+    
+    # 修正: execution_root 基準でパスを解決
+    results_path = execution_root / "keibaai" / "data" / "parsed" / "parquet" / "races"
+    
+    if not results_path.exists():
+        logging.error(f"レース結果ディレクトリが見つかりません: {results_path}")
+        raise FileNotFoundError(f"ディレクトリが見つかりません: {results_path}")
+
+    results_df = load_parquet_data_by_date(results_path, start_date, end_date, date_col='race_date')
+
+    if results_df.empty:
+        raise RuntimeError(f"期間 {start_date} - {end_date} のレース結果データが見つかりません")
+        
+    logging.info(f"{len(results_df)} 行のレース結果データをロードしました。")
+    return results_df
+
+def prepare_sigma_training(results_df: pd.DataFrame, mu_series: pd.Series):
+    """
+    σモデル用データ整備
+    - 目的変数: squared_error = (actual_finish_metric - mu_pred)^2
+    """
+    df = results_df.copy()
+    if 'horse_id' not in df.columns:
+        raise ValueError("results_df に 'horse_id' が必要です")
+        
+    df['horse_id'] = df['horse_id'].astype(str)
+    
+    # μの予測値をマージ
+    df['mu_pred'] = df['horse_id'].map(mu_series)
+    
+    # 目的変数 (performance_target) を定義
+    # 仕様書 通り、ここでは 'finish_position' を使用
+    df['performance_target'] = df['finish_position'].astype(float)
+    
+    # μ予測が欠損している行は学習から除外
+    df = df.dropna(subset=['mu_pred', 'performance_target'])
+    
+    df['squared_error'] = (df['performance_target'] - df['mu_pred']) ** 2
+    
+    # 馬レベルで集約（馬ごとの分散を予測するため）
+    horse_agg = df.groupby('horse_id').agg(
+        sigma_target=('squared_error', 'mean')
+    ).reset_index()
+    
+    # 特徴量の準備 (簡易版: 過去走の統計値を使用)
+    horse_features = df.groupby('horse_id').agg(
+        age=('age', 'first'),
+        mean_finish_pos=('finish_position', 'mean'),
+        std_finish_pos=('finish_position', 'std'),
+        total_races=('race_id', 'count')
+    ).reset_index()
+    
+    train_df = horse_features.merge(horse_agg, on='horse_id', how='inner')
+    
+    # 欠損埋め (stdが計算できない場合など)
+    train_df = train_df.fillna(0)
+    return train_df
+
+def prepare_nu_training(results_df: pd.DataFrame):
+    """
+    νモデル用データ整備（レース荒れ度）
+    - レースごとに実際の順位分散 / 着順の標準偏差 を計算し、レース特徴量から予測する
+    """
+    df = results_df.copy()
+    
+    # レースごとの実際の順位分散を計算
+    race_variance = df.groupby('race_id').agg(
+        nu_target=('finish_position', 'std')
+    ).reset_index()
+    
+    # レース特徴量の作成（例）
+    race_features = df.groupby('race_id').agg(
+        distance_m=('distance_m', 'first'),
+        track_surface=('track_surface', 'first'),
+        track_condition=('track_condition', 'first'),
+        weather=('weather', 'first'),
+        head_count=('horse_number', 'max'), # 頭数
+        avg_win_odds=('win_odds', 'mean'),
+        std_win_odds=('win_odds', 'std'),
+    ).reset_index()
+
+    train_df = race_features.merge(race_variance, on='race_id', how='inner')
+    
+    # カテゴリダミー化
+    categorical_cols = ['track_surface', 'track_condition', 'weather']
+    train_df = pd.get_dummies(train_df, columns=categorical_cols, dummy_na=True)
+    
+    train_df = train_df.fillna(0)
+    return train_df
+
+def train_model_lgb(train_X, train_y, params=None):
+    """
+    LightGBM 回帰モデル 学習（シンプル実装）
+    """
+    if params is None:
+        params = {
+            'objective': 'regression',
+            'metric': 'rmse',
+            'verbosity': -1,
+            'boosting_type': 'gbdt',
+            'num_leaves': 31,
+            'learning_rate': 0.05,
+            'n_estimators': 100
+        }
+    model = lgb.LGBMRegressor(**params)
+    model.fit(train_X, train_y)
+    return model
+
+def main():
+    parser = argparse.ArgumentParser(description="Train sigma and nu models (仕様書 13.4)")
+    parser.add_argument("--training_window_months", type=int, default=12, help="学習に使用する過去月数")
+    parser.add_argument(
+        "--output_dir", 
+        type=str, 
+        default="keibaai/data/models/latest", # 修正: 実行場所からの相対パス
+        help="モデルの保存先ディレクトリ"
+    )
+    parser.add_argument(
+        "--mu_predictions_path", 
+        type=str, 
+        default="keibaai/data/predictions/parquet/mu_predictions.parquet", # 修正: 実行場所からの相対パス
+        help="μモデルの推論結果 (Parquet) のパス"
+    )
+    args = parser.parse_args()
+
+    logging.info("σ/ν モデル学習スクリプト開始")
+    logging.info(f"学習期間: 過去 {args.training_window_months} ヶ月")
+    logging.info(f"モデル保存先: {args.output_dir}")
+
+    try:
+        # --- 1. μ推論結果のロード (修正: パス解決) ---
+        mu_preds_path = execution_root / args.mu_predictions_path
+        if not mu_preds_path.exists():
+            logging.error(f"μの推論結果ファイルが見つかりません: {mu_preds_path}")
+            logging.error("先にμモデルで推論を実行し、 --mu_predictions_path で指定してください。")
+            sys.exit(1)
+        
+        logging.info(f"μ推論結果をロード中: {mu_preds_path}")
+        mu_preds_df = pd.read_parquet(mu_preds_path)
+        
+        if 'horse_id' not in mu_preds_df.columns or 'mu' not in mu_preds_df.columns:
+             logging.error("μ推論ファイルには 'horse_id' と 'mu' カラムが必要です。")
+             sys.exit(1)
+             
+        mu_series = pd.Series(
+            mu_preds_df['mu'].values, 
+            index=mu_preds_df['horse_id'].astype(str)
+        ).drop_duplicates()
+        logging.info(f"{len(mu_series)} 件のμ推論結果（馬ユニーク）をロードしました。")
+
+        # --- 2. 学習データのロード ---
+        results_df = load_training_data(args.training_window_months)
+        
+        # --- 3. σ モデル学習 ---
+        logging.info("σモデルの学習データ準備中...")
+        sigma_train_df = prepare_sigma_training(results_df, mu_series)
+        sigma_feature_cols = [c for c in sigma_train_df.columns if c not in ('horse_id', 'sigma_target')]
+        
+        if not sigma_feature_cols:
+            logging.error("σモデルの学習特徴量がありません。")
+            sys.exit(1)
+            
+        X_sigma = sigma_train_df[sigma_feature_cols]
+        y_sigma = sigma_train_df['sigma_target']
+        X_train, X_val, y_train, y_val = train_test_split(X_sigma, y_sigma, test_size=0.2, random_state=42)
+        
+        logging.info("σモデル学習中...")
+        sigma_model = train_model_lgb(X_train, y_train)
+        y_pred = sigma_model.predict(X_val)
+        logging.info(f"σモデル RMSE (Validation): {mean_squared_error(y_val, y_pred, squared=False):.6f}")
+
+        # --- 4. ν モデル学習 ---
+        logging.info("νモデルの学習データ準備中...")
+        nu_train_df = prepare_nu_training(results_df)
+        nu_feature_cols = [c for c in nu_train_df.columns if c not in ('race_id', 'nu_target')]
+        
+        if not nu_feature_cols:
+            logging.error("νモデルの学習特徴量がありません。")
+            sys.exit(1)
+            
+        X_nu = nu_train_df[nu_feature_cols]
+        y_nu = nu_train_df['nu_target']
+        Xn_train, Xn_val, yn_train, yn_val = train_test_split(X_nu, y_nu, test_size=0.2, random_state=42)
+        
+        logging.info("νモデル学習中...")
+        nu_model = train_model_lgb(Xn_train, yn_train)
+        yn_pred = nu_model.predict(Xn_val)
+        logging.info(f"νモデル RMSE (Validation): {mean_squared_error(yn_val, yn_pred, squared=False):.6f}")
+
+        # --- 5. 保存 (修正: パス解決) ---
+        out_dir = execution_root / args.output_dir
+        out_dir.mkdir(parents=True, exist_ok=True)
+        
+        sigma_path = out_dir / "sigma_model.pkl"
+        logging.info(f"σモデルを保存中: {sigma_path}")
+        with open(sigma_path, "wb") as f:
+            pickle.dump(sigma_model, f)
+        with open(out_dir / "sigma_features.json", "w", encoding='utf-8') as f:
+             json.dump(sigma_feature_cols, f, ensure_ascii=False, indent=2)
+
+        nu_path = out_dir / "nu_model.pkl"
+        logging.info(f"νモデルを保存中: {nu_path}")
+        with open(nu_path, "wb") as f:
+            pickle.dump(nu_model, f)
+        with open(out_dir / "nu_features.json", "w", encoding='utf-8') as f:
+             json.dump(nu_feature_cols, f, ensure_ascii=False, indent=2)
+
+        logging.info("σ/ν モデル学習が完了しました。")
+
+    except Exception as e:
+        logging.error(f"σ/ν モデル学習中に致命的なエラーが発生しました: {e}", exc_info=True)
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()
+
+--- keibaai/src/optimizer/optimizer.py ---
+
+#!/usr/bin/env python3
+# src/optimizer/optimizer.py
+"""
+ポートフォリオ最適化モジュール
+仕様書 10.2章 に基づく実装
+scipy.optimizeベース
+"""
+
+import logging
+from typing import Dict, List, Tuple
+import numpy as np
+import pandas as pd
+from scipy.optimize import minimize, LinearConstraint, Bounds
+import json
+from pathlib import Path
+from datetime import datetime, timezone
+
+class PortfolioOptimizer:
+    """
+    ポートフォリオ最適化クラス
+    仕様書 10.2
+    """
+    
+    def __init__(self, config: Dict):
+        """
+        Args:
+            config: 最適化設定辞書 (configs/optimization.yaml)
+        """
+        # configs/optimization.yaml の 'optimizer' セクションを想定
+        self.config = config.get('optimizer', {}) 
+        logging.info("PortfolioOptimizer が初期化されました")
+
+    def _create_candidates(
+        self,
+        simulation_results: Dict,
+        odds_data: Dict
+    ) -> List[Dict]:
+        """
+        投資候補（期待値が閾値を超える馬券）を作成
+        仕様書 10.2
+        
+        Args:
+            simulation_results: シミュレーション結果 (win_probs, exacta_probsなど)
+            odds_data: オッズデータ (JRAオッズ)
+        
+        Returns:
+            候補リスト
+        """
+        candidates = []
+        
+        ev_threshold = self.config.get('min_expected_value', 1.05) # 期待値の閾値
+        prob_threshold = self.config.get('prob_threshold', 0.01) # 最小確率
+        
+        # --- 1. 単勝(win)候補 ---
+        win_probs = simulation_results.get('win_probs', {})
+        win_odds = odds_data.get('win', {})
+        
+        for horse_num_str, prob in win_probs.items():
+            horse_num = str(horse_num_str) # キーを文字列に統一
+            odds = win_odds.get(horse_num)
+            
+            if odds is None or odds < 1.0:
+                continue
+            
+            ev = prob * odds
+            
+            if ev >= ev_threshold and prob >= prob_threshold:
+                candidates.append({
+                    'type': 'win',
+                    'selection': (horse_num,),
+                    'prob': prob,
+                    'odds': odds,
+                    'ev': ev,
+                    'liquidity': self.config.get('constraints', {}).get('max_investment_per_bet', 1000)
+                })
+        
+        # --- 2. 複勝(place)候補 ---
+        place_probs = simulation_results.get('place_probs', {})
+        place_odds = odds_data.get('place', {})
+        
+        for horse_num_str, prob in place_probs.items():
+            horse_num = str(horse_num_str)
+            odds = place_odds.get(horse_num) # 複勝は通常下限オッズを使用
+
+            if odds is None or odds < 1.0:
+                continue
+            
+            ev = prob * odds
+            
+            if ev >= ev_threshold and prob >= prob_threshold:
+                candidates.append({
+                    'type': 'place',
+                    'selection': (horse_num,),
+                    'prob': prob,
+                    'odds': odds,
+                    'ev': ev,
+                    'liquidity': self.config.get('constraints', {}).get('max_investment_per_bet', 1000)
+                })
+                
+        # --- 3. 馬連(exacta/quinella)候補 ---
+        # (注: simulator.pyの実装はソート済みキー '1-2' を返すため馬連)
+        exacta_probs = simulation_results.get('exacta_probs', {})
+        exacta_odds = odds_data.get('exacta', {}) # オッズ側も '1-2' のキーを想定
+
+        for selection_str, prob in exacta_probs.items():
+            odds = exacta_odds.get(selection_str)
+            
+            if odds is None or odds < 1.0:
+                continue
+
+            ev = prob * odds
+            
+            if ev >= ev_threshold and prob >= prob_threshold:
+                candidates.append({
+                    'type': 'exacta', # 馬連
+                    'selection': tuple(selection_str.split('-')),
+                    'prob': prob,
+                    'odds': odds,
+                    'ev': ev,
+                    'liquidity': self.config.get('constraints', {}).get('max_investment_per_bet', 1000)
+                })
+
+        logging.info(f"{len(candidates)}個の投資候補を作成 (EV >= {ev_threshold})")
+        
+        return candidates
+
+    def _create_simulation_payoffs(
+        self,
+        candidates: List[Dict],
+        simulation_results: Dict
+    ) -> np.ndarray:
+        """
+        シミュレーションペイオフ行列を作成 (K x M)
+        仕様書 10.2 (ただし simulator.py の出力形式に合わせる)
+        
+        各行(k): シミュレーション試行
+        各列(m): 投資候補
+        要素: 的中時の払い戻し倍率（外れ時は0）
+        
+        Args:
+            candidates: 投資候補リスト (M)
+            simulation_results: シミュレーション結果 (Kを含む)
+        
+        Returns:
+            ペイオフ行列 (K, M)
+        """
+        # ★注意★
+        # 本来は simulator.py から生のランキング行列 (K, n_horses) を受け取り、
+        # それに基づいてペイオフを計算する (仕様書 10.2) のが最も正確（相関を考慮できる）。
+        #
+        # しかし、simulator.py の現実装 ではメモリ節約のため生行列を返さず、
+        # 集計済みの確率 (win_probs, exacta_probs) のみを返す。
+        #
+        # そのため、ここでは「各馬券は独立」と仮定し、
+        # 集計済み確率に基づいてランダムにペイオフ行列を「再生成」する
+        # （これは仕様書 10.2 とは異なる簡易実装）。
+        
+        K = simulation_results['K']
+        M = len(candidates)
+        
+        payoffs = np.zeros((K, M))
+        
+        for j, cand in enumerate(candidates):
+            prob = cand['prob']
+            odds = cand['odds']
+            
+            # 確率 prob で的中 (odds)、 確率 (1-prob) でハズレ (0)
+            hits = np.random.binomial(n=1, p=prob, size=K)
+            payoffs[:, j] = hits * odds
+            
+        return payoffs
+        
+    def _solve_optimization(
+        self,
+        sim_payoffs: np.ndarray,
+        W_0: float
+    ) -> np.ndarray:
+        """
+        最適化問題を解く
+        仕様書 10.2 (Fractional Kelly)
+        
+        Args:
+            sim_payoffs: ペイオフ行列 (K, M)
+            W_0: 初期資金
+        
+        Returns:
+            最適投資額配分 (M,)
+        """
+        K, M = sim_payoffs.shape
+        
+        # Fractional Kelly の係数 (仕様書 10.4)
+        fraction = self.config.get('fractional_kelly', {}).get('fraction', 0.1) # デフォルト 0.1 (10%)
+        
+        def objective(x):
+            """
+            目的関数: 負の期待対数リターン
+            maximize E[log(1 + R)]
+            """
+            
+            # x は「投資比率 (x_j / W_0)」ではなく「投資額 (x_j)」とする
+            
+            total_investment = np.sum(x)
+            
+            # 各試行(k)の総リターン (円)
+            # (payoffs はオッズ (倍率) なので、投資額 x_j を掛ける)
+            k_returns_yen = np.dot(sim_payoffs, x) 
+            
+            # 各試行(k)の純利益 (円)
+            k_profit_yen = k_returns_yen - total_investment
+            
+            # 各試行(k)の資金変動後の総資産
+            k_capital_after = W_0 + k_profit_yen
+            
+            # 対数リターン log(W_k / W_0)
+            log_returns = np.log(k_capital_after / W_0)
+            
+            # 期待対数リターン
+            expected_log_return = np.mean(log_returns)
+            
+            # 最小化問題なので負号をつけ、fractionを乗じる
+            return -fraction * expected_log_return
+
+        # --- 制約条件 (仕様書 10.4) ---
+        
+        # 1. 予算制約: Σx_j <= W_0 * c_max
+        c_max = self.config.get('constraints', {}).get('max_investment_per_race', 10000)
+        budget_constraint = LinearConstraint(
+            A=np.ones(M),
+            lb=0,
+            ub=c_max
+        )
+        
+        # 2. 個別投資上限: x_j <= L_j
+        max_per_bet = self.config.get('constraints', {}).get('max_investment_per_bet', 1000)
+        
+        # 3. 非負制約: x_j >= min_bet_unit
+        min_bet_unit = self.config.get('constraints', {}).get('min_bet_unit', 100)
+        
+        bounds = Bounds(lb=0.0, ub=max_per_bet) # 一旦0以上で計算
+        
+        # 初期値 (均等配分)
+        x0 = np.ones(M) * (min_bet_unit)
+        x0 = np.minimum(x0, max_per_bet)
+        
+        # 最適化実行
+        solver_config = self.config.get('solver', {})
+        result = minimize(
+            objective,
+            x0=x0,
+            method=solver_config.get('method', 'SLSQP'),
+            bounds=bounds,
+            constraints=[budget_constraint],
+            options={
+                'maxiter': solver_config.get('maxiter', 1000),
+                'ftol': solver_config.get('ftol', 1e-6)
+            }
+        )
+        
+        if not result.success:
+            logging.warning(f"最適化が収束しませんでした: {result.message}")
+            return np.zeros(M) # 収束失敗時は投資しない
+
+        allocation = result.x
+        
+        # 最小投資単位で丸め、それ未満は切り捨て
+        allocation = np.floor(allocation / min_bet_unit) * min_bet_unit
+        
+        return allocation
+    
+    def optimize(
+        self,
+        simulation_results: Dict,
+        odds_data: Dict,
+        W_0: float
+    ) -> Dict:
+        """
+        ポートフォリオ最適化を実行 (メイン関数)
+        仕様書 10.2
+        
+        Args:
+            simulation_results: シミュレーション結果
+            odds_data: オッズデータ
+            W_0: 初期資金
+        
+        Returns:
+            最適化結果辞書
+        """
+        logging.info("ポートフォリオ最適化開始")
+        
+        # 1. 投資候補の作成
+        candidates = self._create_candidates(simulation_results, odds_data)
+        
+        if len(candidates) == 0:
+            logging.warning("投資候補が見つかりませんでした")
+            return self._format_result(np.array([]), [], np.array([[]]), W_0)
+        
+        # 2. シミュレーションペイオフ行列の作成
+        sim_payoffs = self._create_simulation_payoffs(
+            candidates, simulation_results
+        )
+        
+        # 3. 最適化実行
+        allocation = self._solve_optimization(
+            sim_payoffs=sim_payoffs,
+            W_0=W_0
+        )
+        
+        # 4. 結果を整形
+        result = self._format_result(allocation, candidates, sim_payoffs, W_0)
+        
+        logging.info(f"ポートフォリオ最適化完了: {len(result['bets'])}件の投資案")
+        
+        return result
+    
+    def _format_result(
+        self,
+        allocation: np.ndarray,
+        candidates: List[Dict],
+        sim_payoffs: np.ndarray,
+        W_0: float
+    ) -> Dict:
+        """
+        最適化結果を整形
+        仕様書 10.2
+        """
+        bets = []
+        
+        for j, amount in enumerate(allocation):
+            if amount < self.config.get('constraints', {}).get('min_bet_unit', 100):
+                continue
+            
+            candidate = candidates[j]
+            
+            bets.append({
+                'type': candidate['type'],
+                'selection': candidate['selection'],
+                'amount': float(amount),
+                'odds': candidate['odds'],
+                'prob': candidate['prob'],
+                'ev': candidate['ev']
+            })
+        
+        # 期待リターン計算
+        total_investment = np.sum(allocation)
+        
+        if total_investment > 0:
+            # (ペイオフ行列を使ったシミュレーションベースの期待リターン)
+            k_returns_yen = np.dot(sim_payoffs, allocation) 
+            k_profit_yen = k_returns_yen - total_investment
+            k_returns_pct = k_profit_yen / W_0
+            
+            expected_return = np.mean(k_returns_pct)
+            std_return = np.std(k_returns_pct)
+            sharpe_ratio = expected_return / (std_return + 1e-6)
+        else:
+            expected_return = 0.0
+            std_return = 0.0
+            sharpe_ratio = 0.0
+        
+        return {
+            'bets': bets,
+            'total_investment': float(total_investment),
+            'expected_return': float(expected_return),
+            'std_return': float(std_return),
+            'sharpe_ratio': float(sharpe_ratio),
+            'W_0': W_0
+        }
+    
+    def save_allocation(
+        self,
+        race_id: str,
+        allocation_result: Dict,
+        output_dir: str = 'data/orders'
+    ):
+        """
+        配分結果をJSONとして保存
+        仕様書 10.2
+        """
+        output_path = Path(output_dir)
+        output_path.mkdir(parents=True, exist_ok=True)
+        
+        # order_id生成
+        timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
+        order_id = f"{timestamp}_{race_id}"
+        
+        # 保存データ
+        order_data = {
+            'order_id': order_id,
+            'race_id': race_id,
+            'created_ts': datetime.now(timezone.utc).isoformat(),
+            'status': 'pending_manual', # 自動発注は無効
+            'bets': allocation_result['bets'],
+            'total_investment': allocation_result['total_investment'],
+            'expected_return': allocation_result['expected_return'],
+            'std_return': allocation_result['std_return'],
+            'sharpe_ratio': allocation_result['sharpe_ratio'],
+            'W_0': allocation_result['W_0']
+        }
+        
+        # JSON保存
+        output_file = output_path / f"{order_id}.json"
+        try:
+            with open(output_file, 'w', encoding='utf-8') as f:
+                # (Numpyの型をPythonネイティブ型に変換)
+                json.dump(order_data, f, ensure_ascii=False, indent=2, default=float)
+            logging.info(f"配分結果保存: {output_file}")
+        except Exception as e:
+            logging.error(f"配分結果のJSON保存に失敗: {e}")
+
+--- keibaai/src/optimizer/optimize_daily_races.py ---
+
+#!/usr/bin/env python3
+# src/optimizer/optimize_daily_races.py
+"""
+日次ポートフォリオ最適化 実行スクリプト
+指定された日付のシミュレーション結果とオッズデータを読み込み、
+ポートフォリオ最適化を実行し、data/orders/ に保存する。
+
+仕様書 17.5章 に基づく実装
+
+実行例:
+python src/optimizer/optimize_daily_races.py --date 2023-10-01 --W_0 100000
+"""
+
+import argparse
+import logging
+import sys
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, Any, List
+import json
+import yaml
+import pandas as pd
+
+# プロジェクトルートをパスに追加
+project_root = Path(__file__).resolve().parent.parent
+sys.path.append(str(project_root))
+
+try:
+    from src.pipeline_core import setup_logging, load_config
+    from src.optimizer.optimizer import PortfolioOptimizer
+except ImportError as e:
+    print(f"エラー: 必要なモジュールのインポートに失敗しました: {e}")
+    print("プロジェクトルートが正しく設定されているか確認してください。")
+    print(f"sys.path: {sys.path}")
+    sys.exit(1)
+
+
+def load_simulation_data(sim_dir: Path, target_date_str: str) -> List[Dict]:
+    """
+    指定日のシミュレーションJSONファイルをロード
+    仕様書 17.5
+    """
+    results = []
+    
+    # race_id (YYYYMMDD...) から日付を判断
+    target_date_prefix = target_date_str.replace('-', '')
+    
+    if not sim_dir.exists():
+        logging.warning(f"シミュレーションディレクトリが見つかりません: {sim_dir}")
+        return []
+
+    all_files = list(sim_dir.glob('*.json'))
+    
+    for file_path in all_files:
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            
+            race_id = data.get('race_id')
+            if not race_id:
+                continue
+                
+            if race_id.startswith(target_date_prefix):
+                results.append(data)
+                
+        except Exception as e:
+            logging.warning(f"シミュレーションファイルのロード失敗 ({file_path}): {e}")
+            
+    return results
+
+
+def load_odds_data(odds_dir: Path, race_id: str) -> Dict[str, Any]:
+    """
+    指定レースIDの最新JRAオッズJSONをロード
+    仕様書 17.5 (★ダミー実装)
+    
+    注: 実際の _scrape_jra_odds.py はダミー です。
+       ここでは、そのダミーJSONを読み込むことを想定します。
+    """
+    # ファイル名形式: {race_id}_snapshot_{data_version}.json
+    odds_files = sorted(
+        list(odds_dir.glob(f"{race_id}_snapshot_*.json")),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True # 最新のファイルを取得
+    )
+    
+    if not odds_files:
+        logging.warning(f"レース {race_id} のオッズファイルが見つかりません (検索パス: {odds_dir}/{race_id}_snapshot_*.json)")
+        return {}
+        
+    try:
+        with open(odds_files[0], 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            
+        # オプティマイザが期待する形式に変換
+        # { 'win': {'1': 5.5, '2': 12.3}, 'place': {'1': 1.8}, 'exacta': {'1-2': 20.5} }
+        
+        odds_map = {
+            'win': {},
+            'place': {},
+            'exacta': {} # 馬連 (ダミーJSONには含まれていないが枠だけ用意)
+        }
+        
+        # 'market' キーはダミーJSONの構造
+        market = data.get('market', {})
+        
+        if 'win' in market:
+            odds_map['win'] = {str(k): v.get('odds') for k, v in market['win'].items() if v.get('odds')}
+            
+        if 'place' in market:
+            # 複勝は下限値を使用 (ダミーは単一値なのでそのまま)
+             odds_map['place'] = {str(k): v.get('odds') for k, v in market['place'].items() if v.get('odds')}
+                
+        return odds_map
+        
+    except Exception as e:
+        logging.error(f"オッズファイルのロード失敗 ({odds_files[0]}): {e}")
+        return {}
+
+
+def main():
+    """メイン実行関数"""
+    parser = argparse.ArgumentParser(description='Keiba AI 日次ポートフォリオ最適化')
+    parser.add_argument(
+        '--date',
+        type=str,
+        required=True,
+        help='最適化対象日 (YYYY-MM-DD)'
+    )
+    parser.add_argument(
+        '--W_0',
+        type=float,
+        default=100000.0,
+        help='初期（当日）資金'
+    )
+    parser.add_argument(
+        '--config',
+        type=str,
+        default='configs/default.yaml',
+        help='設定ファイルパス'
+    )
+    parser.add_argument(
+        '--optimization_config',
+        type=str,
+        default='configs/optimization.yaml',
+        help='最適化設定ファイルパス'
+    )
+    parser.add_argument(
+        '--log_level',
+        type=str,
+        default='INFO',
+        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+        help='ログレベル'
+    )
+
+    args = parser.parse_args()
+
+    # --- 0. 設定とロギング ---
+    try:
+        config = load_config(args.config)
+        paths = config.get('paths', {})
+        
+        with open(args.optimization_config, 'r') as f:
+            optimization_config = yaml.safe_load(f)
+            
+        # ログ設定 (簡易版)
+        log_path_template = config.get('logging', {}).get('log_file', 'data/logs/{YYYY}/{MM}/{DD}/optimization.log')
+        now = datetime.now()
+        log_path = log_path_template.format(YYYY=now.year, MM=f"{now.month:02}", DD=f"{now.day:02}")
+        Path(log_path).parent.mkdir(parents=True, exist_ok=True)
+
+        logging.basicConfig(
+            level=args.log_level.upper(),
+            format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+            handlers=[
+                logging.FileHandler(log_path, encoding='utf-8'),
+                logging.StreamHandler(sys.stdout)
+            ]
+        )
+            
+    except FileNotFoundError as e:
+        logging.error(f"設定ファイルが見つかりません: {e}")
+        sys.exit(1)
+
+
+    logging.info("=" * 60)
+    logging.info("Keiba AI 日次ポートフォリオ最適化開始")
+    logging.info("=" * 60)
+    logging.info(f"対象日: {args.date}, 当日資金: ¥{args.W_0:,.0f}")
+
+    # --- 1. シミュレーションデータのロード ---
+    sim_dir = Path(paths.get('simulations_path', 'data/simulations'))
+    simulations = load_simulation_data(sim_dir, args.date)
+    
+    if not simulations:
+        logging.warning(f"{args.date} のシミュレーションデータが見つかりません (検索パス: {sim_dir})。処理を終了します。")
+        sys.exit(0)
+
+    # --- 2. オプティマイザ初期化 ---
+    optimizer = PortfolioOptimizer(config=optimization_config)
+
+    # --- 3. レースごとに最適化実行 ---
+    odds_dir = Path(paths.get('raw_json_jra_odds', 'data/raw/json/jra_odds'))
+    
+    logging.info(f"{len(simulations)} レースの最適化を実行します")
+    
+    for i, sim_result in enumerate(simulations, 1):
+        race_id = sim_result['race_id']
+        logging.info(f"--- レース {i}/{len(simulations)} ({race_id}) ---")
+
+        # 3.1 オッズデータのロード
+        odds_data = load_odds_data(odds_dir, race_id)
+        
+        if not odds_data.get('win'):
+            logging.warning(f"レース {race_id} のオッズデータ（単勝）が不十分なためスキップします")
+            continue
+            
+        # 3.2 最適化実行
+        try:
+            allocation_result = optimizer.optimize(
+                simulation_results=sim_result,
+                odds_data=odds_data,
+                W_0=args.W_0
+            )
+            
+            # 3.3 発注（ログ）保存
+            if allocation_result['total_investment'] > 0:
+                output_dir_str = paths.get('orders_path', 'data/orders')
+                optimizer.save_allocation(
+                    race_id=race_id,
+                    allocation_result=allocation_result,
+                    output_dir=output_dir_str
+                )
+                
+                # コンソールにも結果を表示 (仕様書 10.3)
+                print(f"  総投資額: ¥{allocation_result['total_investment']:,.0f}")
+                print(f"  期待リターン (シミュレーションベース): {allocation_result['expected_return']:.2%}")
+                for bet in allocation_result['bets']:
+                    selection_str = '-'.join(map(str, bet['selection']))
+                    print(f"    {bet['type']:<7} {selection_str:<6} ¥{bet['amount']:>6,.0f} (Odds:{bet['odds']:>5.1f}, EV:{bet['ev']:>4.2f})")
+
+            else:
+                logging.info(f"レース {race_id}: 投資対象なし")
+                
+        except Exception as e:
+            logging.error(f"レース {race_id} の最適化に失敗: {e}", exc_info=True)
+
+    logging.info("=" * 60)
+    logging.info("Keiba AI 日次ポートフォリオ最適化完了")
+    logging.info("=" * 60)
+
+if __name__ == '__main__':
+    main()
+
+--- keibaai/src/sim/simulate_daily_races.py ---
+
+#!/usr/bin/env python3
+# src/sim/simulate_daily_races.py
+"""
+日次シミュレーション 実行スクリプト
+指定された日付の推論結果（μ, σ, ν）を読み込み、
+モンテカルロシミュレーションを実行し、data/simulations/ に保存する。
+
+仕様書 17.4章 に基づく実装
+
+実行例:
+python src/sim/simulate_daily_races.py --date 2023-10-01 --K 1000
+"""
+
+import argparse
+import logging
+import sys
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, Any
+import json
+import yaml
+import pandas as pd
+
+# プロジェクトルートをパスに追加
+project_root = Path(__file__).resolve().parent.parent
+sys.path.append(str(project_root))
+
+try:
+    from src.pipeline_core import setup_logging, load_config
+    from src.utils.data_utils import load_parquet_data_by_date
+    from src.sim.simulator import RaceSimulator
+except ImportError as e:
+    print(f"エラー: 必要なモジュールのインポートに失敗しました: {e}")
+    print("プロジェクトルートが正しく設定されているか確認してください。")
+    print(f"sys.path: {sys.path}")
+    sys.exit(1)
+
+
+def main():
+    """メイン実行関数"""
+    parser = argparse.ArgumentParser(description='Keiba AI 日次シミュレーション')
+    parser.add_argument(
+        '--date',
+        type=str,
+        required=True,
+        help='シミュレーション対象日 (YYYY-MM-DD)'
+    )
+    parser.add_argument(
+        '--K',
+        type=int,
+        default=1000,
+        help='シミュレーション回数 (K)'
+    )
+    parser.add_argument(
+        '--model_id',
+        type=str,
+        default='latest',
+        help='使用したモデルのID (保存用)'
+    )
+    parser.add_argument(
+        '--config',
+        type=str,
+        default='configs/default.yaml',
+        help='設定ファイルパス'
+    )
+    parser.add_argument(
+        '--log_level',
+        type=str,
+        default='INFO',
+        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+        help='ログレベル'
+    )
+
+    args = parser.parse_args()
+
+    # --- 0. 設定とロギング ---
+    try:
+        config = load_config(args.config)
+        paths = config.get('paths', {})
+
+        # ログ設定 (簡易版)
+        log_path_template = config.get('logging', {}).get('log_file', 'data/logs/{YYYY}/{MM}/{DD}/simulation.log')
+        now = datetime.now()
+        log_path = log_path_template.format(YYYY=now.year, MM=f"{now.month:02}", DD=f"{now.day:02}")
+        Path(log_path).parent.mkdir(parents=True, exist_ok=True)
+
+        logging.basicConfig(
+            level=args.log_level.upper(),
+            format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+            handlers=[
+                logging.FileHandler(log_path, encoding='utf-8'),
+                logging.StreamHandler(sys.stdout)
+            ]
+        )
+            
+    except FileNotFoundError as e:
+        logging.error(f"設定ファイルが見つかりません: {e}")
+        sys.exit(1)
+
+
+    logging.info("=" * 60)
+    logging.info("Keiba AI 日次シミュレーション開始")
+    logging.info("=" * 60)
+    logging.info(f"対象日: {args.date}, K={args.K}")
+
+    # シミュレーション設定
+    sim_config = config.get('simulation', {})
+    sim_config['K'] = args.K
+    
+    # --- 1. 日付範囲の決定 ---
+    try:
+        target_dt = datetime.strptime(args.date, '%Y-%m-%d')
+    except ValueError as e:
+        logging.error(f"日付フォーマットエラー: {e}")
+        sys.exit(1)
+
+    # --- 2. 推論データのロード ---
+    predictions_dir = Path(paths.get('predictions_path', 'data/predictions')) / 'parquet'
+    
+    # load_parquet_data_by_date はパーティション化されたディレクトリを読むことを想定
+    predictions_df = load_parquet_data_by_date(predictions_dir, target_dt, target_dt, date_col='race_date')
+    
+    if predictions_df.empty:
+        # もしパーティション化されておらず、単一ファイル (predict.pyのフォールバック) の場合
+        single_file_path = predictions_dir / "mu_predictions.parquet" # (これはμのみなので不十分)
+        
+        # predict.py が 'year', 'month', 'day' カラムを付与していることを期待
+        # load_parquet_data_by_date がパーティションを読み、日付でフィルタするはず
+        
+        logging.warning(f"{args.date} の推論データが見つかりません (ディレクトリ: {predictions_dir})。処理を終了します。")
+        sys.exit(0)
+
+    # --- 3. シミュレータ初期化 ---
+    simulator = RaceSimulator(config=sim_config)
+    
+    # --- 4. レースごとにシミュレーション実行 ---
+    race_ids = predictions_df['race_id'].unique()
+    
+    logging.info(f"{len(race_ids)} レースのシミュレーションを実行します")
+    
+    for i, race_id in enumerate(race_ids, 1):
+        logging.info(f"--- レース {i}/{len(race_ids)} ({race_id}) ---")
+        
+        race_data = predictions_df[predictions_df['race_id'] == race_id].copy()
+        
+        if len(race_data) < 2:
+            logging.warning(f"レース {race_id} の出走馬が少なすぎるためスキップします")
+            continue
+            
+        # パラメータ準備
+        mu = race_data['mu'].values
+        sigma = race_data['sigma'].values
+        nu = race_data['nu'].iloc[0] # レース単位で共通
+        horse_numbers = race_data['horse_number'].values
+        
+        seed = sim_config.get('seed', 42) + i # レースごとにシードを変更
+        
+        try:
+            # 実行
+            sim_results = simulator.simulate_race(
+                mu=mu,
+                sigma=sigma,
+                nu=nu,
+                horse_numbers=horse_numbers,
+                K=args.K,
+                seed=seed
+            )
+            
+            if not sim_results:
+                 logging.warning(f"レース {race_id}: シミュレーション結果が空です。")
+                 continue
+
+            # 保存
+            output_dir_str = paths.get('simulations_path', 'data/simulations')
+            simulator.save_simulation(
+                race_id=race_id,
+                model_id=args.model_id,
+                simulation_results=sim_results,
+                output_dir=output_dir_str
+            )
+            
+        except Exception as e:
+            logging.error(f"レース {race_id} のシミュレーションに失敗: {e}", exc_info=True)
+
+    logging.info("=" * 60)
+    logging.info("Keiba AI 日次シミュレーション完了")
+    logging.info("=" * 60)
+
+if __name__ == '__main__':
+    main()
+
+--- keibaai/src/sim/simulator.py ---
+
+#!/usr/bin/env python3
+# src/sim/simulator.py
+"""
+Monte Carlo シミュレーションモジュール
+仕様書 8.2章 に基づく実装
+Numba最適化版
+"""
+
+import logging
+from typing import Dict, List, Tuple
+import numpy as np
+import pandas as pd
+from numba import jit, prange
+import json
+from pathlib import Path
+from datetime import datetime, timezone
+
+class RaceSimulator:
+    """
+    レースシミュレータ
+    仕様書 8.2
+    """
+    
+    def __init__(self, config: Dict):
+        """
+        Args:
+            config: シミュレーション設定辞書 (configs/default.yaml や optimization.yaml)
+        """
+        self.config = config
+    
+    def simulate_race(
+        self,
+        mu: np.ndarray,
+        sigma: np.ndarray,
+        nu: float,
+        horse_numbers: np.ndarray,
+        K: int = 1000,
+        seed: int = 42
+    ) -> Dict:
+        """
+        1レースのシミュレーション
+        仕様書 8.2
+        
+        Args:
+            mu: 各馬のμ値（性能スコア）
+            sigma: 各馬のσ値（残差分散）
+            nu: レース荒れ度
+            horse_numbers: 馬番の配列
+            K: シミュレーション回数
+            seed: 乱数シード
+        
+        Returns:
+            シミュレーション結果辞書
+        """
+        logging.info(f"シミュレーション開始: K={K}, 馬数={len(mu)}")
+        
+        n_horses = len(mu)
+        
+        if n_horses == 0:
+            logging.warning("シミュレーション対象の馬がいません。")
+            return {}
+            
+        # Numba最適化関数を呼び出し
+        rankings = simulate_plackett_luce_numba(
+            mu=mu,
+            sigma=sigma,
+            nu=nu,
+            n_horses=n_horses,
+            K=K,
+            seed=seed
+        )
+        
+        # 結果を集計
+        results = self._aggregate_results(
+            rankings=rankings,
+            horse_numbers=horse_numbers,
+            K=K
+        )
+        
+        logging.info("シミュレーション完了")
+        
+        return results
+    
+    def _aggregate_results(
+        self,
+        rankings: np.ndarray,
+        horse_numbers: np.ndarray,
+        K: int
+    ) -> Dict:
+        """
+        シミュレーション結果を集計
+        仕様書 8.2
+        
+        Args:
+            rankings: ランキング配列 (K, n_horses) (0-indexedのインデックス)
+            horse_numbers: 馬番配列 (インデックスに対応する馬番)
+            K: シミュレーション回数
+        
+        Returns:
+            集計結果辞書
+        """
+        n_horses = len(horse_numbers)
+        
+        # 1. 単勝確率（1着確率）
+        win_probs = {}
+        # (np.bincount を使って高速化)
+        win_counts = np.bincount(rankings[:, 0], minlength=n_horses)
+        for i, horse_num in enumerate(horse_numbers):
+            win_probs[str(horse_num)] = float(win_counts[i] / K)
+        
+        # 2. 複勝確率（3着以内確率）
+        place_probs = {}
+        # (3着までのランキングをフラットにしてbincount)
+        top3_indices = rankings[:, :3].ravel()
+        place_counts = np.bincount(top3_indices, minlength=n_horses)
+        for i, horse_num in enumerate(horse_numbers):
+            place_probs[str(horse_num)] = float(place_counts[i] / K)
+             
+        # 3. 馬連確率（上位2頭の組み合わせ）
+        exacta_probs = {}
+        # (インデックス -> 馬番への変換)
+        top2_horse_numbers = np.take(horse_numbers, rankings[:, :2])
+        # (ソートして文字列キーを作成 '馬番1-馬番2')
+        top2_sorted = np.sort(top2_horse_numbers, axis=1)
+        
+        # 高速な集計
+        keys = [f"{r[0]}-{r[1]}" for r in top2_sorted]
+        unique_keys, counts = np.unique(keys, return_counts=True)
+        exacta_probs = {key: float(count / K) for key, count in zip(unique_keys, counts)}
+
+        # 4. 3連単確率（上位3頭の順序付き組み合わせ）
+        trifecta_probs = {}
+        # (インデックス -> 馬番への変換)
+        top3_horse_numbers = np.take(horse_numbers, rankings[:, :3])
+        
+        # 高速な集計
+        keys_trifecta = [f"{r[0]}-{r[1]}-{r[2]}" for r in top3_horse_numbers]
+        unique_keys_t, counts_t = np.unique(keys_trifecta, return_counts=True)
+        
+        # TopNのみ保持（メモリ節約のため）
+        trifecta_all = {key: float(count / K) for key, count in zip(unique_keys_t, counts_t)}
+        trifecta_probs_top = dict(
+            sorted(trifecta_all.items(), key=lambda x: x[1], reverse=True)[:20] # Top 20
+        )
+        
+        return {
+            'win_probs': win_probs,
+            'place_probs': place_probs,
+            'exacta_probs': exacta_probs, # 馬連 (仕様書 では exacta だが、ソートしているので馬連 (quinella))
+            'trifecta_probs': trifecta_probs_top,
+            'K': K
+            # 'rankings': rankings, # 生データは巨大なので通常は保存しない
+        }
+    
+    def save_simulation(
+        self,
+        race_id: str,
+        model_id: str,
+        simulation_results: Dict,
+        output_dir: str = 'data/simulations'
+    ):
+        """
+        シミュレーション結果を保存
+        仕様書 8.2
+        
+        Args:
+            race_id: レースID
+            model_id: モデルID
+            simulation_results: シミュレーション結果
+            output_dir: 出力ディレクトリ
+        """
+        output_path = Path(output_dir)
+        output_path.mkdir(parents=True, exist_ok=True)
+        
+        # sim_id生成
+        timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
+        sim_id = f"{timestamp}_{model_id}_{race_id}"
+        
+        # 保存データ
+        save_data = {
+            'sim_id': sim_id,
+            'race_id': race_id,
+            'model_id': model_id,
+            'created_ts': datetime.now(timezone.utc).isoformat(),
+            'K': simulation_results['K'],
+            'win_probs': simulation_results['win_probs'],
+            'place_probs': simulation_results['place_probs'],
+            'exacta_probs': simulation_results['exacta_probs'],
+            'trifecta_probs': simulation_results['trifecta_probs']
+        }
+        
+        # JSON保存 (atomic_write を使った方が安全だが、仕様書に合わせて簡易化)
+        output_file = output_path / f"{sim_id}.json"
+        try:
+            with open(output_file, 'w', encoding='utf-8') as f:
+                json.dump(save_data, f, ensure_ascii=False, indent=2)
+            logging.info(f"シミュレーション結果保存: {output_file}")
+        except Exception as e:
+            logging.error(f"シミュレーション結果の保存に失敗: {e}")
+
+
+@jit(nopython=True, parallel=True)
+def simulate_plackett_luce_numba(
+    mu: np.ndarray,
+    sigma: np.ndarray,
+    nu: float,
+    n_horses: int,
+    K: int,
+    seed: int
+) -> np.ndarray:
+    """
+    Plackett-Luceモデルによるランキング生成（Numba最適化）
+    仕様書 8.2
+    
+    Args:
+        mu: 各馬のμ値
+        sigma: 各馬のσ値
+        nu: レース荒れ度
+        n_horses: 馬数
+        K: シミュレーション回数
+        seed: 乱数シード
+    
+    Returns:
+        ランキング配列 (K, n_horses)
+        各行は馬のインデックス（0-indexed）の順位
+    """
+    np.random.seed(seed)
+    
+    rankings = np.zeros((K, n_horses), dtype=np.int32)
+    
+    # K回のシミュレーション (並列実行)
+    for k in prange(K):
+        # 各馬の性能スコアをサンプリング
+        # θ_i ~ N(μ_i, σ_i^2 + ν^2)
+        theta = np.zeros(n_horses)
+        for i in range(n_horses):
+            # (σ^2 + ν^2) の平方根
+            total_std = np.sqrt(sigma[i]**2 + nu**2)
+            theta[i] = np.random.normal(mu[i], total_std)
+        
+        # Plackett-Luceサンプリング
+        # (Numbaは np.arange(n_horses).tolist() のような動的リスト操作が遅い)
+        # (代わりに、インデックス配列とマスクを使用する)
+        
+        remaining_indices = np.arange(n_horses)
+        
+        for pos in range(n_horses):
+            # 残りの馬の数
+            remaining_count = n_horses - pos
+            
+            # 残りの馬の性能スコア (θ)
+            remaining_theta = np.zeros(remaining_count)
+            for j in range(remaining_count):
+                remaining_theta[j] = theta[remaining_indices[j]]
+
+            # 指数変換（数値安定性のため正規化）
+            exp_theta = np.exp(remaining_theta - np.max(remaining_theta))
+            
+            # 確率計算
+            sum_exp_theta = np.sum(exp_theta)
+            if sum_exp_theta == 0: # 全員 0 の場合
+                 probs = np.ones(remaining_count) / remaining_count
+            else:
+                 probs = exp_theta / sum_exp_theta
+            
+            # サンプリング (Gumbel-Max-Trick の方が速いが、仕様書 に合わせる)
+            cumsum_probs = np.cumsum(probs)
+            rand_val = np.random.random()
+            
+            selected_idx_in_remaining = 0
+            for j in range(remaining_count):
+                if rand_val <= cumsum_probs[j]:
+                    selected_idx_in_remaining = j
+                    break
+            
+            # 選択された馬の「元のインデックス」
+            selected_original_idx = remaining_indices[selected_idx_in_remaining]
+            
+            # 順位を記録
+            rankings[k, pos] = selected_original_idx
+            
+            # 残りから削除 (選択された要素を末尾と交換して末尾を捨てる)
+            last_idx_in_remaining = remaining_count - 1
+            remaining_indices[selected_idx_in_remaining] = remaining_indices[last_idx_in_remaining]
+            # (配列のサイズは変えずに、次のループで見る範囲を1つ減らす)
+            
+    return rankings
+
+--- keibaai/src/utils/data_utils.py ---
+
+#!/usr/bin/env python3
+# src/utils/data_utils.py
+
+import hashlib
+import logging
+from datetime import datetime, timezone, timedelta
+from pathlib import Path
+from typing import Optional, Dict, Any
+
+import pandas as pd
+
+
+def save_fetch_metadata(
+    db_conn,
+    url: str,
+    file_path: str,
+    data: bytes,
+    http_status: int,
+    fetch_method: str,
+    error_message: str = None
+):
+    """
+    データ取得のメタデータをSQLiteに保存
+    """
+    sha256 = hashlib.sha256(data).hexdigest()
+
+    # [修正] UTC -> Asia/Tokyo (+09:00)
+    jst = timezone(timedelta(hours=9))
+    fetched_ts = datetime.now(jst).isoformat()
+
+    file_size = len(data)
+
+    cursor = db_conn.cursor()
+    cursor.execute('''
+INSERT OR REPLACE INTO fetch_log (
+url, file_path, fetched_ts, sha256,
+file_size, fetch_method, http_status, error_message
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+''', (
+        url, file_path, fetched_ts, sha256,
+        file_size, fetch_method, http_status, error_message
+    ))
+    db_conn.commit()
+
+
+def generate_data_version(data: bytes) -> str:
+    """
+    データバージョン文字列を生成
+    形式: YYYYMMDDTHHMMSS+0900_sha256={hash[:8]}
+    """
+    timestamp = datetime.now(timezone.utc).astimezone(
+        timezone(timedelta(hours=9))
+    ).strftime('%Y%m%dT%H%M%S%z')
+
+    sha256_short = hashlib.sha256(data).hexdigest()[:8]
+
+    return f"{timestamp}_sha256={sha256_short}"
+
+
+def construct_filename(
+    base_name: str,
+    identifier: str,
+    data: bytes,
+    extension: str = 'bin'
+) -> str:
+    """
+    バージョン付きファイル名を構築
+    例: race_202306010101_20251106T120000+09:00_sha256=abcd1234.bin
+    """
+    data_version = generate_data_version(data)
+    return f"{base_name}_{identifier}_{data_version}.{extension}"
+
+# --- ▼▼▼ 修正版の関数 ▼▼▼ ---
+
+def load_parquet_data_by_date(
+    base_dir: Path,
+    start_dt: Optional[datetime],
+    end_dt: Optional[datetime],
+    date_col: str = 'race_date'
+) -> pd.DataFrame:
+    """
+    指定された日付範囲に基づいてParquetデータをロードする
+    (パーティション化されたディレクトリ、または単一ファイルを想定)
+
+    Args:
+        base_dir: Parquetデータが格納されているベースディレクトリ
+        start_dt: 開始日 (Noneの場合は指定なし)
+        end_dt: 終了日 (Noneの場合は指定なし)
+        date_col: 日付フィルタリングに使用するカラム名
+
+    Returns:
+        結合されたDataFrame
+    """
+    all_dfs = []
+    
+    if not base_dir.exists():
+        logging.warning(f"ディレクトリが見つかりません: {base_dir}")
+        return pd.DataFrame()
+
+    # --- 修正: パーティション対応 ---
+    # base_dir 直下、またはサブディレクトリ内の .parquet ファイルを再帰的に検索
+    target_files = list(base_dir.rglob("*.parquet"))
+    
+    if not target_files:
+        logging.warning(f"Parquetファイルが見つかりません (rglob検索): {base_dir}")
+        return pd.DataFrame()
+        
+    for parquet_file in target_files:
+        try:
+            df = pd.read_parquet(parquet_file)
+            all_dfs.append(df)
+        except Exception as e:
+            logging.warning(f"Parquetファイルの読み込み失敗 ({parquet_file}): {e}")
+
+    if not all_dfs:
+        logging.warning(f"Parquetデータが空です: {base_dir}")
+        return pd.DataFrame()
+
+    # 結合し、重複を除去 (パーティションロードで重複する可能性があるため)
+    combined_df = pd.concat(all_dfs, ignore_index=True)
+    combined_df = combined_df.drop_duplicates()
+
+
+    # 日付フィルタリング
+    if start_dt is None and end_dt is None:
+        return combined_df
+
+    if date_col not in combined_df.columns:
+        logging.warning(f"日付カラム '{date_col}' がDataFrameに存在しないため、日付フィルタをスキップします。")
+        # race_id から日付を生成する試み (shutuba, results, features の場合)
+        if 'race_id' in combined_df.columns:
+            try:
+                # 'race_date' カラムが生成済みならそれを使う
+                if 'race_date' in combined_df.columns:
+                    date_col = 'race_date'
+                    logging.info(f"既存の 'race_date' カラムを日付フィルタに使用します。")
+                else:
+                    combined_df['race_date_str'] = combined_df['race_id'].astype(str).str[:8]
+                    combined_df[date_col] = pd.to_datetime(combined_df['race_date_str'], format='%Y%m%d', errors='coerce')
+                    logging.info(f"'{date_col}' カラムを 'race_id' から生成しました。")
+            except Exception:
+                return combined_df # それでも失敗したらフィルタせず返す
+        else:
+             return combined_df
+
+    # 日付カラムが object 型の場合、datetime に変換
+    if not pd.api.types.is_datetime64_any_dtype(combined_df[date_col]):
+         combined_df[date_col] = pd.to_datetime(combined_df[date_col], errors='coerce')
+
+    # タイムゾーンを意識しない比較に統一 (datetime.datetime)
+    # NaT (日付変換失敗) を除外
+    combined_df = combined_df.dropna(subset=[date_col])
+    if combined_df.empty:
+        logging.warning("日付カラムのクレンジング後、データが0行になりました。")
+        return pd.DataFrame()
+        
+    combined_df[date_col] = combined_df[date_col].dt.tz_localize(None)
+
+    if start_dt and end_dt:
+        mask = (combined_df[date_col] >= start_dt) & (combined_df[date_col] <= end_dt)
+        return combined_df[mask].copy()
+    elif start_dt:
+        mask = (combined_df[date_col] >= start_dt)
+        return combined_df[mask].copy()
+    elif end_dt:
+        mask = (combined_df[date_col] <= end_dt)
+        return combined_df[mask].copy()
+        
+    return combined_df
+
+--- keibaai/src/utils/time_utils.py ---
+
+
+
+--- keibaai/src/utils/__init__.py ---
+
+
+
+--- keibaai/tests/__init__.py ---
+
+
+
+--- keibaai/tests/integration/test_pipeline_e2e.py ---
+
+
+
+--- keibaai/tests/regression/test_parser_regression.py ---
+
+
+
+--- keibaai/tests/unit/test_features.py ---
+
+
+
+--- keibaai/tests/unit/test_models.py ---
+
+
+
+--- keibaai/tests/unit/test_parsers.py ---
+
+
+

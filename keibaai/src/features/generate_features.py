@@ -23,6 +23,8 @@ from typing import Dict, Any
 
 import pandas as pd
 import yaml
+import pyarrow as pa
+import pyarrow.parquet as pq
 
 # --- ▼▼▼ 修正 ▼▼▼ ---
 # スクリプト(keibaai/src/features/generate_features.py) の4階層上が Keiba_AI_v2 (実行ルート)
@@ -45,7 +47,7 @@ def load_data_for_features(
     paths_config: Dict[str, Any],
     start_dt: datetime,
     end_dt: datetime,
-    execution_root: Path # ★修正
+    execution_root: Path
 ) -> Dict[str, pd.DataFrame]:
     """
     特徴量生成に必要なデータをロードする
@@ -70,11 +72,22 @@ def load_data_for_features(
         return {}
         
     # 2. 過去成績 (全期間 - 終了日まで)
-    # ★★★ 修正: 'results' (仕様書) ではなく 'races' (現状のデータ構造) を使用 ★★★
-    results_history_dir = parsed_base_dir / 'races'
+    # --- ▼▼▼ 修正 ▼▼▼ ---
+    # ★★★ 修正: 'results' (仕様書) ではなく、run_parsing_pipeline_local.py の
+    #             実装に合わせ 'races' ディレクトリを読み込む ★★★
+    results_history_dir = parsed_base_dir / 'races' # 'results' から 'races' に変更
     results_history_df = load_parquet_data_by_date(
         results_history_dir, None, end_dt, date_col='race_date'
-    ) 
+    )
+    
+    # ★追加: レース結果がロードできたか確認
+    if results_history_df.empty:
+        logging.warning(f"レース結果(races)データが {results_history_dir} からロードできませんでした。")
+        logging.warning("run_parsing_pipeline_local.py が実行されているか確認してください。")
+        # 目的変数なしで続行するが、マージ時に警告が出る
+    else:
+        logging.info(f"{len(results_history_df)} 行のレース結果(races)をロードしました。")
+    # --- ▲▲▲ 修正 ▲▲▲ ---
 
     # 3. 馬プロフィール (全期間)
     horse_profiles_dir = parsed_base_dir / 'horses'
@@ -266,10 +279,10 @@ def main():
             
             # ★修正: results_df が空でないか、カラムが存在するかをチェック
             if results_df.empty:
-                logging.warning("レース結果(races/results)データが空のため、目的変数をマージできません。")
+                logging.warning("レース結果(results)データが空のため、目的変数をマージできません。")
             elif not all(col in results_df.columns for col in target_cols):
                 missing_cols = [col for col in target_cols if col not in results_df.columns]
-                logging.warning(f"レース結果(races/results)に目的変数カラム {missing_cols} が不足しているため、マージをスキップします。")
+                logging.warning(f"レース結果(results)に目的変数カラム {missing_cols} が不足しているため、マージをスキップします。")
             else:
                 # マージキーの型を合わせる
                 shutuba_df['race_id'] = shutuba_df['race_id'].astype(str)
@@ -332,20 +345,26 @@ def main():
                         features_df['year'] = features_df['race_date'].dt.year
                         features_df['month'] = features_df['race_date'].dt.month
                         features_df['day'] = features_df['race_date'].dt.day
-                         
+                        
                 except Exception as ex_date:
                     logging.error(f"race_id から日付を復元できませんでした: {ex_date}")
         
         # ★修正: engine.save_features は仕様書になく、実装もないため、ここで直接保存する
         try:
+            # --- ▼▼▼ 修正: pandas.to_parquet から pyarrow.write_to_dataset に変更 ▼▼▼
             output_dir.mkdir(parents=True, exist_ok=True)
-            features_df.to_parquet(
-                output_dir,
-                engine='pyarrow',
-                compression='snappy',
+            
+            # DataFrame を Arrow Table に変換
+            table = pa.Table.from_pandas(features_df, preserve_index=False)
+            
+            pq.write_to_dataset(
+                table,
+                root_path=output_dir,
                 partition_cols=partition_cols,
-                existing_data_behavior='overwrite_or_ignore'
+                existing_data_behavior='delete_matching' # 'overwrite_or_ignore' から変更
             )
+            # --- ▲▲▲ 修正 ▲▲▲
+            
             logging.info(f"{len(features_df)}行を {output_dir} に保存しました")
 
             # 特徴量リストを保存 (仕様書 6.6)
