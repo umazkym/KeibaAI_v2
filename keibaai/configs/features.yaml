@@ -12,48 +12,20 @@ feature_engine:
 
 # レースベースの特徴量
 race_features:
-  - name: "race_distance"
-    source_column: "distance_m"
-  - name: "track_surface"
-    source_column: "track_surface"
-    encoder: "onehot"
-  - name: "venue_id"
-    source_column: "venue"
-    encoder: "label"
-  - name: "head_count"
-    source_column: "head_count"
+  enabled: true
 
 # 馬ベースの特徴量
 horse_features:
-  - name: "age"
-    source_column: "age"
-  - name: "sex"
-    source_column: "sex"
-    encoder: "onehot"
-  - name: "basis_weight"
-    source_column: "basis_weight"
-  - name: "career_win_rate"
-    lambda: "x['career_wins'] / x['career_starts']"
-  - name: "avg_last_3f_time"
-    rolling_window:
-      column: "last_3f_time"
-      window_size: 5
-      agg_func: "mean"
+  enabled: true
 
 # 騎手ベースの特徴量
 jockey_features:
-  - name: "jockey_win_rate_last_year"
-    # (集計期間や算出方法は別途定義)
-    enabled: true
+  enabled: true
 
 # 調教師ベースの特徴量
 trainer_features:
-  - name: "trainer_win_rate_last_year"
-    enabled: true
+  enabled: true
 
 # 血統ベースの特徴量
 pedigree_features:
-  - name: "sire_avg_prize_money"
-    enabled: true
-  - name: "damsire_avg_finish_position"
-    enabled: true
+  enabled: true

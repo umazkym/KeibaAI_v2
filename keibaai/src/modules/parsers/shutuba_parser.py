@@ -50,6 +50,9 @@ def parse_shutuba_html(file_path: str, race_id: str = None) -> pd.DataFrame:
     
     soup = BeautifulSoup(html_text, 'lxml')
     
+    # --- レース日付を HTML から抽出 ---
+    race_date = extract_race_date_from_html(soup, race_id)
+    
     shutuba_table = soup.find('table', class_='Shutuba_Table')
     
     if not shutuba_table:
@@ -62,6 +65,8 @@ def parse_shutuba_html(file_path: str, race_id: str = None) -> pd.DataFrame:
         try:
             row_data = parse_shutuba_row(tr, race_id)
             if row_data:
+                # レース日付を追加
+                row_data['race_date'] = race_date
                 rows.append(row_data)
         except Exception as e:
             logging.warning(f"行のパースエラー: {e}")
@@ -177,3 +182,102 @@ def extract_race_id_from_filename(file_path: str) -> str:
     filename = Path(file_path).stem
     match = re.search(r'(\d{12})', filename)
     return match.group(1) if match else None
+
+
+def extract_race_date_from_html(soup: BeautifulSoup, race_id: str) -> Optional[str]:
+    """
+    出馬表HTMLからレース日付を抽出
+    
+    Args:
+        soup: BeautifulSoup オブジェクト
+        race_id: レースID (フォールバック用)
+    
+    Returns:
+        race_date (ISO8601形式: YYYY-MM-DD) または None
+    
+    抽出パターン:
+        1. <dd class="Active">2023年5月28日</dd>
+        2. <p class="RaceData01">2023年5月28日(日)</p>
+        3. race_id の先頭4桁 (西暦) を使ったフォールバック
+    """
+    try:
+        # パターン1: dd.Active (開催日表示)
+        active_dd = soup.find('dd', class_='Active')
+        if active_dd:
+            date_text = active_dd.get_text(strip=True)
+            # "2023年5月28日" -> "2023-05-28"
+            match = re.search(r'(\d{4})年(\d{1,2})月(\d{1,2})日', date_text)
+            if match:
+                year = match.group(1)
+                month = match.group(2).zfill(2)
+                day = match.group(3).zfill(2)
+                return f"{year}-{month}-{day}"
+        
+        # パターン2: p.RaceData01 (レース情報)
+        race_data = soup.find('p', class_='RaceData01')
+        if race_data:
+            date_text = race_data.get_text(strip=True)
+            match = re.search(r'(\d{4})年(\d{1,2})月(\d{1,2})日', date_text)
+            if match:
+                year = match.group(1)
+                month = match.group(2).zfill(2)
+                day = match.group(3).zfill(2)
+                return f"{year}-{month}-{day}"
+        
+        # パターン3: div.RaceList_Item の日付テキスト
+        race_list_items = soup.find_all('div', class_='RaceList_Item')
+        for item in race_list_items:
+            date_text = item.get_text(strip=True)
+            match = re.search(r'(\d{4})年(\d{1,2})月(\d{1,2})日', date_text)
+            if match:
+                year = match.group(1)
+                month = match.group(2).zfill(2)
+                day = match.group(3).zfill(2)
+                return f"{year}-{month}-{day}"
+        
+        # フォールバック: race_id から日付を抽出 (YYYYMMDDHHSS形式の先頭8桁)
+        logging.warning(f"HTMLから日付を抽出できませんでした。race_id: {race_id} から日付を推定します。")
+
+        # race_id の形式: YYYYMMDDHHSS (12桁)
+        # 先頭8桁: YYYYMMDD
+        if race_id and len(race_id) >= 8:
+            try:
+                year = race_id[0:4]
+                month = race_id[4:6]
+                day = race_id[6:8]
+                return f"{year}-{month}-{day}"
+            except Exception as e:
+                logging.error(f"race_id からの日付抽出に失敗: {e}")
+
+        return None
+        
+    except Exception as e:
+        logging.error(f"レース日付の抽出に失敗: {e}")
+        return None
+
+
+def extract_race_date_from_race_id(race_id_series: pd.Series) -> pd.Series:
+    """
+    race_id (YYYYMMDD形式を含む12桁) から race_date を生成
+    
+    Args:
+        race_id_series: race_id の Series
+    
+    Returns:
+        race_date の Series (datetime64[ns])
+    
+    例:
+        202305020811 → 2023-05-02
+    """
+    try:
+        # race_id の先頭8桁を抽出 (YYYYMMDD)
+        date_str_series = race_id_series.astype(str).str[:8]
+        
+        # datetime に変換
+        race_date_series = pd.to_datetime(date_str_series, format='%Y%m%d', errors='coerce')
+        
+        return race_date_series
+        
+    except Exception as e:
+        logging.error(f"race_id から race_date の生成に失敗: {e}")
+        return pd.Series([None] * len(race_id_series))
