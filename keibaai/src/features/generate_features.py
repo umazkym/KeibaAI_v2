@@ -63,8 +63,12 @@ def load_data_for_features(
     
     # --- 修正箇所 4: paths_config の参照方法を修正 ---
     # paths_config は 'paths' キーを含む辞書、または 'paths' キーそのもの
+    # default.yaml に 'paths:' がないため、paths_config そのものを参照する
     paths = paths_config.get('paths', paths_config)
-    parsed_base_dir = Path(paths.get('parsed_data_path', 'data/parsed')) / 'parquet'
+    
+    # 変数展開済みのパスを取得
+    parsed_data_path = paths.get('parsed_data_path', 'data/parsed')
+    parsed_base_dir = Path(parsed_data_path) / 'parquet'
     # --- 修正箇所 4 終了 ---
     
     # 1. 出馬表 (対象期間)
@@ -151,12 +155,33 @@ def main():
     try:
         # pipeline_core を使って設定をロード
         default_config = load_config(args.config)
-        paths_config = default_config.get('paths', default_config)
+
+        # --- ★ 修正: 変数展開の実施 ---
+        # 1. data_path を取得
+        data_path_val = default_config.get('data_path', 'data')
+
+        # 2. paths_config を準備 (default.yaml に 'paths:' がないため、default_config をコピー)
+        paths_config = default_config.copy()
+
+        # 3. ${data_path} を置換
+        for key, value in paths_config.items():
+            if isinstance(value, str):
+                paths_config[key] = value.replace('${data_path}', data_path_val)
         
-        # ログパスのプレースホルダを置換
+        # 4. logs_path を取得 (置換後の値)
+        logs_path_base = paths_config.get('logs_path', 'data/logs')
+
+        # 5. ログパステンプレートを取得
         log_path_template = default_config.get('logging', {}).get('log_file', 'data/logs/{YYYY}/{MM}/{DD}/features.log')
+
+        # 6. ${logs_path} を置換
+        log_path_with_base = log_path_template.replace('${logs_path}', logs_path_base)
+        
         now = datetime.now()
-        log_path = log_path_template.format(YYYY=now.year, MM=f"{now.month:02}", DD=f"{now.day:02}")
+        # 7. YYYY/MM/DD をフォーマット
+        log_path = log_path_with_base.format(YYYY=now.year, MM=f"{now.month:02}", DD=f"{now.day:02}")
+        # --- ★ 修正終了 ---
+
         Path(log_path).parent.mkdir(parents=True, exist_ok=True)
 
         logging.basicConfig(
@@ -173,10 +198,22 @@ def main():
         # フォールバック (簡易ロギング)
         logging.basicConfig(level=args.log_level.upper(), format='%(asctime)s [%(levelname)s] %(name)s: %(message)s')
         try:
-             with open(args.config, 'r') as f:
-                paths_config = yaml.safe_load(f)
+             with open(args.config, 'r', encoding='utf-8') as f:
+                paths_config_raw = yaml.safe_load(f)
+                
+                # --- ★ 修正: フォールバックでも変数展開 ---
+                data_path_val = paths_config_raw.get('data_path', 'data')
+                paths_config = paths_config_raw.copy()
+                for key, value in paths_config.items():
+                    if isinstance(value, str):
+                        paths_config[key] = value.replace('${data_path}', data_path_val)
+                # --- ★ 修正終了 ---
+
         except FileNotFoundError:
              logging.error(f"設定ファイルが見つかりません: {args.config}")
+             sys.exit(1)
+        except Exception as ex:
+             logging.error(f"フォールバック設定のロード中にエラー: {ex}")
              sys.exit(1)
 
 
@@ -185,7 +222,7 @@ def main():
     logging.info("=" * 60)
 
     try:
-        with open(args.features_config, 'r') as f:
+        with open(args.features_config, 'r', encoding='utf-8') as f:
             features_config = yaml.safe_load(f)
     except FileNotFoundError:
         logging.error(f"特徴量設定ファイルが見つかりません: {args.features_config}")
@@ -210,11 +247,16 @@ def main():
         sys.exit(1)
 
     # --- 2. データロード ---
+    # ★ 修正: default.yaml に 'paths:' キーがないため、paths_config を直接渡す
     data = load_data_for_features(paths_config, start_dt, end_dt)
     
     if not data:
-        logging.warning("データロードに失敗しましたが、処理を続行します（対象データなし）。")
-        # sys.exit(1) # ログでは警告に留め、パイプラインは停止しない
+        # (load_data_for_features内でWarningログ出力済み)
+        logging.warning("ロード対象のデータがありませんでした。処理を終了します。")
+        logging.info("=" * 60)
+        logging.info("Keiba AI 特徴量生成パイプライン完了 (対象なし)")
+        logging.info("=" * 60)
+        sys.exit(0) # データがない場合は正常終了
 
     # --- 3. 特徴量エンジン初期化 ---
     engine = FeatureEngine(config=features_config)
@@ -239,7 +281,8 @@ def main():
         # sys.exit(1) # ログでは警告に留め、パイプラインは停止しない
     else:
         # --- 5. 特徴量保存 ---
-        output_dir_base = paths_config.get('paths', paths_config).get('features_path', 'data/features')
+        # ★ 修正: default.yaml に 'paths:' キーがないため、paths_config を直接参照
+        output_dir_base = paths_config.get('features_path', 'data/features')
         output_dir = Path(output_dir_base) / 'parquet'
         partition_cols = features_config.get('output', {}).get('partition_by', ['year', 'month'])
         
@@ -254,13 +297,25 @@ def main():
             # race_id からの復元を試みる
             if 'race_id' in features_df.columns:
                 try:
+                    # 'race_id' が YYYYMMDD... 形式であることを前提とする (仕様書 3.2)
                     features_df['race_date_str'] = features_df['race_id'].astype(str).str[:8]
                     features_df['race_date'] = pd.to_datetime(features_df['race_date_str'], format='%Y%m%d', errors='coerce')
-                    features_df['year'] = features_df['race_date'].dt.year
-                    features_df['month'] = features_df['race_date'].dt.month
-                    features_df['day'] = features_df['race_date'].dt.day
-                except Exception:
-                    logging.error("race_id から日付を復元できませんでした。")
+                    
+                    # NaT (日付変換失敗) がないか確認
+                    if features_df['race_date'].isnull().any():
+                         logging.warning("race_id から日付への変換に失敗したレコードがあります。")
+                         # NaT を含まないデータで year/month/day を設定
+                         valid_dates = features_df['race_date'].notnull()
+                         features_df.loc[valid_dates, 'year'] = features_df.loc[valid_dates, 'race_date'].dt.year
+                         features_df.loc[valid_dates, 'month'] = features_df.loc[valid_dates, 'race_date'].dt.month
+                         features_df.loc[valid_dates, 'day'] = features_df.loc[valid_dates, 'race_date'].dt.day
+                    else:
+                         features_df['year'] = features_df['race_date'].dt.year
+                         features_df['month'] = features_df['race_date'].dt.month
+                         features_df['day'] = features_df['race_date'].dt.day
+                         
+                except Exception as ex_date:
+                    logging.error(f"race_id から日付を復元できませんでした: {ex_date}")
             
         engine.save_features(
             features_df=features_df,
