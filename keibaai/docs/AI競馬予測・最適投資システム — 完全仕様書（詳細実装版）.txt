@@ -8159,20 +8159,28 @@ where:
     2. pytest tests/unit/test_features.py -v
 
     # [修正] 1ヶ月分の特徴量を生成
-    python src/features/generate_features.py \
-      --start_date 2023-01-01 \
-      --end_date 2023-01-31
+    # ⚠️ 重要: モデル学習の前に必ず実行すること
+    python keibaai/src/features/generate_features.py \
+      --start_date 2023-05-01 \
+      --end_date 2023-05-31 \
+      --config keibaai/configs/default.yaml \
+      --features_config keibaai/configs/features.yaml
     ```
 2.  **モデル学習（LightGBM）**
     ```bash
     # (仕様書 19.3.2 と同様)
+    # ⚠️ 前提条件: ステップ1の特徴量生成が完了していること
+    
     # μモデル学習
-    python src/models/model_train.py \
-      --start_date 2023-01-01 \
-      --end_date 2023-06-30 \
-      --output_dir data/models/202307_mu
+    python keibaai/src/models/train_mu_model.py \
+      --start_date 2023-05-01 \
+      --end_date 2023-05-31 \
+      --output_dir keibaai/data/models/mu_model_v1 \
+      --config keibaai/configs/default.yaml \
+      --models_config keibaai/configs/models.yaml \
+      --features_config keibaai/configs/features.yaml
 
-    # σ, νモデル学習 (※別途学習スクリプトが必要だが、ここでは省略)
+    # σ, νモデル学習 (※μモデル学習後に実行)
     ```
 3.  **推論・シミュレーション・最適化のテスト [修正]**
     ```bash
