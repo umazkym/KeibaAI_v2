@@ -11,12 +11,31 @@ from pathlib import Path
 import pandas as pd
 from bs4 import BeautifulSoup
 
-from .common_utils import (
-    parse_int_or_none,
-    parse_float_or_none,
-    parse_sex_age,
-    parse_horse_weight,
-)
+# common_utils のインポートパスを修正 (プロジェクトルートからの相対パスを想定)
+try:
+    from .common_utils import (
+        parse_int_or_none,
+        parse_float_or_none,
+        parse_sex_age,
+        parse_horse_weight,
+    )
+except ImportError:
+    # スクリプトとして直接実行された場合などのフォールバック
+    logging.warning("common_utils の相対インポートに失敗。絶対インポートを試みます。")
+    try:
+        from modules.parsers.common_utils import (
+            parse_int_or_none,
+            parse_float_or_none,
+            parse_sex_age,
+            parse_horse_weight,
+        )
+    except ImportError:
+        logging.error("common_utils が見つかりません。")
+        # 簡易的なフォールバック（実際には環境設定が必要）
+        parse_int_or_none = lambda x: int(x) if x and x.isdigit() else None
+        parse_float_or_none = lambda x: float(x) if x and x.replace('.', '', 1).isdigit() else None
+        parse_sex_age = lambda x: (x[0], int(x[1:])) if x and len(x) > 1 else (None, None)
+        parse_horse_weight = lambda x: (None, None)
 
 
 def parse_shutuba_html(file_path: str, race_id: str = None) -> pd.DataFrame:
@@ -61,6 +80,7 @@ def parse_shutuba_html(file_path: str, race_id: str = None) -> pd.DataFrame:
     
     rows = []
     
+    # class 'HorseList' を持つ <tr> のみを取得
     for tr in shutuba_table.find_all('tr', class_='HorseList'):
         try:
             row_data = parse_shutuba_row(tr, race_id)
@@ -85,8 +105,9 @@ def parse_shutuba_row(tr, race_id: str) -> Optional[Dict]:
     
     修正ポイント:
     1. jockey_id: 複数URLパターン対応
-    2. HTMLに存在しないフィールドはNoneに設定
-    3. セル数チェックの強化
+    2. trainer_id: 複数URLパターン対応 (BugFix)
+    3. HTMLに存在しないフィールドはNoneに設定
+    4. セル数チェックの強化
     """
     cells = tr.find_all('td')
     
@@ -139,15 +160,22 @@ def parse_shutuba_row(tr, race_id: str) -> Optional[Dict]:
         row_data['jockey_name'] = cells[6].get_text(strip=True)
         row_data['jockey_id'] = None
     
-    # 調教師名・調教師ID
-    trainer_link = cells[7].find('a', href=re.compile(r'/trainer/\d+'))
+    # ▼▼▼ 修正箇所（バグ修正） ▼▼▼
+    # 調教師名・調教師ID (修正: 複数パターン対応)
+    trainer_link = cells[7].find('a', href=re.compile(r'/trainer/'))
     if trainer_link:
         row_data['trainer_name'] = trainer_link.get_text(strip=True)
-        trainer_id_match = re.search(r'/trainer/(\d+)', trainer_link['href'])
+        href = trainer_link['href']
+        # パターン1: /trainer/result/recent/数字
+        trainer_id_match = re.search(r'/trainer/result/recent/(\d+)', href)
+        if not trainer_id_match:
+            # パターン2: /trainer/数字
+            trainer_id_match = re.search(r'/trainer/(\d+)', href)
         row_data['trainer_id'] = trainer_id_match.group(1) if trainer_id_match else None
     else:
         row_data['trainer_name'] = cells[7].get_text(strip=True)
         row_data['trainer_id'] = None
+    # ▲▲▲ 修正箇所 ▲▲▲
     
     # 馬体重（前走）
     if len(cells) > 8:
@@ -186,7 +214,7 @@ def extract_race_id_from_filename(file_path: str) -> str:
 
 def extract_race_date_from_html(soup: BeautifulSoup, race_id: str) -> Optional[str]:
     """
-    出馬表HTMLからレース日付を抽出
+    出馬表HTMLからレース日付を抽出 (修正版)
     
     Args:
         soup: BeautifulSoup オブジェクト
@@ -195,24 +223,27 @@ def extract_race_date_from_html(soup: BeautifulSoup, race_id: str) -> Optional[s
     Returns:
         race_date (ISO8601形式: YYYY-MM-DD) または None
     
-    抽出パターン:
-        1. <dd class="Active">2023年5月28日</dd>
-        2. <p class="RaceData01">2023年5月28日(日)</p>
-        3. race_id の先頭4桁 (西暦) を使ったフォールバック
+    抽出パターン (優先順):
+        1. <p class="smalltxt"> (レース結果ページと同じタグ。debug_find_date.py で発見)
+        2. <p class="RaceData01">
+        3. <dd class="Active"> (ただし年が欠落している可能性あり)
     """
     try:
-        # パターン1: dd.Active (開催日表示)
-        active_dd = soup.find('dd', class_='Active')
-        if active_dd:
-            date_text = active_dd.get_text(strip=True)
-            # "2023年5月28日" -> "2023-05-28"
+        # パターン1: <p class="smalltxt"> (debug_find_date.py で発見)
+        # (注: shutuba.html にはこのクラスが存在しない場合があるが、
+        #  results_parser.py とロジックを共通化するため残す)
+        smalltxt = soup.find('p', class_='smalltxt')
+        if smalltxt:
+            date_text = smalltxt.get_text(strip=True)
+            # "2023年05月14日 2回東京8日目..."
             match = re.search(r'(\d{4})年(\d{1,2})月(\d{1,2})日', date_text)
             if match:
                 year = match.group(1)
                 month = match.group(2).zfill(2)
                 day = match.group(3).zfill(2)
+                logging.info(f"日付抽出成功 (smalltxt): {year}-{month}-{day}")
                 return f"{year}-{month}-{day}"
-        
+
         # パターン2: p.RaceData01 (レース情報)
         race_data = soup.find('p', class_='RaceData01')
         if race_data:
@@ -222,33 +253,58 @@ def extract_race_date_from_html(soup: BeautifulSoup, race_id: str) -> Optional[s
                 year = match.group(1)
                 month = match.group(2).zfill(2)
                 day = match.group(3).zfill(2)
+                logging.info(f"日付抽出成功 (RaceData01): {year}-{month}-{day}")
                 return f"{year}-{month}-{day}"
         
-        # パターン3: div.RaceList_Item の日付テキスト
-        race_list_items = soup.find_all('div', class_='RaceList_Item')
-        for item in race_list_items:
-            date_text = item.get_text(strip=True)
-            match = re.search(r'(\d{4})年(\d{1,2})月(\d{1,2})日', date_text)
-            if match:
-                year = match.group(1)
-                month = match.group(2).zfill(2)
-                day = match.group(3).zfill(2)
+        # パターン3: dd.Active (開催日表示)
+        active_dd = soup.find('dd', class_='Active')
+        if active_dd:
+            date_text = active_dd.get_text(strip=True)
+            # "2023年5月28日" or "5月28日"
+            match_full = re.search(r'(\d{4})年(\d{1,2})月(\d{1,2})日', date_text)
+            if match_full:
+                year = match_full.group(1)
+                month = match_full.group(2).zfill(2)
+                day = match_full.group(3).zfill(2)
+                logging.info(f"日付抽出成功 (Active Full): {year}-{month}-{day}")
                 return f"{year}-{month}-{day}"
+            
+            # 年が欠落している場合 ("5月14日(日)")
+            # この場合、他のタグから年（YYYY）を探す
+            match_partial = re.search(r'(\d{1,2})月(\d{1,2})日', date_text)
+            if match_partial and '年' not in date_text:
+                logging.warning(f"日付抽出 (Active Partial): 年が欠落しています '{date_text}'。年を別途探索します。")
+                # 年の探索: <li class="Active">YYYY</li> または <title>YYYY</title>
+                year_str = None
+                
+                # <li class="Active"> の親の前の <li> タグ
+                active_li = active_dd.find_parent('li')
+                if active_li:
+                    prev_li = active_li.find_previous_sibling('li', class_='Active')
+                    if prev_li:
+                        year_match = re.search(r'(\d{4})', prev_li.get_text(strip=True))
+                        if year_match:
+                            year_str = year_match.group(1)
+
+                # title タグからも試行
+                if not year_str:
+                    title_tag = soup.find('title')
+                    if title_tag:
+                         year_match = re.search(r'(\d{4})', title_tag.get_text(strip=True))
+                         if year_match:
+                            year_str = year_match.group(1)
+
+                if year_str:
+                    month = match_partial.group(1).zfill(2)
+                    day = match_partial.group(2).zfill(2)
+                    logging.info(f"日付抽出成功 (Active Partial + Year): {year_str}-{month}-{day}")
+                    return f"{year_str}-{month}-{day}"
+                else:
+                    logging.warning(f"年（YYYY）の特定に失敗しました。")
+
         
-        # フォールバック: race_id から日付を抽出 (YYYYMMDDHHSS形式の先頭8桁)
-        logging.warning(f"HTMLから日付を抽出できませんでした。race_id: {race_id} から日付を推定します。")
-
-        # race_id の形式: YYYYMMDDHHSS (12桁)
-        # 先頭8桁: YYYYMMDD
-        if race_id and len(race_id) >= 8:
-            try:
-                year = race_id[0:4]
-                month = race_id[4:6]
-                day = race_id[6:8]
-                return f"{year}-{month}-{day}"
-            except Exception as e:
-                logging.error(f"race_id からの日付抽出に失敗: {e}")
-
+        # HTMLから日付を見つけられなかった場合
+        logging.warning(f"HTMLから日付を抽出できませんでした (race_id: {race_id})。Noneを返します。")
         return None
         
     except Exception as e:
@@ -258,16 +314,10 @@ def extract_race_date_from_html(soup: BeautifulSoup, race_id: str) -> Optional[s
 
 def extract_race_date_from_race_id(race_id_series: pd.Series) -> pd.Series:
     """
+    (この関数は現在、shutuba_parser.pyからは呼び出されていません)
     race_id (YYYYMMDD形式を含む12桁) から race_date を生成
     
-    Args:
-        race_id_series: race_id の Series
-    
-    Returns:
-        race_date の Series (datetime64[ns])
-    
-    例:
-        202305020811 → 2023-05-02
+    ★警告★: このロジックはユーザーの指摘により「NG」です。
     """
     try:
         # race_id の先頭8桁を抽出 (YYYYMMDD)

@@ -12,16 +12,40 @@ from pathlib import Path
 import pandas as pd
 from bs4 import BeautifulSoup
 
-from .common_utils import (
-    parse_int_or_none,
-    parse_float_or_none,
-    parse_sex_age,
-    parse_time_to_seconds,
-    parse_margin_to_seconds,
-    parse_horse_weight,
-    parse_prize_money,
-)
-
+# common_utils のインポートパスを修正 (プロジェクトルートからの相対パスを想定)
+try:
+    from .common_utils import (
+        parse_int_or_none,
+        parse_float_or_none,
+        parse_sex_age,
+        parse_time_to_seconds,
+        parse_margin_to_seconds,
+        parse_horse_weight,
+        parse_prize_money,
+    )
+except ImportError:
+    # スクリプトとして直接実行された場合などのフォールバック
+    logging.warning("common_utils の相対インポートに失敗。絶対インポートを試みます。")
+    try:
+        from modules.parsers.common_utils import (
+            parse_int_or_none,
+            parse_float_or_none,
+            parse_sex_age,
+            parse_time_to_seconds,
+            parse_margin_to_seconds,
+            parse_horse_weight,
+            parse_prize_money,
+        )
+    except ImportError:
+        logging.error("common_utils が見つかりません。")
+        # 簡易的なフォールバック（実際には環境設定が必要）
+        parse_int_or_none = lambda x: int(x) if x and x.isdigit() else None
+        parse_float_or_none = lambda x: float(x) if x and x.replace('.', '', 1).isdigit() else None
+        parse_sex_age = lambda x: (x[0], int(x[1:])) if x and len(x) > 1 else (None, None)
+        parse_time_to_seconds = lambda x: None
+        parse_margin_to_seconds = lambda x: None
+        parse_horse_weight = lambda x: (None, None)
+        parse_prize_money = lambda x: None
 
 def parse_results_html(file_path: str, race_id: str = None) -> pd.DataFrame:
     """
@@ -42,7 +66,7 @@ def parse_results_html(file_path: str, race_id: str = None) -> pd.DataFrame:
     
     soup = BeautifulSoup(html_text, 'lxml')
     
-    # diary_snap_cut タグを無力化
+    # diary_snap_cut タグを無力化 (日付抽出の邪魔になるため)
     for tag in soup.find_all('diary_snap_cut'):
         tag.unwrap()
     
@@ -56,6 +80,7 @@ def parse_results_html(file_path: str, race_id: str = None) -> pd.DataFrame:
         return pd.DataFrame()
     
     rows = []
+    # 最初の行 (ヘッダー) をスキップ
     for tr in result_table.find_all('tr')[1:]:
         try:
             row_data = parse_result_row(tr, race_id)
@@ -71,11 +96,17 @@ def parse_results_html(file_path: str, race_id: str = None) -> pd.DataFrame:
     
     # margin_seconds を計算（1着との差分）
     if not df.empty and 'finish_time_seconds' in df.columns:
-        first_place_time = df.loc[df['finish_position'] == 1, 'finish_time_seconds'].values
-        if len(first_place_time) > 0 and pd.notna(first_place_time[0]):
-            df['margin_seconds'] = df['finish_time_seconds'] - first_place_time[0]
-            df.loc[df['finish_position'] == 1, 'margin_seconds'] = 0.0
-            df['margin_seconds'] = df['margin_seconds'].apply(lambda x: max(x, 0) if pd.notna(x) else None)
+        # finish_position が '1' の行の finish_time_seconds を取得
+        first_place_time_series = df.loc[df['finish_position'] == 1, 'finish_time_seconds']
+        
+        if not first_place_time_series.empty:
+            first_place_time = first_place_time_series.values[0]
+            if pd.notna(first_place_time):
+                df['margin_seconds'] = df['finish_time_seconds'] - first_place_time
+                # 1着自身と、タイムが無い馬（競争中止など）のマージンを調整
+                df['margin_seconds'] = df['margin_seconds'].apply(lambda x: max(x, 0) if pd.notna(x) else None)
+            else:
+                df['margin_seconds'] = None
         else:
             df['margin_seconds'] = None
     
@@ -95,7 +126,7 @@ def parse_result_row(tr, race_id: str) -> Optional[Dict]:
     """
     cells = tr.find_all('td')
 
-    if len(cells) < 15:
+    if len(cells) < 15: # 最小でも15セル（馬体重まで）は必要
         return None
     
     row_data = {'race_id': race_id}
@@ -215,7 +246,8 @@ def parse_result_row(tr, race_id: str) -> Optional[Dict]:
             break
         else:
             owner_text = cell.get_text(strip=True)
-            if owner_text and owner_text not in ['---', '---.-', '']:
+            # '[西]' や '[東]' などの調教師情報と区別する
+            if owner_text and owner_text not in ['---', '---.-', ''] and not re.match(r'\[(東|西)\]', owner_text):
                 owner_name = owner_text
                 break
 
@@ -250,7 +282,7 @@ def extract_race_id_from_filename(file_path: str) -> str:
 
 def extract_race_date_from_html(soup: BeautifulSoup, race_id: str) -> Optional[str]:
     """
-    レース結果HTMLからレース日付を抽出
+    レース結果HTMLからレース日付を抽出 (修正版)
     
     Args:
         soup: BeautifulSoup オブジェクト
@@ -259,13 +291,26 @@ def extract_race_date_from_html(soup: BeautifulSoup, race_id: str) -> Optional[s
     Returns:
         race_date (ISO8601形式: YYYY-MM-DD) または None
     
-    抽出パターン:
-        1. <p class="RaceData01">2023年5月28日(日)</p>
-        2. <dd class="Active">2023年5月28日</dd>
-        3. race_id の先頭4桁 (西暦) を使ったフォールバック
+    抽出パターン (優先順):
+        1. <p class="smalltxt"> (debug_find_date.py で発見)
+        2. <p class="RaceData01">
+        3. <dd class="Active">
     """
     try:
-        # パターン1: p.RaceData01 (レース情報)
+        # パターン1: <p class="smalltxt"> (debug_find_date.py で発見)
+        smalltxt = soup.find('p', class_='smalltxt')
+        if smalltxt:
+            date_text = smalltxt.get_text(strip=True)
+            # "2023年05月14日 2回東京8日目..."
+            match = re.search(r'(\d{4})年(\d{1,2})月(\d{1,2})日', date_text)
+            if match:
+                year = match.group(1)
+                month = match.group(2).zfill(2)
+                day = match.group(3).zfill(2)
+                logging.info(f"日付抽出成功 (smalltxt): {year}-{month}-{day}")
+                return f"{year}-{month}-{day}"
+
+        # パターン2: p.RaceData01 (レース情報)
         race_data = soup.find('p', class_='RaceData01')
         if race_data:
             date_text = race_data.get_text(strip=True)
@@ -275,9 +320,10 @@ def extract_race_date_from_html(soup: BeautifulSoup, race_id: str) -> Optional[s
                 year = match.group(1)
                 month = match.group(2).zfill(2)
                 day = match.group(3).zfill(2)
+                logging.info(f"日付抽出成功 (RaceData01): {year}-{month}-{day}")
                 return f"{year}-{month}-{day}"
         
-        # パターン2: dd.Active (開催日表示)
+        # パターン3: dd.Active (開催日表示)
         active_dd = soup.find('dd', class_='Active')
         if active_dd:
             date_text = active_dd.get_text(strip=True)
@@ -286,52 +332,23 @@ def extract_race_date_from_html(soup: BeautifulSoup, race_id: str) -> Optional[s
                 year = match.group(1)
                 month = match.group(2).zfill(2)
                 day = match.group(3).zfill(2)
+                logging.info(f"日付抽出成功 (Active): {year}-{month}-{day}")
                 return f"{year}-{month}-{day}"
         
-        # パターン3: diary_snap_cut内のテキスト
-        diary_tags = soup.find_all('diary_snap_cut')
-        for tag in diary_tags:
-            date_text = tag.get_text(strip=True)
-            match = re.search(r'(\d{4})年(\d{1,2})月(\d{1,2})日', date_text)
-            if match:
-                year = match.group(1)
-                month = match.group(2).zfill(2)
-                day = match.group(3).zfill(2)
-                return f"{year}-{month}-{day}"
-        
-        # フォールバック: race_id から日付を抽出 (YYYYMMDDHHSS形式の先頭8桁)
-        logging.warning(f"HTMLから日付を抽出できませんでした。race_id: {race_id} から日付を推定します。")
-
-        # race_id の形式: YYYYMMDDHHSS (12桁)
-        # 先頭8桁: YYYYMMDD
-        if race_id and len(race_id) >= 8:
-            try:
-                year = race_id[0:4]
-                month = race_id[4:6]
-                day = race_id[6:8]
-                return f"{year}-{month}-{day}"
-            except Exception as e:
-                logging.error(f"race_id からの日付抽出に失敗: {e}")
-
+        # HTMLから日付を見つけられなかった場合
+        logging.warning(f"HTMLから日付を抽出できませんでした (race_id: {race_id})。Noneを返します。")
         return None
         
     except Exception as e:
         logging.error(f"レース日付の抽出に失敗: {e}")
         return None
 
-
 def extract_race_date_from_race_id(race_id_series: pd.Series) -> pd.Series:
     """
+    (この関数は現在、results_parser.pyからは呼び出されていません)
     race_id (YYYYMMDD形式を含む12桁) から race_date を生成
     
-    Args:
-        race_id_series: race_id の Series
-    
-    Returns:
-        race_date の Series (datetime64[ns])
-    
-    例:
-        202305020811 → 2023-05-02
+    ★警告★: このロジックはユーザーの指摘により「NG」です。
     """
     try:
         # race_id の先頭8桁を抽出 (YYYYMMDD)
