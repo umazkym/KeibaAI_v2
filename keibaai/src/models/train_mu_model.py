@@ -149,32 +149,92 @@ def main():
 
     # --- 2. 特徴量データのロード (修正: パス解決) ---
     # default.yaml の 'features_path' (例: "keibaai/data/features") を execution_root 基準で解決
-    features_dir = execution_root / paths.get('features_path', 'keibaai/data/features') / 'parquet'
+    
+    # ★★★ 修正: 特徴量リスト (feature_names.yaml) のパス ★★★
+    features_base_dir = execution_root / paths.get('features_path', 'keibaai/data/features')
+    # ★★★ 修正: Parquetデータ本体 (パーティションルート) のパス ★★★
+    features_parquet_dir = features_base_dir / 'parquet'
     
     # 特徴量リストを読み込む
+    feature_names_list = []
     try:
-        with open(features_dir / "feature_names.yaml", 'r', encoding='utf-8') as f:
-            feature_names = yaml.safe_load(f)
-        logging.info(f"{len(feature_names)}個の特徴量をロードしました")
+        # ★★★ 修正: 正しいパスから読み込む ★★★
+        feature_names_yaml_path = features_base_dir / "feature_names.yaml"
+        with open(feature_names_yaml_path, 'r', encoding='utf-8') as f:
+            # YAMLファイルは {'feature_names': [...]} という構造を想定
+            feature_names_config = yaml.safe_load(f)
+            feature_names_list = feature_names_config.get('feature_names', [])
+            
+        if not feature_names_list:
+             logging.error(f"特徴量リスト (feature_names.yaml) の中身が空です: {feature_names_yaml_path}")
+             sys.exit(1)
+             
+        logging.info(f"{len(feature_names_list)}個の特徴量をロードしました")
+        
     except FileNotFoundError:
-         logging.error(f"特徴量リスト (feature_names.yaml) が見つかりません: {features_dir}")
+         logging.error(f"特徴量リスト (feature_names.yaml) が見つかりません: {feature_names_yaml_path}")
+         sys.exit(1)
+    except Exception as e:
+         logging.error(f"特徴量リスト (feature_names.yaml) の読み込みに失敗: {e}")
          sys.exit(1)
 
+
     # 学習データをロード
-    features_df = load_parquet_data_by_date(features_dir, start_dt, end_dt, date_col='race_date')
+    # ★★★ 修正: Parquetデータ本体のパスを渡す ★★★
+    features_df = load_parquet_data_by_date(features_parquet_dir, start_dt, end_dt, date_col='race_date')
     
     if features_df.empty:
         logging.error(f"期間 {args.start_date} - {args.end_date} の特徴量データが見つかりません。")
+        logging.error(f"検索パス: {features_parquet_dir}")
         sys.exit(1)
         
     # 学習に必要な目的変数が存在するか確認
     if 'finish_position' not in features_df.columns or 'finish_time_seconds' not in features_df.columns:
-        logging.error("学習に必要な目的変数 (finish_position, finish_time_seconds) が特徴量データにありません。")
-        sys.exit(1)
+        # 特徴量データに目的変数が含まれていない場合は、元の 'races' データからマージする
+        logging.warning("特徴量データに目的変数 (finish_position, finish_time_seconds) がありません。")
+        logging.warning("元の 'races' Parquetデータからマージを試みます...")
         
+        try:
+            races_dir = execution_root / paths.get('parsed_parquet_races', 'keibaai/data/parsed/parquet/races')
+            races_df = load_parquet_data_by_date(races_dir, start_dt, end_dt, date_col='race_date')
+            
+            if races_df.empty:
+                raise FileNotFoundError("マージ対象の 'races' データが見つかりません。")
+            
+            # 必要なカラムのみを選択してマージ
+            target_cols = ['race_id', 'horse_id', 'finish_position', 'finish_time_seconds']
+            if not all(col in races_df.columns for col in target_cols):
+                raise ValueError(f"'races' データに必要なカラム {target_cols} が揃っていません。")
+
+            # マージキー（race_id, horse_id）の型を合わせる
+            features_df['race_id'] = features_df['race_id'].astype(str)
+            features_df['horse_id'] = features_df['horse_id'].astype(str)
+            races_df['race_id'] = races_df['race_id'].astype(str)
+            races_df['horse_id'] = races_df['horse_id'].astype(str)
+
+            features_df = features_df.merge(
+                races_df[target_cols],
+                on=['race_id', 'horse_id'],
+                how='left'
+            )
+            logging.info("目的変数のマージ完了。")
+
+        except Exception as e:
+            logging.error(f"目的変数のマージに失敗しました: {e}")
+            logging.error("特徴量生成パイプラインが 'races' データを正しく処理したか確認してください。")
+            sys.exit(1)
+
     # 欠損値を含む行を削除 (学習のため)
-    features_df = features_df.dropna(subset=feature_names + ['finish_position', 'finish_time_seconds', 'race_id'])
-    logging.info(f"欠損値除去後、{len(features_df)}行のデータで学習します。")
+    required_cols = feature_names_list + ['finish_position', 'finish_time_seconds', 'race_id']
+    # 存在しないカラムを要求リストから除外 (安全のため)
+    required_cols = [col for col in required_cols if col in features_df.columns]
+    
+    original_rows = len(features_df)
+    features_df = features_df.dropna(subset=required_cols)
+    rows_dropped = original_rows - len(features_df)
+    
+    logging.info(f"欠損値除去: {rows_dropped}行を除去しました。")
+    logging.info(f"{len(features_df)}行のデータで学習します。")
 
     if features_df.empty:
         logging.error("欠損値を除去した結果、学習データが0行になりました。")
@@ -183,6 +243,9 @@ def main():
     # --- 3. モデル学習 ---
     mu_model_config = models_config.get('mu_estimator', {})
     estimator = MuEstimator(mu_model_config)
+    
+    # ★★★ 修正: estimator に特徴量リストを渡す ★★★
+    estimator.feature_names = feature_names_list
     
     try:
         estimator.train(

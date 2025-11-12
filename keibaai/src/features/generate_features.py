@@ -185,7 +185,9 @@ def main():
             handlers=[
                 logging.FileHandler(log_path_abs, encoding='utf-8'),
                 logging.StreamHandler(sys.stdout)
-            ]
+            ],
+            # ★★★ 修正: force=True を追加 ★★★
+            force=True
         )
             
     except Exception as e:

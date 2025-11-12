@@ -1,0 +1,22 @@
+feature_names:
+- bracket_number
+- horse_name
+- sex_age
+- sex
+- age
+- basis_weight
+- jockey_name
+- jockey_id
+- trainer_name
+- trainer_id
+- horse_weight
+- horse_weight_change
+- owner_name
+- prize_total
+- morning_odds
+- morning_popularity
+- career_stats
+- career_starts
+- career_wins
+- career_places
+- last_5_finishes
