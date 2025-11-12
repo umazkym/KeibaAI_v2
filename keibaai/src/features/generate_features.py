@@ -24,13 +24,12 @@ from typing import Dict, Any
 import pandas as pd
 import yaml
 
-# --- プロジェクトルート (keibaai/) を基準にする ---
-# generate_features.py は keibaai/src/features/ にあるため、2階層上が keibaai/src/、3階層上が keibaai/
-script_dir = Path(__file__).resolve().parent  # keibaai/src/features/
-src_dir = script_dir.parent  # keibaai/src/
-project_root = src_dir.parent  # keibaai/
-
-sys.path.insert(0, str(src_dir))  # keibaai/src/ を追加
+# --- ▼▼▼ 修正 ▼▼▼ ---
+# スクリプト(keibaai/src/features/generate_features.py) の4階層上が Keiba_AI_v2 (実行ルート)
+execution_root = Path(__file__).resolve().parent.parent.parent.parent
+# keibaai/src を sys.path に追加
+sys.path.append(str(execution_root / "keibaai" / "src"))
+# --- ▲▲▲ 修正 ▲▲▲ ---
 
 try:
     from pipeline_core import setup_logging, load_config
@@ -46,7 +45,7 @@ def load_data_for_features(
     paths_config: Dict[str, Any],
     start_dt: datetime,
     end_dt: datetime,
-    project_root: Path
+    execution_root: Path # ★修正
 ) -> Dict[str, pd.DataFrame]:
     """
     特徴量生成に必要なデータをロードする
@@ -55,8 +54,8 @@ def load_data_for_features(
     logging.info("特徴量生成用のデータをロード中...")
     
     # --- 修正: プロジェクトルート (keibaai/) を基準にパスを構築 ---
-    data_path_val = paths_config.get('data_path', 'data')
-    parsed_base_dir = project_root / data_path_val / 'parsed' / 'parquet'
+    # default.yaml の 'parsed_parquet_path' (例: "keibaai/data/parsed/parquet") を execution_root 基準で解決
+    parsed_base_dir = execution_root / paths_config.get('parsed_parquet_path', 'keibaai/data/parsed/parquet')
     
     logging.info(f"データ検索パス: {parsed_base_dir}")
     
@@ -71,6 +70,7 @@ def load_data_for_features(
         return {}
         
     # 2. 過去成績 (全期間 - 終了日まで)
+    # ★★★ 修正: 'results' (仕様書) ではなく 'races' (現状のデータ構造) を使用 ★★★
     results_history_dir = parsed_base_dir / 'races'
     results_history_df = load_parquet_data_by_date(
         results_history_dir, None, end_dt, date_col='race_date'
@@ -119,13 +119,13 @@ def main():
     parser.add_argument(
         '--config',
         type=str,
-        default='configs/default.yaml',
+        default='keibaai/configs/default.yaml', # ★修正
         help='設定ファイルパス'
     )
     parser.add_argument(
         '--features_config',
         type=str,
-        default='configs/features.yaml',
+        default='keibaai/configs/features.yaml', # ★修正
         help='特徴量設定ファイルパス'
     )
     parser.add_argument(
@@ -138,29 +138,27 @@ def main():
 
     args = parser.parse_args()
 
-    # --- プロジェクトルート (keibaai/) を取得 ---
-    project_root = Path(__file__).resolve().parent.parent.parent  # keibaai/
+    # --- 修正 (train_mu_model.py とロジックを統一) ---
+    # 実行ルート (Keiba_AI_v2/) を取得
+    execution_root = Path(__file__).resolve().parent.parent.parent.parent
 
     # --- 0. 設定とロギング ---
     paths_config = {}
     try:
-        # 設定ファイルのパスを keibaai/ からの相対パスとして解決
-        # args.config は "keibaai/configs/default.yaml" または "configs/default.yaml" の可能性がある
-        
-        # まず args.config から "keibaai/" プレフィックスを除去
-        config_rel = args.config.replace("keibaai/", "").replace("keibaai\\", "")
-        features_config_rel = args.features_config.replace("keibaai/", "").replace("keibaai\\", "")
-        
-        config_path = project_root / config_rel
-        features_config_path = project_root / features_config_rel
+        # コマンド引数のパス (例: keibaai/configs/default.yaml) は実行場所(execution_root)からの相対パスとして解決
+        config_path = execution_root / args.config
+        features_config_path = execution_root / args.features_config
         
         logging.info(f"設定ファイルパス: {config_path}")
         
         default_config = load_config(str(config_path))
         
-        # data_path を取得
-        data_path_val = default_config.get('data_path', 'data')
-        paths_config = default_config.copy()
+        # 'paths' セクションを取得
+        paths = default_config.get('paths', {})
+        paths_config = paths.copy()
+
+        # data_path を取得 (default.yaml に基づく)
+        data_path_val = paths_config.get('data_path', 'keibaai/data')
         
         # ${data_path} を置換
         for key, value in paths_config.items():
@@ -168,15 +166,15 @@ def main():
                 paths_config[key] = value.replace('${data_path}', data_path_val)
         
         # ログパステンプレートを取得
-        logs_path_base = paths_config.get('logs_path', 'data/logs')
-        log_path_template = default_config.get('logging', {}).get('log_file', 'data/logs/{YYYY}/{MM}/{DD}/features.log')
+        logs_path_base = paths_config.get('logs_path', 'keibaai/data/logs')
+        log_path_template = default_config.get('logging', {}).get('log_file', 'keibaai/data/logs/{YYYY}/{MM}/{DD}/features.log')
         log_path_with_base = log_path_template.replace('${logs_path}', logs_path_base)
         
         now = datetime.now()
         log_path = log_path_with_base.format(YYYY=now.year, MM=f"{now.month:02}", DD=f"{now.day:02}")
         
         # ログファイルパスを絶対パスに変換
-        log_path_abs = project_root / log_path
+        log_path_abs = execution_root / log_path
         log_path_abs.parent.mkdir(parents=True, exist_ok=True)
 
         logging.basicConfig(
@@ -186,18 +184,19 @@ def main():
                 logging.FileHandler(log_path_abs, encoding='utf-8'),
                 logging.StreamHandler(sys.stdout)
             ],
-            # ★★★ 修正: force=True を追加 ★★★
             force=True
         )
             
     except Exception as e:
+        # この時点ではロギングが失敗している可能性があるため print を使用
         print(f"ロギングと設定の初期化に失敗しました: {e}")
         logging.basicConfig(level=args.log_level.upper(), format='%(asctime)s [%(levelname)s] %(name)s: %(message)s')
         try:
+            # フォールバック（設定ファイルの手動読み込み試行）
             with open(config_path, 'r', encoding='utf-8') as f:
-                paths_config_raw = yaml.safe_load(f)
+                paths_config_raw = yaml.safe_load(f).get('paths', {})
                 
-            data_path_val = paths_config_raw.get('data_path', 'data')
+            data_path_val = paths_config_raw.get('data_path', 'keibaai/data')
             paths_config = paths_config_raw.copy()
             for key, value in paths_config.items():
                 if isinstance(value, str):
@@ -209,6 +208,7 @@ def main():
         except Exception as ex:
             logging.error(f"フォールバック設定のロード中にエラー: {ex}")
             sys.exit(1)
+    # --- 修正ここまで ---
 
 
     logging.info("=" * 60)
@@ -241,7 +241,7 @@ def main():
         sys.exit(1)
 
     # --- 2. データロード ---
-    data = load_data_for_features(paths_config, start_dt, end_dt, project_root)
+    data = load_data_for_features(paths_config, start_dt, end_dt, execution_root) # ★修正
     
     if not data:
         logging.warning("ロード対象のデータがありませんでした。処理を終了します。")
@@ -257,12 +257,42 @@ def main():
     features_df = pd.DataFrame()
     if data:
         try:
+            # --- ▼▼▼ 修正 ▼▼▼ ---
+            # 目的変数 (finish_position等) を shutuba_df にマージする
+            shutuba_df = data["shutuba_df"]
+            results_df = data["results_history_df"] # results_history_df には全期間の結果が含まれる
+
+            target_cols = ['race_id', 'horse_id', 'finish_position', 'finish_time_seconds']
+            
+            # ★修正: results_df が空でないか、カラムが存在するかをチェック
+            if results_df.empty:
+                logging.warning("レース結果(races/results)データが空のため、目的変数をマージできません。")
+            elif not all(col in results_df.columns for col in target_cols):
+                missing_cols = [col for col in target_cols if col not in results_df.columns]
+                logging.warning(f"レース結果(races/results)に目的変数カラム {missing_cols} が不足しているため、マージをスキップします。")
+            else:
+                # マージキーの型を合わせる
+                shutuba_df['race_id'] = shutuba_df['race_id'].astype(str)
+                shutuba_df['horse_id'] = shutuba_df['horse_id'].astype(str)
+                results_df['race_id'] = results_df['race_id'].astype(str)
+                results_df['horse_id'] = results_df['horse_id'].astype(str)
+
+                # shutuba_df (対象期間) に、対応するレース結果 (全期間から) をマージ
+                shutuba_df = shutuba_df.merge(
+                    results_df[target_cols],
+                    on=['race_id', 'horse_id'],
+                    how='left' # 出馬表がベース
+                )
+                logging.info("特徴量生成のため、出馬表にレース結果（目的変数）をマージしました。")
+            
             features_df = engine.generate_features(
-                shutuba_df=data["shutuba_df"],
+                shutuba_df=shutuba_df, # ★修正: マージ済みの shutuba_df を渡す
                 results_history_df=data["results_history_df"],
                 horse_profiles_df=data["horse_profiles_df"],
                 pedigree_df=data["pedigree_df"]
             )
+            # --- ▲▲▲ 修正 ▲▲▲ ---
+            
         except Exception as e:
             logging.error(f"特徴量生成中にエラーが発生しました: {e}", exc_info=True)
             sys.exit(1)
@@ -272,8 +302,11 @@ def main():
         logging.warning("特徴量生成の結果が空です。")
     else:
         # --- 5. 特徴量保存 ---
-        output_dir_base = paths_config.get('features_path', 'data/features')
-        output_dir = project_root / output_dir_base / 'parquet'
+        # --- 修正 ---
+        output_dir_base = paths_config.get('features_path', 'keibaai/data/features')
+        output_dir = execution_root / output_dir_base / 'parquet' 
+        # --- 修正ここまで ---
+        
         partition_cols = features_config.get('output', {}).get('partition_by', ['year', 'month'])
         
         # 保存のために 'race_date' からパーティションカラムを生成
@@ -302,12 +335,28 @@ def main():
                          
                 except Exception as ex_date:
                     logging.error(f"race_id から日付を復元できませんでした: {ex_date}")
-            
-        engine.save_features(
-            features_df=features_df,
-            output_dir=str(output_dir),
-            partition_cols=partition_cols
-        )
+        
+        # ★修正: engine.save_features は仕様書になく、実装もないため、ここで直接保存する
+        try:
+            output_dir.mkdir(parents=True, exist_ok=True)
+            features_df.to_parquet(
+                output_dir,
+                engine='pyarrow',
+                compression='snappy',
+                partition_cols=partition_cols,
+                existing_data_behavior='overwrite_or_ignore'
+            )
+            logging.info(f"{len(features_df)}行を {output_dir} に保存しました")
+
+            # 特徴量リストを保存 (仕様書 6.6)
+            feature_names_path = execution_root / output_dir_base / 'feature_names.yaml' # ★修正
+            feature_names_data = {'feature_names': engine.feature_names}
+            with open(feature_names_path, 'w', encoding='utf-8') as f:
+                yaml.dump(feature_names_data, f, allow_unicode=True)
+            logging.info(f"特徴量リストを {feature_names_path} に保存しました")
+
+        except Exception as e:
+            logging.error(f"特徴量の保存に失敗: {e}", exc_info=True)
 
     logging.info("=" * 60)
     logging.info("Keiba AI 特徴量生成パイプライン完了")

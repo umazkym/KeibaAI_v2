@@ -1,0 +1,14 @@
+PS C:\Users\zk-ht\Keiba\Keiba_AI_v2> python keibaai/src/models/train_mu_model.py `
+>>     --start_date 2023-05-01 `
+>>     --end_date 2023-05-31 `
+>>     --output_dir keibaai/data/models/mu_model_v1 `
+>>     --config keibaai/configs/default.yaml `
+>>     --models_config keibaai/configs/models.yaml `
+>>     --features_config keibaai/configs/features.yaml
+2025-11-12 21:05:17,815 [INFO] root: ============================================================
+2025-11-12 21:05:17,815 [INFO] root: Keiba AI μモデル学習パイプライン開始
+2025-11-12 21:05:17,815 [INFO] root: ============================================================
+2025-11-12 21:05:17,815 [INFO] root: 学習期間: 2023-05-01 - 2023-05-31
+2025-11-12 21:05:17,824 [INFO] root: 33個の特徴量をロードしました
+2025-11-12 21:05:17,824 [WARNING] root: Parquetファイルが見つかりません: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\features\parquet
+2025-11-12 21:05:17,825 [ERROR] root: 期間 2023-05-01 - 2023-05-31 の特徴量データが見つかりません。

@@ -20,3 +20,5 @@ feature_names:
 - career_wins
 - career_places
 - last_5_finishes
+- finish_position
+- finish_time_seconds

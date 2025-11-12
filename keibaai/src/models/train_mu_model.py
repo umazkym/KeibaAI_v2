@@ -93,8 +93,20 @@ def main():
         features_config_path = execution_root / args.features_config
         
         config = load_config(str(config_path))
-        paths = config.get('paths', {})
         
+        # --- ▼▼▼ 修正: 'paths' セクションの取得と解決 ▼▼▼ ---
+        paths = config.get('paths', {})
+        paths_config = paths.copy()
+
+        # data_path を取得 (default.yaml に基づく)
+        data_path_val = paths_config.get('data_path', 'keibaai/data')
+        
+        # ${data_path} を置換
+        for key, value in paths_config.items():
+            if isinstance(value, str):
+                paths_config[key] = value.replace('${data_path}', data_path_val)
+        # --- ▲▲▲ 修正 ▲▲▲ ---
+
         with open(models_config_path, 'r', encoding='utf-8') as f:
             models_config = yaml.safe_load(f)
         
@@ -102,16 +114,15 @@ def main():
             features_config = yaml.safe_load(f)
 
         # ログパスの ${logs_path} を解決
-        logs_path_base = paths.get('logs_path', 'data/logs')
-        log_path_template = config.get('logging', {}).get('log_file', 'data/logs/{YYYY}/{MM}/{DD}/training.log')
+        logs_path_base = paths_config.get('logs_path', 'keibaai/data/logs') # ★修正
+        log_path_template = config.get('logging', {}).get('log_file', 'keibaai/data/logs/{YYYY}/{MM}/{DD}/training.log') # ★修正
         log_path_with_base = log_path_template.replace('${logs_path}', logs_path_base)
         
         now = datetime.now()
         log_path = log_path_with_base.format(YYYY=now.year, MM=f"{now.month:02}", DD=f"{now.day:02}")
         
         # ログファイルパスを execution_root からの相対パスとして解決
-        # (configのパス例: "keibaai/data/logs/...")
-        log_path_abs = execution_root / log_path
+        log_path_abs = execution_root / log_path # ★修正
         log_path_abs.parent.mkdir(parents=True, exist_ok=True)
 
         logging.basicConfig(
@@ -151,14 +162,14 @@ def main():
     # default.yaml の 'features_path' (例: "keibaai/data/features") を execution_root 基準で解決
     
     # ★★★ 修正: 特徴量リスト (feature_names.yaml) のパス ★★★
-    features_base_dir = execution_root / paths.get('features_path', 'keibaai/data/features')
+    features_base_dir = execution_root / paths_config.get('features_path', 'keibaai/data/features') # ★修正
     # ★★★ 修正: Parquetデータ本体 (パーティションルート) のパス ★★★
     features_parquet_dir = features_base_dir / 'parquet'
     
     # 特徴量リストを読み込む
     feature_names_list = []
     try:
-        # ★★★ 修正: 正しいパスから読み込む ★★★
+        # ★★★ 修正: 正しいパスから読み込む (parquet ディレクトリの上) ★★★
         feature_names_yaml_path = features_base_dir / "feature_names.yaml"
         with open(feature_names_yaml_path, 'r', encoding='utf-8') as f:
             # YAMLファイルは {'feature_names': [...]} という構造を想定
@@ -188,52 +199,45 @@ def main():
         logging.error(f"検索パス: {features_parquet_dir}")
         sys.exit(1)
         
-    # 学習に必要な目的変数が存在するか確認
-    if 'finish_position' not in features_df.columns or 'finish_time_seconds' not in features_df.columns:
-        # 特徴量データに目的変数が含まれていない場合は、元の 'races' データからマージする
-        logging.warning("特徴量データに目的変数 (finish_position, finish_time_seconds) がありません。")
-        logging.warning("元の 'races' Parquetデータからマージを試みます...")
-        
-        try:
-            races_dir = execution_root / paths.get('parsed_parquet_races', 'keibaai/data/parsed/parquet/races')
-            races_df = load_parquet_data_by_date(races_dir, start_dt, end_dt, date_col='race_date')
-            
-            if races_df.empty:
-                raise FileNotFoundError("マージ対象の 'races' データが見つかりません。")
-            
-            # 必要なカラムのみを選択してマージ
-            target_cols = ['race_id', 'horse_id', 'finish_position', 'finish_time_seconds']
-            if not all(col in races_df.columns for col in target_cols):
-                raise ValueError(f"'races' データに必要なカラム {target_cols} が揃っていません。")
+    
+    # --- ▼▼▼ 修正: 目的変数マージ処理を削除 ▼▼▼ ---
+    # generate_features.py で目的変数がマージされるようになったため、
+    # ここでのマージ処理は不要
+    
+    # if 'finish_position' not in features_df.columns or 'finish_time_seconds' not in features_df.columns:
+    #     logging.warning("特徴量データに目的変数 (finish_position, finish_time_seconds) がありません。")
+    #     logging.warning("元の 'results' Parquetデータからマージを試みます...")
+    #     ... (中略) ...
+    #     except Exception as e:
+    #         logging.error(f"目的変数のマージに失敗しました: {e}")
+    #         sys.exit(1)
+    # --- ▲▲▲ 修正 ▲▲▲ ---
 
-            # マージキー（race_id, horse_id）の型を合わせる
-            features_df['race_id'] = features_df['race_id'].astype(str)
-            features_df['horse_id'] = features_df['horse_id'].astype(str)
-            races_df['race_id'] = races_df['race_id'].astype(str)
-            races_df['horse_id'] = races_df['horse_id'].astype(str)
-
-            features_df = features_df.merge(
-                races_df[target_cols],
-                on=['race_id', 'horse_id'],
-                how='left'
-            )
-            logging.info("目的変数のマージ完了。")
-
-        except Exception as e:
-            logging.error(f"目的変数のマージに失敗しました: {e}")
-            logging.error("特徴量生成パイプラインが 'races' データを正しく処理したか確認してください。")
-            sys.exit(1)
 
     # 欠損値を含む行を削除 (学習のため)
     required_cols = feature_names_list + ['finish_position', 'finish_time_seconds', 'race_id']
     # 存在しないカラムを要求リストから除外 (安全のため)
     required_cols = [col for col in required_cols if col in features_df.columns]
     
+    # ★修正: ログ出力用に original_rows をここで定義
     original_rows = len(features_df)
+    
+    # ★修正: 目的変数が features.parquet に含まれているか最終チェック
+    if 'finish_position' not in features_df.columns or 'finish_time_seconds' not in features_df.columns:
+        logging.error("features.parquet に目的変数 (finish_position, finish_time_seconds) が含まれていません。")
+        logging.error("generate_features.py が正しく 'results' テーブルとマージしたか確認してください。")
+        # どのカラムが欠けているか詳細ログ
+        if 'finish_position' not in features_df.columns:
+             logging.error("カラム 'finish_position' がありません。")
+        if 'finish_time_seconds' not in features_df.columns:
+             logging.error("カラム 'finish_time_seconds' がありません。")
+        sys.exit(1)
+
+
     features_df = features_df.dropna(subset=required_cols)
     rows_dropped = original_rows - len(features_df)
     
-    logging.info(f"欠損値除去: {rows_dropped}行を除去しました。")
+    logging.info(f"欠損値除去: {rows_dropped}行を除去しました。 (元の行数: {original_rows})")
     logging.info(f"{len(features_df)}行のデータで学習します。")
 
     if features_df.empty:
