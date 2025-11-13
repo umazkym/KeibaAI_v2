@@ -66,3 +66,102 @@
 2025-11-13 23:17:43,165 - root - INFO - 日付抽出成功 (Active Partial + Year): 2023-05-14
 2025-11-13 23:17:43,168 - root - INFO - 出馬表パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251111T102915+0900_sha256=0bd7bfca.html (16行)
 2025-11-13 23:17:43,169 - root - INFO - 出馬表パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251111T103340+0900_sha256=0bd7bfca.html
+2025-11-13 23:17:43,784 - root - WARNING - 日付抽出 (Active Partial): 年が欠落しています '5月14日(日)'。年を別途探索します。
+2025-11-13 23:17:43,785 - root - INFO - 日付抽出成功 (Active Partial + Year): 2023-05-14
+2025-11-13 23:17:43,788 - root - INFO - 出馬表パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251111T103340+0900_sha256=0bd7bfca.html (16行)
+2025-11-13 23:17:43,788 - root - INFO - 出馬表パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251111T224411+0900_sha256=4cfeb609.html
+2025-11-13 23:17:44,381 - root - WARNING - 日付抽出 (Active Partial): 年が欠落しています '5月14日(日)'。年を別途探索します。
+2025-11-13 23:17:44,381 - root - INFO - 日付抽出成功 (Active Partial + Year): 2023-05-14
+2025-11-13 23:17:44,384 - root - INFO - 出馬表パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251111T224411+0900_sha256=4cfeb609.html (16行)
+2025-11-13 23:17:44,384 - root - INFO - 出馬表パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251112T005756+0900_sha256=4cfeb609.html
+2025-11-13 23:17:44,838 - root - WARNING - 日付抽出 (Active Partial): 年が欠落しています '5月14日(日)'。年を別途探索します。
+2025-11-13 23:17:44,838 - root - INFO - 日付抽出成功 (Active Partial + Year): 2023-05-14
+2025-11-13 23:17:44,841 - root - INFO - 出馬表パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251112T005756+0900_sha256=4cfeb609.html (16行)
+2025-11-13 23:17:44,841 - root - INFO - 出馬表パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251112T011836+0900_sha256=4cfeb609.html
+2025-11-13 23:17:45,316 - root - WARNING - 日付抽出 (Active Partial): 年が欠落しています '5月14日(日)'。年を別途探索します。
+2025-11-13 23:17:45,316 - root - INFO - 日付抽出成功 (Active Partial + Year): 2023-05-14
+2025-11-13 23:17:45,320 - root - INFO - 出馬表パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251112T011836+0900_sha256=4cfeb609.html (16行)
+2025-11-13 23:17:45,320 - root - INFO - 出馬表パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251112T012940+0900_sha256=4cfeb609.html
+2025-11-13 23:17:45,806 - root - WARNING - 日付抽出 (Active Partial): 年が欠落しています '5月14日(日)'。年を別途探索します。
+2025-11-13 23:17:45,806 - root - INFO - 日付抽出成功 (Active Partial + Year): 2023-05-14
+2025-11-13 23:17:45,808 - root - INFO - 出馬表パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251112T012940+0900_sha256=4cfeb609.html (16行)
+2025-11-13 23:17:45,808 - root - INFO - 出馬表パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251112T014234+0900_sha256=4cfeb609.html
+2025-11-13 23:17:46,295 - root - WARNING - 日付抽出 (Active Partial): 年が欠落しています '5月14日(日)'。年を別途探索します。
+2025-11-13 23:17:46,295 - root - INFO - 日付抽出成功 (Active Partial + Year): 2023-05-14
+2025-11-13 23:17:46,298 - root - INFO - 出馬表パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251112T014234+0900_sha256=4cfeb609.html (16行)
+2025-11-13 23:17:46,298 - root - INFO - 出馬表パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251112T015030+0900_sha256=4cfeb609.html
+2025-11-13 23:17:46,770 - root - WARNING - 日付抽出 (Active Partial): 年が欠落しています '5月14日(日)'。年を別途探索します。
+2025-11-13 23:17:46,770 - root - INFO - 日付抽出成功 (Active Partial + Year): 2023-05-14
+2025-11-13 23:17:46,773 - root - INFO - 出馬表パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251112T015030+0900_sha256=4cfeb609.html (16行)
+2025-11-13 23:17:46,773 - root - INFO - 出馬表パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251112T100639+0900_sha256=7b36a247.html
+2025-11-13 23:17:47,348 - root - WARNING - 日付抽出 (Active Partial): 年が欠落しています '5月14日(日)'。年を別途探索します。
+2025-11-13 23:17:47,350 - root - INFO - 日付抽出成功 (Active Partial + Year): 2023-05-14
+2025-11-13 23:17:47,358 - root - INFO - 出馬表パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251112T100639+0900_sha256=7b36a247.html (16行)
+2025-11-13 23:17:47,361 - root - INFO - 出馬表パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251112T101815+0900_sha256=7b36a247.html
+2025-11-13 23:17:47,887 - root - WARNING - 日付抽出 (Active Partial): 年が欠落しています '5月14日(日)'。年を別途探索します。
+2025-11-13 23:17:47,888 - root - INFO - 日付抽出成功 (Active Partial + Year): 2023-05-14
+2025-11-13 23:17:47,896 - root - INFO - 出馬表パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251112T101815+0900_sha256=7b36a247.html (16行)
+2025-11-13 23:17:47,898 - root - INFO - 出馬表パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251112T102647+0900_sha256=0bd7bfca.html
+2025-11-13 23:17:48,440 - root - WARNING - 日付抽出 (Active Partial): 年が欠落しています '5月14日(日)'。年を別途探索します。
+2025-11-13 23:17:48,441 - root - INFO - 日付抽出成功 (Active Partial + Year): 2023-05-14
+2025-11-13 23:17:48,449 - root - INFO - 出馬表パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251112T102647+0900_sha256=0bd7bfca.html (16行)
+2025-11-13 23:17:48,456 - root - INFO - 出馬表パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251112T103718+0900_sha256=0bd7bfca.html
+2025-11-13 23:17:49,026 - root - WARNING - 日付抽出 (Active Partial): 年が欠落しています '5月14日(日)'。年を別途探索します。
+2025-11-13 23:17:49,028 - root - INFO - 日付抽出成功 (Active Partial + Year): 2023-05-14
+2025-11-13 23:17:49,034 - root - INFO - 出馬表パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251112T103718+0900_sha256=0bd7bfca.html (16行)
+2025-11-13 23:17:49,038 - root - INFO - 出馬表パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251112T105546+0900_sha256=444f8b2d.html
+2025-11-13 23:17:49,625 - root - WARNING - 日付抽出 (Active Partial): 年が欠落しています '5月14日(日)'。年を別途探索します。
+2025-11-13 23:17:49,627 - root - INFO - 日付抽出成功 (Active Partial + Year): 2023-05-14
+2025-11-13 23:17:49,634 - root - INFO - 出馬表パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251112T105546+0900_sha256=444f8b2d.html (16行)
+2025-11-13 23:17:49,634 - root - INFO - 出馬表パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251113T231348+0900_sha256=0bd7bfca.html
+2025-11-13 23:17:49,722 - root - WARNING - 日付抽出 (Active Partial): 年が欠落しています '5月14日(日)'。年を別途探索します。
+2025-11-13 23:17:49,723 - root - INFO - 日付抽出成功 (Active Partial + Year): 2023-05-14
+2025-11-13 23:17:49,729 - root - INFO - 出馬表パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251113T231348+0900_sha256=0bd7bfca.html (16行)
+2025-11-13 23:17:49,745 - __main__ - INFO - 出馬表のパース結果をParquetファイルとして保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\parsed\parquet\shutuba\shutuba.parquet (224レコード)
+2025-11-13 23:17:49,745 - __main__ - INFO - 馬プロフィールHTMLのパース処理を開始します。
+2025-11-13 23:17:49,756 - __main__ - INFO - 194件の馬プロフィールHTMLファイルが見つかりました。
+2025-11-13 23:17:49,757 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2017102294_20251111T103440+0900_sha256=c07cb689.html
+2025-11-13 23:17:50,371 - root - INFO - 馬プロフィールパース完了: 2017102294
+2025-11-13 23:17:50,372 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2017102294_20251112T005835+0900_sha256=d84df314.html
+2025-11-13 23:17:51,040 - root - INFO - 馬プロフィールパース完了: 2017102294
+2025-11-13 23:17:51,040 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2017102294_20251112T012130+0900_sha256=67f97854.html
+2025-11-13 23:17:51,609 - root - INFO - 馬プロフィールパース完了: 2017102294
+2025-11-13 23:17:51,609 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2017102294_20251112T013052+0900_sha256=fa23b92d.html
+2025-11-13 23:17:52,123 - root - INFO - 馬プロフィールパース完了: 2017102294
+2025-11-13 23:17:52,124 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2017102294_20251112T014555+0900_sha256=e4971c0e.html
+2025-11-13 23:17:52,725 - root - INFO - 馬プロフィールパース完了: 2017102294
+2025-11-13 23:17:52,727 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2017102294_20251112T015052+0900_sha256=3c5d7496.html
+2025-11-13 23:17:53,296 - root - INFO - 馬プロフィールパース完了: 2017102294
+2025-11-13 23:17:53,296 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2017102294_20251112T100949+0900_sha256=3e2024e3.html
+2025-11-13 23:17:53,838 - root - INFO - 馬プロフィールパース完了: 2017102294
+2025-11-13 23:17:53,842 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2017102294_20251112T101823+0900_sha256=2718617e.html
+2025-11-13 23:17:54,384 - root - INFO - 馬プロフィールパース完了: 2017102294
+2025-11-13 23:17:54,386 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2017102294_20251112T102925+0900_sha256=c3386af3.html
+2025-11-13 23:17:54,899 - root - INFO - 馬プロフィールパース完了: 2017102294
+2025-11-13 23:17:54,899 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2017102294_20251112T103833+0900_sha256=0903638d.html
+2025-11-13 23:17:55,519 - root - INFO - 馬プロフィールパース完了: 2017102294
+2025-11-13 23:17:55,519 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2017102294_20251112T105837+0900_sha256=9b7abe1e.html
+2025-11-13 23:17:56,107 - root - INFO - 馬プロフィールパース完了: 2017102294
+2025-11-13 23:17:56,108 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2017102294_20251113T231439+0900_sha256=61a268fe.html
+2025-11-13 23:17:56,688 - root - INFO - 馬プロフィールパース完了: 2017102294
+2025-11-13 23:17:56,688 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2017103201_20251111T103404+0900_sha256=b522107e.html
+2025-11-13 23:17:57,303 - root - INFO - 馬プロフィールパース完了: 2017103201
+2025-11-13 23:17:57,303 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2017103201_20251112T005916+0900_sha256=58889afb.html
+2025-11-13 23:17:57,990 - root - INFO - 馬プロフィールパース完了: 2017103201
+2025-11-13 23:17:57,991 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2017103201_20251112T011907+0900_sha256=65eeead9.html
+2025-11-13 23:17:58,534 - root - INFO - 馬プロフィールパース完了: 2017103201
+2025-11-13 23:17:58,534 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2017103201_20251112T013018+0900_sha256=36ebc8b6.html
+2025-11-13 23:17:59,026 - root - INFO - 馬プロフィールパース完了: 2017103201
+2025-11-13 23:17:59,026 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2017103201_20251112T014432+0900_sha256=f51bb7b6.html
+2025-11-13 23:17:59,627 - root - INFO - 馬プロフィールパース完了: 2017103201
+2025-11-13 23:17:59,627 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2017103201_20251112T015305+0900_sha256=6e2bc9b7.html
+2025-11-13 23:18:00,266 - root - INFO - 馬プロフィールパース完了: 2017103201
+2025-11-13 23:18:00,267 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2017103201_20251112T100739+0900_sha256=6d260b1e.html
+2025-11-13 23:18:00,828 - root - INFO - 馬プロフィールパース完了: 2017103201
+2025-11-13 23:18:00,829 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2017103201_20251112T102029+0900_sha256=12848fcf.html
+2025-11-13 23:18:01,323 - root - INFO - 馬プロフィールパース完了: 2017103201
+2025-11-13 23:18:01,324 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2017103201_20251112T102947+0900_sha256=6e9f272c.html
+2025-11-13 23:18:01,847 - root - INFO - 馬プロフィールパース完了: 2017103201
+2025-11-13 23:18:01,848 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2017103201_20251112T103811+0900_sha256=a6a128d1.html
+2025-11-13 23:18:02,368 - root - INFO - 馬プロフィールパース完了: 2017103201
+2025-11-13 23:18:02,368 - root - INFO - 馬プロフィールパース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\horse\horse_2017103201_20251112T105824+0900_sha256=255570df.html
