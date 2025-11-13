@@ -19,8 +19,8 @@ from pathlib import Path
 import yaml
 import pandas as pd
 
-# プロジェクトルートをパスに追加
-project_root = Path(__file__).resolve().parent.parent
+# プロジェクトルート (keibaai ディレクトリ) をパスに追加
+project_root = Path(__file__).resolve().parent.parent.parent
 sys.path.append(str(project_root))
 
 try:
@@ -84,33 +84,41 @@ def main():
 
     # --- 0. 設定とロギング ---
     try:
-        config = load_config(args.config)
+        # 【修正箇所】 load_config (encoding なし) の代わりに、encoding を指定して config をロード
+        # これにより、Windows (cp932) 環境での config パースエラーを防ぐ
+        with open(args.config, 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f)
+        
         paths = config.get('paths', {})
         
-        with open(args.models_config, 'r') as f:
+        # encoding='utf-8' を指定
+        with open(args.models_config, 'r', encoding='utf-8') as f:
             models_config = yaml.safe_load(f)
         
-        with open(args.features_config, 'r') as f:
+        # encoding='utf-8' を指定
+        with open(args.features_config, 'r', encoding='utf-8') as f:
             features_config = yaml.safe_load(f)
 
-        # ログ設定 (簡易版)
-        log_path_template = config.get('logging', {}).get('log_file', 'data/logs/{YYYY}/{MM}/{DD}/training.log')
-        now = datetime.now()
-        log_path = log_path_template.format(YYYY=now.year, MM=f"{now.month:02}", DD=f"{now.day:02}")
-        Path(log_path).parent.mkdir(parents=True, exist_ok=True)
-
-        logging.basicConfig(
-            level=args.log_level.upper(),
-            format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
-            handlers=[
-                logging.FileHandler(log_path, encoding='utf-8'),
-                logging.StreamHandler(sys.stdout)
-            ]
-        )
+        # 【!!! 修正箇所 !!!】
+        # setup_logging (turn 20) が logging_config から 'log_file' (logging: の下) と
+        # 'paths' (トップレベル) の両方を期待しているという矛盾した実装に対応する。
+        # config['logging'] 辞書を取得し、それに config['paths'] をマージして渡す。
+        logging_config = config.get('logging', {})
+        logging_config['paths'] = paths # paths 辞書を logging_config に追加
+        
+        setup_logging(args.log_level.upper(), logging_config)
             
     except FileNotFoundError as e:
+        # ロギング設定前にエラーが発生した場合に備えて print も残す
+        print(f"設定ファイルが見つかりません: {e}")
         logging.error(f"設定ファイルが見つかりません: {e}")
         sys.exit(1)
+    except Exception as e:
+        # 予期せぬエラー（ロギング設定失敗など）をキャッチ
+        print(f"初期化中にエラーが発生しました: {e}")
+        logging.error(f"初期化中にエラーが発生しました: {e}", exc_info=True)
+        sys.exit(1)
+
 
     logging.info("=" * 60)
     logging.info("Keiba AI μモデル学習パイプライン開始")
@@ -126,15 +134,21 @@ def main():
         sys.exit(1)
 
     # --- 2. 特徴量データのロード ---
-    features_dir = Path(paths.get('features_path', 'data/features')) / 'parquet'
+    
+    # 【修正箇所】 config が正しくロードされたため、base_dir の定義を
+    # コマンド実行時のカレントディレクトリ基準ではなく、config ファイル基準の絶対パスにする
+    base_dir = Path(args.config).resolve().parent.parent
+    features_dir = base_dir / Path(paths.get('features_path', 'data/features')) / 'parquet'
     
     # 特徴量リストを読み込む
     try:
-        with open(features_dir / "feature_names.yaml", 'r') as f:
+        # encoding='utf-8' を指定
+        with open(features_dir / "feature_names.yaml", 'r', encoding='utf-8') as f:
             feature_names = yaml.safe_load(f)
         logging.info(f"{len(feature_names)}個の特徴量をロードしました")
     except FileNotFoundError:
-         logging.error(f"特徴量リスト (feature_names.yaml) が見つかりません: {features_dir}")
+         # エラーメッセージを修正し、絶対パスを表示
+         logging.error(f"特徴量リスト (feature_names.yaml) が見つかりません: {features_dir.resolve()}")
          sys.exit(1)
 
     # 学習データをロード
@@ -175,7 +189,9 @@ def main():
 
     # --- 4. モデル保存 ---
     try:
-        estimator.save_model(args.output_dir)
+        # output_dir も Path オブジェクトとして渡す
+        output_path = Path(args.output_dir)
+        estimator.save_model(output_path)
         
         # (仕様書 3.4.2 に基づき、メタデータもDBに保存するのが望ましいが、ここではファイル保存のみ)
         
