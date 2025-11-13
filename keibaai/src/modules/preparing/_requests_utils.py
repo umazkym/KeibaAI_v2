@@ -1,86 +1,65 @@
-#!/usr/bin/env python3
-# keibaai/src/modules/preparing/_requests_utils.py
-"""
-リクエストユーティリティ (ダミー実装)
-スクレイピングパイプライン用
-"""
-import logging
+import requests
 import time
 import random
-from typing import List, Optional
-from dataclasses import dataclass
+import logging
+from typing import List, Dict
 
-@dataclass
-class Response:
-    """レスポンスオブジェクト"""
-    content: bytes
-    status_code: int
+# from omegaconf import DictConfig
 
-def fetch_html(url: str, config: dict) -> Optional[Response]:
-    """
-    HTMLを取得する (ダミー実装)
-    
-    Args:
-        url: 取得対象URL
-        config: スクレイピング設定
-    
-    Returns:
-        Response または None
-    """
-    logging.info(f"[DUMMY] fetch_html: {url}")
-    
-    # ダミーHTMLコンテンツ
-    dummy_html = f"""
-    <html>
-    <head><title>Dummy Page</title></head>
-    <body>
-    <h1>This is a dummy HTML for {url}</h1>
-    <p>Real scraping is not implemented.</p>
-    </body>
-    </html>
-    """.encode('utf-8')
-    
-    # 遅延をシミュレート
-    delay_min = config.get('delay_seconds', {}).get('min', 1.0)
-    delay_max = config.get('delay_seconds', {}).get('max', 3.0)
-    time.sleep(random.uniform(delay_min, delay_max))
-    
-    return Response(content=dummy_html, status_code=200)
+log = logging.getLogger(__name__)
 
-def scrape_kaisai_dates(config: dict) -> List[str]:
+def fetch_html(url: str, cfg: Dict) -> requests.Response:
     """
-    開催日一覧を取得 (ダミー実装)
-    
-    Returns:
-        開催日のリスト (YYYY-MM-DD形式)
+    指定されたURLからHTMLを取得する。
+    設定に基づいて遅延、リトライ、User-Agentローテーションを行う。
     """
-    logging.info("[DUMMY] scrape_kaisai_dates: 2023年5月の開催日を返します")
+    max_attempts = cfg['scraping']['retry']['max_attempts']
+    backoff_factor = cfg['scraping']['retry']['backoff_factor']
     
-    # 2023年5月の全日を返す (ダミー)
-    return [f"2023-05-{day:02d}" for day in range(1, 32)]
+    for attempt in range(max_attempts):
+        try:
+            # User-Agentをランダムに選択
+            user_agent = random.choice(cfg['scraping']['user_agents'])
+            headers = {'User-Agent': user_agent}
+            
+            response = requests.get(url, headers=headers, timeout=30)
+            response.raise_for_status()  # HTTPエラーがあれば例外を発生させる
+            
+            # リクエスト間の遅延
+            delay = random.uniform(cfg['scraping']['delay_seconds']['min'], cfg['scraping']['delay_seconds']['max'])
+            time.sleep(delay)
+            
+            log.info(f"Successfully fetched HTML from {url}")
+            return response
 
-def scrape_race_id_list(kaisai_dates: List[str], config: dict) -> List[str]:
+        except requests.exceptions.RequestException as e:
+            log.warning(f"Attempt {attempt + 1}/{max_attempts} failed for {url}: {e}")
+            if attempt + 1 == max_attempts:
+                log.error(f"All attempts to fetch {url} failed.")
+                raise
+            
+            # 指数バックオフ
+            sleep_time = backoff_factor * (2 ** attempt) + random.uniform(0, 1)
+            log.info(f"Retrying in {sleep_time:.2f} seconds...")
+            time.sleep(sleep_time)
+
+# --- 以下はプレースホルダー関数 ---
+
+def scrape_kaisai_dates(cfg: Dict) -> List[str]:
     """
-    レースID一覧を取得 (ダミー実装)
-    
-    Args:
-        kaisai_dates: 開催日のリスト
-        config: スクレイピング設定
-    
-    Returns:
-        レースIDのリスト
+    開催日一覧をスクレイピングする（将来実装）
     """
-    logging.info(f"[DUMMY] scrape_race_id_list: {len(kaisai_dates)}日分のレースIDを生成")
-    
-    race_ids = []
-    for date_str in kaisai_dates:
-        # 日付から8桁の数値を生成 (例: 2023-05-01 -> 20230501)
-        date_numeric = date_str.replace('-', '')
-        
-        # 各開催日に3レース分のIDを生成 (ダミー)
-        for race_num in range(1, 4):
-            race_id = f"{date_numeric}{race_num:02d}01"  # 例: 2023050101, 2023050102, ...
-            race_ids.append(race_id)
-    
-    logging.info(f"合計 {len(race_ids)} 件のレースIDを生成しました")
-    return race_ids
+    log.info("開催日一覧のスクレイピングを開始します...")
+    # ここに実際のスクレイピングロジックを実装
+    # 例: return ["2023/01/01", "2023/01/05", ...]
+    log.warning("scrape_kaisai_dates は現在モック実装です。")
+    return ["2023/01/05", "2023/01/07", "2023/01/08"]
+
+def scrape_race_id_list(kaisai_dates: List[str], cfg: Dict) -> List[str]:
+    """
+    開催日からレースID一覧をスクレイピングする（将来実装）
+    """
+    log.info("レースID一覧のスクレイピングを開始します...")
+    # 存在するレースID（2023年日本ダービー）を返すように修正
+    log.warning("scrape_race_id_list は現在、単一の存在するレースIDを返すテスト実装です。")
+    return ["202305020811"]

@@ -1,0 +1,68 @@
+2025-11-13 23:17:37,971 - __main__ - INFO - データ整形パイプラインを開始します...
+2025-11-13 23:17:37,972 - __main__ - INFO - レース結果HTMLのパース処理を開始します。
+2025-11-13 23:17:37,972 - __main__ - INFO - 19件のレース結果HTMLファイルが見つかりました。
+2025-11-13 23:17:37,972 - root - INFO - レース結果パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_2023010501_20251111T102431+0900_sha256=06f0f78a.html
+2025-11-13 23:17:38,234 - root - INFO - 日付抽出成功 (smalltxt): 1970-01-01
+2025-11-13 23:17:38,234 - root - ERROR - レース結果テーブル (class='race_table_01') が見つかりません: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_2023010501_20251111T102431+0900_sha256=06f0f78a.html
+2025-11-13 23:17:38,235 - root - INFO - レース結果パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_2023010502_20251111T102435+0900_sha256=b007e534.html
+2025-11-13 23:17:38,447 - root - INFO - 日付抽出成功 (smalltxt): 1970-01-01
+2025-11-13 23:17:38,447 - root - ERROR - レース結果テーブル (class='race_table_01') が見つかりません: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_2023010502_20251111T102435+0900_sha256=b007e534.html
+2025-11-13 23:17:38,448 - root - INFO - レース結果パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_2023010701_20251111T102442+0900_sha256=9d291bca.html
+2025-11-13 23:17:38,681 - root - INFO - 日付抽出成功 (smalltxt): 1970-01-01
+2025-11-13 23:17:38,681 - root - ERROR - レース結果テーブル (class='race_table_01') が見つかりません: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_2023010701_20251111T102442+0900_sha256=9d291bca.html
+2025-11-13 23:17:38,681 - root - INFO - レース結果パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_2023010702_20251111T102452+0900_sha256=d6c4015e.html
+2025-11-13 23:17:38,897 - root - INFO - 日付抽出成功 (smalltxt): 1970-01-01
+2025-11-13 23:17:38,897 - root - ERROR - レース結果テーブル (class='race_table_01') が見つかりません: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_2023010702_20251111T102452+0900_sha256=d6c4015e.html
+2025-11-13 23:17:38,897 - root - INFO - レース結果パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251111T102646+0900_sha256=f6778e3d.html
+2025-11-13 23:17:39,122 - root - INFO - 日付抽出成功 (smalltxt): 2023-05-14
+2025-11-13 23:17:39,125 - root - INFO - レース結果パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251111T102646+0900_sha256=f6778e3d.html (16行)
+2025-11-13 23:17:39,125 - root - INFO - レース結果パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251111T102908+0900_sha256=c90e86f1.html
+2025-11-13 23:17:39,397 - root - INFO - 日付抽出成功 (smalltxt): 2023-05-14
+2025-11-13 23:17:39,399 - root - INFO - レース結果パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251111T102908+0900_sha256=c90e86f1.html (16行)
+2025-11-13 23:17:39,399 - root - INFO - レース結果パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251111T103335+0900_sha256=c90e86f1.html
+2025-11-13 23:17:39,617 - root - INFO - 日付抽出成功 (smalltxt): 2023-05-14
+2025-11-13 23:17:39,620 - root - INFO - レース結果パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251111T103335+0900_sha256=c90e86f1.html (16行)
+2025-11-13 23:17:39,620 - root - INFO - レース結果パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251111T224408+0900_sha256=0e511e63.html
+2025-11-13 23:17:39,833 - root - INFO - 日付抽出成功 (smalltxt): 2023-05-14
+2025-11-13 23:17:39,836 - root - INFO - レース結果パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251111T224408+0900_sha256=0e511e63.html (16行)
+2025-11-13 23:17:39,836 - root - INFO - レース結果パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251112T005748+0900_sha256=0e511e63.html
+2025-11-13 23:17:40,073 - root - INFO - 日付抽出成功 (smalltxt): 2023-05-14
+2025-11-13 23:17:40,076 - root - INFO - レース結果パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251112T005748+0900_sha256=0e511e63.html (16行)
+2025-11-13 23:17:40,076 - root - INFO - レース結果パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251112T011827+0900_sha256=a0b610ef.html
+2025-11-13 23:17:40,299 - root - INFO - 日付抽出成功 (smalltxt): 2023-05-14
+2025-11-13 23:17:40,302 - root - INFO - レース結果パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251112T011827+0900_sha256=a0b610ef.html (16行)
+2025-11-13 23:17:40,302 - root - INFO - レース結果パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251112T012933+0900_sha256=0e511e63.html
+2025-11-13 23:17:40,530 - root - INFO - 日付抽出成功 (smalltxt): 2023-05-14
+2025-11-13 23:17:40,532 - root - INFO - レース結果パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251112T012933+0900_sha256=0e511e63.html (16行)
+2025-11-13 23:17:40,533 - root - INFO - レース結果パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251112T014228+0900_sha256=a0b610ef.html
+2025-11-13 23:17:40,772 - root - INFO - 日付抽出成功 (smalltxt): 2023-05-14
+2025-11-13 23:17:40,775 - root - INFO - レース結果パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251112T014228+0900_sha256=a0b610ef.html (16行)
+2025-11-13 23:17:40,775 - root - INFO - レース結果パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251112T015020+0900_sha256=0e511e63.html
+2025-11-13 23:17:41,019 - root - INFO - 日付抽出成功 (smalltxt): 2023-05-14
+2025-11-13 23:17:41,022 - root - INFO - レース結果パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251112T015020+0900_sha256=0e511e63.html (16行)
+2025-11-13 23:17:41,022 - root - INFO - レース結果パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251112T100635+0900_sha256=c90e86f1.html
+2025-11-13 23:17:41,278 - root - INFO - 日付抽出成功 (smalltxt): 2023-05-14
+2025-11-13 23:17:41,281 - root - INFO - レース結果パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251112T100635+0900_sha256=c90e86f1.html (16行)
+2025-11-13 23:17:41,281 - root - INFO - レース結果パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251112T101811+0900_sha256=c90e86f1.html
+2025-11-13 23:17:41,518 - root - INFO - 日付抽出成功 (smalltxt): 2023-05-14
+2025-11-13 23:17:41,521 - root - INFO - レース結果パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251112T101811+0900_sha256=c90e86f1.html (16行)
+2025-11-13 23:17:41,522 - root - INFO - レース結果パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251112T102643+0900_sha256=c90e86f1.html
+2025-11-13 23:17:41,803 - root - INFO - 日付抽出成功 (smalltxt): 2023-05-14
+2025-11-13 23:17:41,806 - root - INFO - レース結果パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251112T102643+0900_sha256=c90e86f1.html (16行)
+2025-11-13 23:17:41,806 - root - INFO - レース結果パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251112T103714+0900_sha256=f6778e3d.html
+2025-11-13 23:17:42,091 - root - INFO - 日付抽出成功 (smalltxt): 2023-05-14
+2025-11-13 23:17:42,094 - root - INFO - レース結果パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251112T103714+0900_sha256=f6778e3d.html (16行)
+2025-11-13 23:17:42,094 - root - INFO - レース結果パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251112T105541+0900_sha256=f6778e3d.html
+2025-11-13 23:17:42,340 - root - INFO - 日付抽出成功 (smalltxt): 2023-05-14
+2025-11-13 23:17:42,343 - root - INFO - レース結果パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251112T105541+0900_sha256=f6778e3d.html (16行)
+2025-11-13 23:17:42,343 - root - INFO - レース結果パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251113T231337+0900_sha256=c90e86f1.html
+2025-11-13 23:17:42,577 - root - INFO - 日付抽出成功 (smalltxt): 2023-05-14
+2025-11-13 23:17:42,580 - root - INFO - レース結果パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\race\race_202305020811_20251113T231337+0900_sha256=c90e86f1.html (16行)
+2025-11-13 23:17:42,760 - __main__ - INFO - レース結果のパース結果をParquetファイルとして保存しました: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\parsed\parquet\races\races.parquet (240レコード)
+2025-11-13 23:17:42,760 - __main__ - INFO - 出馬表HTMLのパース処理を開始します。
+2025-11-13 23:17:42,762 - __main__ - INFO - 14件の出馬表HTMLファイルが見つかりました。
+2025-11-13 23:17:42,762 - root - INFO - 出馬表パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251111T102915+0900_sha256=0bd7bfca.html
+2025-11-13 23:17:43,165 - root - WARNING - 日付抽出 (Active Partial): 年が欠落しています '5月14日(日)'。年を別途探索します。
+2025-11-13 23:17:43,165 - root - INFO - 日付抽出成功 (Active Partial + Year): 2023-05-14
+2025-11-13 23:17:43,168 - root - INFO - 出馬表パース完了: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251111T102915+0900_sha256=0bd7bfca.html (16行)
+2025-11-13 23:17:43,169 - root - INFO - 出馬表パース開始: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\shutuba\shutuba_202305020811_20251111T103340+0900_sha256=0bd7bfca.html
