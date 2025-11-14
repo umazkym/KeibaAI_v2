@@ -84,12 +84,38 @@ def main():
 
     # --- 0. 設定とロギング ---
     try:
+        # 【修正箇所】 base_dir の定義を config ロードの直前に移動
+        # コマンド実行時のカレントディレクトリではなく、config ファイル基準の絶対パスにする
+        base_dir = Path(args.config).resolve().parent.parent
+
         # 【修正箇所】 load_config (encoding なし) の代わりに、encoding を指定して config をロード
         # これにより、Windows (cp932) 環境での config パースエラーを防ぐ
         with open(args.config, 'r', encoding='utf-8') as f:
             config = yaml.safe_load(f)
         
-        paths = config.get('paths', {})
+        # 【!!! 修正箇所 !!!】
+        # config 内のプレースホルダ (${data_path}) を簡易的に解決
+        data_path_str = config.get('data_path', 'data')
+        
+        resolved_config = {}
+        for key, value in config.items():
+            if isinstance(value, str):
+                # ${data_path} を置換
+                resolved_value_str = value.replace('${data_path}', data_path_str)
+                
+                # パス関連のキー (末尾が _path) なら、絶対パスに解決 (log_file は除く)
+                if key.endswith('_path') and not Path(resolved_value_str).is_absolute():
+                     resolved_config[key] = str((base_dir / resolved_value_str).resolve())
+                else:
+                     resolved_config[key] = resolved_value_str
+            else:
+                 resolved_config[key] = value
+        
+        config = resolved_config
+        
+        # L89: paths = config.get('paths', {}) は、default.yaml の構造と合っていないため、
+        # config 自体を paths として扱う
+        paths = config 
         
         # encoding='utf-8' を指定
         with open(args.models_config, 'r', encoding='utf-8') as f:
@@ -100,9 +126,23 @@ def main():
             features_config = yaml.safe_load(f)
 
         # 【!!! 修正箇所 !!!】
-        # setup_logging を正しい引数で呼び出す
+        # setup_logging を呼び出す
         logging_config = config.get('logging', {})
         
+        # logging_config の ${logs_path} を解決
+        if 'log_file' in logging_config:
+            logs_path = config.get('logs_path', 'data/logs') # ${data_path} は解決済み
+            
+            # config['logs_path'] が絶対パスでない場合は base_dir で解決
+            if not Path(logs_path).is_absolute():
+                logs_path = str(base_dir / logs_path)
+                
+            logging_config['log_file'] = logging_config['log_file'].replace('${logs_path}', logs_path)
+            
+            # log_file のパス自体も base_dir からの絶対パスに解決
+            if not Path(logging_config['log_file']).is_absolute():
+                logging_config['log_file'] = str(base_dir / logging_config['log_file'])
+
         setup_logging(args.log_level.upper(), logging_config)
             
     except FileNotFoundError as e:
@@ -133,9 +173,12 @@ def main():
     # --- 2. 特徴量データのロード ---
     
     # 【修正箇所】 config が正しくロードされたため、base_dir の定義を
-    # コマンド実行時のカレントディレクトリ基準ではなく、config ファイル基準の絶対パスにする
-    base_dir = Path(args.config).resolve().parent.parent
-    features_dir = base_dir / Path(paths.get('features_path', 'data/features')) / 'parquet'
+    # (L84) に移動済み。
+    # base_dir = Path(args.config).resolve().parent.parent # (L151) 削除
+    
+    # (L152) paths は (L110) で config に設定済み
+    features_path_str = paths.get('features_path', str(base_dir / 'data/features'))
+    features_dir = Path(features_path_str) / 'parquet'
     
     # 特徴量リストを読み込む
     try:
