@@ -73,47 +73,14 @@ def load_parquet_data_by_date(
     date_col: str = 'race_date'
 ) -> pd.DataFrame:
     """
-    指定された日付範囲に基づいてパーティション化されたParquetデータをロードする
-    (pyarrow.dataset を使用)
+    指定された日付範囲に基づいてパーティション化されたParquetデータをロードする。
+    rglobを使用して安定性を重視。
     """
     if not base_dir.exists():
         logging.warning(f"ディレクトリが見つかりません: {base_dir}")
         return pd.DataFrame()
 
     try:
-        # フィルタ式を構築
-        filter_expression = None
-        if start_dt:
-            filter_expression = (ds.field(date_col) >= start_dt)
-        if end_dt:
-            if filter_expression is not None:
-                filter_expression &= (ds.field(date_col) <= end_dt)
-            else:
-                filter_expression = (ds.field(date_col) <= end_dt)
-
-        # パーティションキーを year, month と仮定してデータセットを読み込む
-        dataset = ds.dataset(
-            base_dir,
-            format="parquet",
-            partitioning=["year", "month"]
-        )
-
-        table = dataset.to_table(filter=filter_expression)
-        df = table.to_pandas()
-        
-        # メモリ解放
-        del table
-        
-        logging.info(f"読み込み成功 (pyarrow.dataset): {len(df)}行 from {base_dir}")
-        
-        if df.empty:
-            logging.warning(f"指定期間のデータが見つかりませんでした: {start_dt} - {end_dt}")
-
-        return df
-
-    except Exception as e:
-        logging.warning(f"pyarrow.datasetでの読み込みに失敗しました（フォールバック実行）: {e}")
-        # フォールバック: rglobで全ファイルを検索
         all_dfs = []
         target_files = list(base_dir.rglob("*.parquet"))
         
@@ -132,16 +99,17 @@ def load_parquet_data_by_date(
             return pd.DataFrame()
 
         combined_df = pd.concat(all_dfs, ignore_index=True)
-        logging.info(f"読み込み成功 (フォールバック): {len(combined_df)}行 from {len(target_files)} files")
+        logging.info(f"読み込み成功: {len(combined_df)}行 from {len(target_files)} files")
 
         # 日付フィルタリング
         if start_dt is None and end_dt is None:
             return combined_df
 
         if date_col not in combined_df.columns:
-            logging.warning(f"日付カラム '{date_col}' がDataFrameに存在しません。")
+            logging.warning(f"日付カラム '{date_col}' がDataFrameに存在しません。フィルタリングをスキップします。")
             return combined_df
 
+        # タイムゾーン情報を除去して比較
         combined_df[date_col] = pd.to_datetime(combined_df[date_col]).dt.tz_localize(None)
 
         mask = True
@@ -150,4 +118,13 @@ def load_parquet_data_by_date(
         if end_dt:
             mask &= (combined_df[date_col] <= end_dt)
         
-        return combined_df[mask].copy()
+        filtered_df = combined_df[mask].copy()
+        
+        if filtered_df.empty:
+            logging.warning(f"指定期間のデータが見つかりませんでした: {start_dt} - {end_dt}")
+
+        return filtered_df
+
+    except Exception as e:
+        logging.error(f"Parquetデータのロード中に予期せぬエラーが発生しました: {e}", exc_info=True)
+        return pd.DataFrame()

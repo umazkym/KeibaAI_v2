@@ -43,27 +43,37 @@ def main():
 
     # --- 0. 設定とロギングの初期化 ---
     try:
-        base_dir = Path(args.config).resolve().parent.parent
-        with open(args.config, 'r', encoding='utf-8') as f:
+        # スクリプトの場所を基準にプロジェクトルートを定義
+        project_root_path = Path(__file__).resolve().parent.parent.parent
+
+        # 設定ファイルのパスを絶対パスに解決
+        config_path = project_root_path / args.config
+        models_config_path = project_root_path / args.models_config
+        features_config_path = project_root_path / args.features_config
+
+        with open(config_path, 'r', encoding='utf-8') as f:
             config = yaml.safe_load(f)
-        with open(args.models_config, 'r', encoding='utf-8') as f:
+        with open(models_config_path, 'r', encoding='utf-8') as f:
             models_config = yaml.safe_load(f)
         
-        data_path = Path(config.get('data_path', 'data'))
-        if not data_path.is_absolute():
-            data_path = base_dir / data_path
+        # データパスなどのプレースホルダを解決
+        data_path = project_root_path / config.get('data_path', 'data')
         for key, value in config.items():
             if isinstance(value, str):
                 config[key] = value.replace('${data_path}', str(data_path))
             if key.endswith('_path') and not Path(config[key]).is_absolute():
-                config[key] = str(base_dir / config[key])
-        
+                config[key] = str(project_root_path / config[key])
+
+        # ロギング設定
         log_conf = config.get('logging', {})
         log_file_template = log_conf.get('log_file', 'logs/pipeline.log')
         logs_path = Path(config.get('logs_path', str(data_path / 'logs')))
         log_file_path = log_file_template.replace('${logs_path}', str(logs_path))
         now = datetime.now()
         log_file_path = now.strftime(log_file_path.replace('{YYYY}', '%Y').replace('{MM}', '%m').replace('{DD}', '%d'))
+        
+        # ログディレクトリの作成
+        Path(log_file_path).parent.mkdir(parents=True, exist_ok=True)
         
         setup_logging(log_level=args.log_level, log_file=log_file_path, log_format=log_conf.get('format'))
 
@@ -81,7 +91,7 @@ def main():
     end_dt = datetime.strptime(args.end_date, '%Y-%m-%d')
 
     # --- 1. 特徴量リスト(feature_names.yaml)の読み込み ---
-    features_path_str = config.get('features_path', str(base_dir / 'data/features'))
+    features_path_str = config['features_path']
     features_dir = Path(features_path_str)
     parquet_dir = features_dir / 'parquet'
     
@@ -111,7 +121,7 @@ def main():
         sys.exit(1)
     
     # 2.2. レース結果データのロード
-    parsed_data_path = config.get('parsed_data_path', str(base_dir / 'data/parsed'))
+    parsed_data_path = config['parsed_data_path']
     races_parquet_path = Path(parsed_data_path) / 'parquet' / 'races' / 'races.parquet'
     try:
         races_df = pd.read_parquet(races_parquet_path)

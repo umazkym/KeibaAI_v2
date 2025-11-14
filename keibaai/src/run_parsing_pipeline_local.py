@@ -64,7 +64,7 @@ def main():
         raw_race_html_dir = Path(cfg["default"]["raw_data_path"]) / "html" / "race"
         parsed_race_parquet_dir = Path(cfg["default"]["parsed_data_path"]) / "parquet" / "races"
         parsed_race_parquet_dir.mkdir(parents=True, exist_ok=True)
-        race_html_files = list(raw_race_html_dir.glob("*.html"))
+        race_html_files = list(raw_race_html_dir.glob("*.html")) + list(raw_race_html_dir.glob("*.bin"))
         log.info(f"{len(race_html_files)}件のレース結果HTMLファイルが見つかりました。")
         all_results_df = []
         for html_file in race_html_files:
@@ -84,7 +84,7 @@ def main():
         raw_shutuba_html_dir = Path(cfg["default"]["raw_data_path"]) / "html" / "shutuba"
         parsed_shutuba_parquet_dir = Path(cfg["default"]["parsed_data_path"]) / "parquet" / "shutuba"
         parsed_shutuba_parquet_dir.mkdir(parents=True, exist_ok=True)
-        shutuba_html_files = list(raw_shutuba_html_dir.glob("*.html"))
+        shutuba_html_files = list(raw_shutuba_html_dir.glob("*.html")) + list(raw_shutuba_html_dir.glob("*.bin"))
         log.info(f"{len(shutuba_html_files)}件の出馬表HTMLファイルが見つかりました。")
         all_shutuba_df = []
         for html_file in shutuba_html_files:
@@ -104,7 +104,7 @@ def main():
         raw_horse_html_dir = Path(cfg["default"]["raw_data_path"]) / "html" / "horse"
         parsed_horse_parquet_dir = Path(cfg["default"]["parsed_data_path"]) / "parquet" / "horses"
         parsed_horse_parquet_dir.mkdir(parents=True, exist_ok=True)
-        horse_html_files = list(raw_horse_html_dir.glob("*.html"))
+        horse_html_files = list(raw_horse_html_dir.glob("*.html")) + list(raw_horse_html_dir.glob("*.bin"))
         log.info(f"{len(horse_html_files)}件の馬プロフィールHTMLファイルが見つかりました。")
         all_horses_data = []
         for html_file in horse_html_files:
@@ -124,7 +124,7 @@ def main():
         raw_ped_html_dir = Path(cfg["default"]["raw_data_path"]) / "html" / "ped"
         parsed_ped_parquet_dir = Path(cfg["default"]["parsed_data_path"]) / "parquet" / "pedigrees"
         parsed_ped_parquet_dir.mkdir(parents=True, exist_ok=True)
-        ped_html_files = list(raw_ped_html_dir.glob("*.html"))
+        ped_html_files = list(raw_ped_html_dir.glob("*.html")) + list(raw_ped_html_dir.glob("*.bin"))
         log.info(f"{len(ped_html_files)}件の血統HTMLファイルが見つかりました。")
         all_pedigrees_df = []
         for html_file in ped_html_files:
