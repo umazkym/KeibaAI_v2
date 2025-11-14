@@ -45,12 +45,22 @@ def load_config(config_path: str) -> Dict[str, Any]:
 
 def setup_logging(
     level: str = 'INFO',
-    log_file_template: str = 'data/logs/{YYYY}/{MM}/{DD}/default.log'
+    logging_config: Dict[str, Any] = None
 ):
     """
     ロギングを設定する
+    
+    Args:
+        level: ログレベル
+        logging_config: ロギング設定辞書 (log_file テンプレートを含む)
     """
     try:
+        # ログファイルテンプレートを取得
+        if logging_config and 'log_file' in logging_config:
+            log_file_template = logging_config['log_file']
+        else:
+            log_file_template = 'data/logs/{YYYY}/{MM}/{DD}/default.log'
+        
         # ログパスのプレースホルダを置換
         now = datetime.now(timezone(timedelta(hours=9)))
         log_path = log_file_template.format(

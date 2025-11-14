@@ -100,11 +100,8 @@ def main():
             features_config = yaml.safe_load(f)
 
         # 【!!! 修正箇所 !!!】
-        # setup_logging (turn 20) が logging_config から 'log_file' (logging: の下) と
-        # 'paths' (トップレベル) の両方を期待しているという矛盾した実装に対応する。
-        # config['logging'] 辞書を取得し、それに config['paths'] をマージして渡す。
+        # setup_logging を正しい引数で呼び出す
         logging_config = config.get('logging', {})
-        logging_config['paths'] = paths # paths 辞書を logging_config に追加
         
         setup_logging(args.log_level.upper(), logging_config)
             

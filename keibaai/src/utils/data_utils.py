@@ -80,7 +80,7 @@ def load_parquet_data_by_date(
 ) -> pd.DataFrame:
     """
     指定された日付範囲に基づいてParquetデータをロードする
-    (パーティション化されていないParquetファイルを想定)
+    (パーティション化されたParquetも対応)
 
     Args:
         base_dir: Parquetファイル群が格納されているディレクトリ
@@ -91,17 +91,52 @@ def load_parquet_data_by_date(
     Returns:
         結合されたDataFrame
     """
-    all_dfs = []
     
     if not base_dir.exists():
         logging.warning(f"ディレクトリが見つかりません: {base_dir}")
         return pd.DataFrame()
 
-    # Parquetファイルは単一ファイルとして保存されていると仮定
-    # (仕様書 17.1 (parse_all.py) の実装はパーティション化しているが、
-    #  run_parsing_pipeline_local.py の実装は単一ファイル)
-    # 実行スクリプト(run_parsing_pipeline_local.py)の実装に合わせる
+    # まずパーティション化されたParquetを読み込む試み（pyarrow）
+    try:
+        # パーティション構造（year=YYYY/month=M/*.parquet）を自動認識
+        df = pd.read_parquet(base_dir, engine='pyarrow')
+        logging.info(f"パーティション化されたParquetを読み込みました: {len(df)}行")
+        
+        # 日付フィルタリング
+        if start_dt or end_dt:
+            if date_col not in df.columns:
+                logging.warning(f"日付カラム '{date_col}' が存在しません。race_id から生成を試みます。")
+                if 'race_id' in df.columns:
+                    try:
+                        df['race_date_str'] = df['race_id'].astype(str).str[:8]
+                        df[date_col] = pd.to_datetime(df['race_date_str'], format='%Y%m%d', errors='coerce')
+                        logging.info(f"'{date_col}' カラムを 'race_id' から生成しました。")
+                    except Exception:
+                        return df
+                else:
+                    return df
+            
+            # タイムゾーンを意識しない比較に統一
+            df[date_col] = pd.to_datetime(df[date_col]).dt.tz_localize(None)
+            
+            if start_dt and end_dt:
+                mask = (df[date_col] >= start_dt) & (df[date_col] <= end_dt)
+                return df[mask].copy()
+            elif start_dt:
+                mask = (df[date_col] >= start_dt)
+                return df[mask].copy()
+            elif end_dt:
+                mask = (df[date_col] <= end_dt)
+                return df[mask].copy()
+        
+        return df
+        
+    except Exception as e:
+        # パーティション読み込み失敗時は、単一ファイル検索にフォールバック
+        logging.debug(f"パーティション読み込み失敗（フォールバックします）: {e}")
     
+    # フォールバック: 単一ファイル検索
+    all_dfs = []
     target_files = list(base_dir.glob("*.parquet"))
     
     if not target_files:
@@ -125,19 +160,18 @@ def load_parquet_data_by_date(
         return combined_df
 
     if date_col not in combined_df.columns:
-        logging.warning(f"日付カラム '{date_col}' がDataFrameに存在しないため、日付フィルタをスキップします。")
-        # race_id から日付を生成する試み (shutuba, results の場合)
+        logging.warning(f"日付カラム '{date_col}' がDataFrameに存在しません。race_id から生成を試みます。")
         if 'race_id' in combined_df.columns:
             try:
                 combined_df['race_date_str'] = combined_df['race_id'].astype(str).str[:8]
                 combined_df[date_col] = pd.to_datetime(combined_df['race_date_str'], format='%Y%m%d', errors='coerce')
                 logging.info(f"'{date_col}' カラムを 'race_id' から生成しました。")
             except Exception:
-                return combined_df # それでも失敗したらフィルタせず返す
+                return combined_df
         else:
              return combined_df
 
-    # タイムゾーンを意識しない比較に統一 (datetime.datetime)
+    # タイムゾーンを意識しない比較に統一
     combined_df[date_col] = pd.to_datetime(combined_df[date_col]).dt.tz_localize(None)
 
     if start_dt and end_dt:

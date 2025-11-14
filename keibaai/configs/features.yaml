@@ -7,7 +7,7 @@ feature_engine:
 
   # 欠損値の処理方法
   imputation_strategy:
-    numeric: "mean"  # or "median", "zero"
+    numeric: "mean" # or "median", "zero"
     categorical: "most_frequent" # or "constant"
 
 # レースベースの特徴量
@@ -29,3 +29,9 @@ trainer_features:
 # 血統ベースの特徴量
 pedigree_features:
   enabled: true
+
+# 出力設定
+output:
+  partition_by:
+    - year
+    - month
