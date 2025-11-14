@@ -136,3 +136,197 @@
 2025-11-14 09:15:11,874 [INFO] root: 33個の特徴量をロードしました
 2025-11-14 09:15:11,889 [WARNING] root: Parquetファイルが見つかりません: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\features\parquet
 2025-11-14 09:15:11,890 [ERROR] root: 期間 2023-05-01 - 2023-05-31 の特徴量データが見つかりません。
+2025-11-14 09:23:14,704 - root - INFO - ロギングが正常に設定されました。ログファイル: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\logs/2025/11/14/pipeline.log
+2025-11-14 09:23:14,705 - root - INFO - ============================================================
+2025-11-14 09:23:14,705 - root - INFO - Keiba AI μモデル学習パイプライン開始
+2025-11-14 09:23:14,705 - root - INFO - ============================================================
+2025-11-14 09:23:14,705 - root - INFO - 学習期間: 2023-05-01 - 2023-05-31
+2025-11-14 09:23:14,705 - root - ERROR - 特徴量リスト (feature_names.yaml) が見つかりません: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\features\feature_names.yaml
+2025-11-14 09:28:38,912 - root - INFO - ロギングが正常に設定されました。ログファイル: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\logs/2025/11/14/pipeline.log
+2025-11-14 09:28:38,913 - root - INFO - ============================================================
+2025-11-14 09:28:38,913 - root - INFO - Keiba AI μモデル学習パイプライン開始
+2025-11-14 09:28:38,913 - root - INFO - ============================================================
+2025-11-14 09:28:38,913 - root - INFO - 学習期間: 2023-05-01 - 2023-05-31
+2025-11-14 09:28:38,914 - root - INFO - 33個の特徴量をロードしました
+2025-11-14 09:28:38,930 - root - WARNING - Parquetファイルが見つかりません: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\features\parquet
+2025-11-14 09:28:38,932 - root - ERROR - 期間 2023-05-01 - 2023-05-31 の特徴量データが見つかりません。
+2025-11-14 09:29:53,973 - root - INFO - ロギングが正常に設定されました。ログファイル: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\logs/2025/11/14/pipeline.log
+2025-11-14 09:29:53,973 - root - INFO - ============================================================
+2025-11-14 09:29:53,973 - root - INFO - Keiba AI μモデル学習パイプライン開始
+2025-11-14 09:29:53,973 - root - INFO - ============================================================
+2025-11-14 09:29:53,973 - root - INFO - 学習期間: 2023-05-01 - 2023-05-31
+2025-11-14 09:29:53,975 - root - INFO - 33個の特徴量をロードしました
+2025-11-14 09:29:53,982 - root - WARNING - pyarrow.datasetでの読み込みに失敗しました（フォールバック実行）: Error creating dataset. Could not read schema from 'C:/Users/zk-ht/Keiba/Keiba_AI_v2/keibaai/data/features/parquet/feature_names.yaml'. Is this a 'parquet' file?: Could not open Parquet input source 'C:/Users/zk-ht/Keiba/Keiba_AI_v2/keibaai/data/features/parquet/feature_names.yaml': Parquet magic bytes not found in footer. Either the file is corrupted or this is not a parquet file.
+2025-11-14 09:29:54,081 - root - INFO - 読み込み成功 (フォールバック): 14480行 from 5 files
+2025-11-14 09:29:54,091 - root - ERROR - 学習に必要な目的変数 ['finish_position', 'finish_time_seconds'] が特徴量データにありません。
+2025-11-14 09:31:15,581 - root - INFO - ロギングが正常に設定されました。ログファイル: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\logs/2025/11/14/pipeline.log
+2025-11-14 09:31:15,581 - root - INFO - ============================================================
+2025-11-14 09:31:15,581 - root - INFO - Keiba AI μモデル学習パイプライン開始
+2025-11-14 09:31:15,581 - root - INFO - ============================================================
+2025-11-14 09:31:15,581 - root - INFO - 学習期間: 2023-05-01 - 2023-05-31
+2025-11-14 09:31:15,582 - root - INFO - 33個の特徴量をロードしました
+2025-11-14 09:31:15,606 - root - INFO - 読み込み成功 (pyarrow.dataset): 14480行 from C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\features\parquet
+2025-11-14 09:31:15,606 - root - ERROR - 学習に必要な目的変数 ['finish_position', 'finish_time_seconds'] が特徴量データにありません。
+2025-11-14 09:33:57,283 - root - INFO - ロギングが正常に設定されました。ログファイル: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\logs/2025/11/14/pipeline.log
+2025-11-14 09:33:57,283 - root - INFO - ============================================================
+2025-11-14 09:33:57,284 - root - INFO - Keiba AI μモデル学習パイプライン開始
+2025-11-14 09:33:57,284 - root - INFO - ============================================================
+2025-11-14 09:33:57,284 - root - INFO - 学習期間: 2023-05-01 - 2023-05-31
+2025-11-14 09:33:57,285 - root - INFO - 33個の特徴量をロードしました
+2025-11-14 09:33:57,299 - root - INFO - 読み込み成功 (pyarrow.dataset): 14480行 from C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\features\parquet
+2025-11-14 09:33:57,305 - root - INFO - レース結果データをロードしました: 256行
+2025-11-14 09:33:57,358 - root - INFO - 特徴量とレース結果をマージしました。結果: 231680行
+2025-11-14 09:33:57,406 - root - INFO - 欠損値除去後、0行のデータで学習します。
+2025-11-14 09:33:57,407 - root - ERROR - 欠損値を除去した結果、学習データが0行になりました。
+2025-11-14 09:34:54,144 - root - INFO - ロギングが正常に設定されました。ログファイル: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\logs/2025/11/14/pipeline.log
+2025-11-14 09:34:54,144 - root - INFO - ============================================================
+2025-11-14 09:34:54,144 - root - INFO - Keiba AI μモデル学習パイプライン開始
+2025-11-14 09:34:54,144 - root - INFO - ============================================================
+2025-11-14 09:34:54,144 - root - INFO - 学習期間: 2023-05-01 - 2023-05-31
+2025-11-14 09:34:54,145 - root - INFO - 33個の特徴量をロードしました
+2025-11-14 09:34:54,160 - root - INFO - 読み込み成功 (pyarrow.dataset): 14480行 from C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\features\parquet
+2025-11-14 09:34:54,165 - root - INFO - 全レース結果データをロードしました: 256行
+2025-11-14 09:34:54,168 - root - INFO - 学習期間にフィルタリング後: 256行
+2025-11-14 09:34:54,214 - root - INFO - 特徴量とレース結果をマージしました。結果: 231680行
+2025-11-14 09:34:54,255 - root - INFO - 欠損値除去後、0行のデータで学習します。
+2025-11-14 09:34:54,255 - root - ERROR - 欠損値を除去した結果、学習データが0行になりました。
+2025-11-14 09:35:49,623 - root - INFO - ロギングが正常に設定されました。ログファイル: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\logs/2025/11/14/pipeline.log
+2025-11-14 09:35:49,623 - root - INFO - ============================================================
+2025-11-14 09:35:49,623 - root - INFO - Keiba AI μモデル学習パイプライン開始
+2025-11-14 09:35:49,623 - root - INFO - ============================================================
+2025-11-14 09:35:49,623 - root - INFO - 学習期間: 2023-05-01 - 2023-05-31
+2025-11-14 09:35:49,624 - root - INFO - 33個の特徴量をロードしました
+2025-11-14 09:35:49,637 - root - INFO - 読み込み成功 (pyarrow.dataset): 14480行 from C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\features\parquet
+2025-11-14 09:35:49,643 - root - INFO - 全レース結果データをロードしました: 256行
+2025-11-14 09:35:49,646 - root - INFO - 学習期間にフィルタリング後: 256行
+2025-11-14 09:35:49,646 - root - INFO - --- Debug: Pre-merge DataFrames ---
+2025-11-14 09:35:49,646 - root - INFO - features_df columns: ['race_id', 'horse_id', 'horse_number', 'race_date', 'bracket_number', 'age', 'basis_weight', 'horse_weight', 'horse_weight_change', 'prize_total', 'morning_odds', 'morning_popularity', 'career_stats', 'career_starts', 'career_wins', 'career_places', 'last_5_finishes', 'sex_牝', 'bracket_is_inner', 'bracket_is_middle', 'bracket_is_outer', 'past_1_finish_position_mean', 'past_3_finish_position_mean', 'past_5_finish_position_mean', 'career_win_rate', 'past_1_finish_time_seconds_mean', 'past_3_finish_time_seconds_mean', 'past_5_finish_time_seconds_mean', 'past_1_margin_seconds_mean', 'past_3_margin_seconds_mean', 'past_5_margin_seconds_mean', 'past_1_last_3f_time_mean', 'past_3_last_3f_time_mean', 'past_5_last_3f_time_mean', 'days_since_last_race', 'horse_weight_zscore', 'basis_weight_zscore', 'day', 'year', 'month']
+2025-11-14 09:35:49,647 - root - INFO - races_df columns: ['race_id', 'race_date', 'finish_position', 'bracket_number', 'horse_number', 'horse_name', 'horse_id', 'sex_age', 'sex', 'age', 'basis_weight', 'jockey_name', 'jockey_id', 'finish_time_str', 'finish_time_seconds', 'margin_str', 'margin_seconds', 'passing_order', 'last_3f_time', 'win_odds', 'popularity', 'horse_weight', 'horse_weight_change', 'trainer_name', 'trainer_id', 'owner_name', 'prize_money']
+2025-11-14 09:35:49,647 - root - INFO - features_df dtypes:
+race_id                                    object
+horse_id                                   object
+horse_number                                int64
+race_date                          datetime64[ns]
+bracket_number                              int64
+age                                         int64
+basis_weight                              float64
+horse_weight                                int64
+horse_weight_change                       float64
+prize_total                                object
+morning_odds                               object
+morning_popularity                         object
+career_stats                               object
+career_starts                              object
+career_wins                                object
+career_places                              object
+last_5_finishes                            object
+sex_牝                                       int32
+bracket_is_inner                            int32
+bracket_is_middle                           int32
+bracket_is_outer                            int32
+past_1_finish_position_mean               float64
+past_3_finish_position_mean               float64
+past_5_finish_position_mean               float64
+career_win_rate                           float64
+past_1_finish_time_seconds_mean           float64
+past_3_finish_time_seconds_mean           float64
+past_5_finish_time_seconds_mean           float64
+past_1_margin_seconds_mean                float64
+past_3_margin_seconds_mean                float64
+past_5_margin_seconds_mean                float64
+past_1_last_3f_time_mean                  float64
+past_3_last_3f_time_mean                  float64
+past_5_last_3f_time_mean                  float64
+days_since_last_race                      float64
+horse_weight_zscore                       float64
+basis_weight_zscore                       float64
+day                                         int32
+year                                       object
+month                                      object
+dtype: object
+2025-11-14 09:35:49,648 - root - INFO - races_df dtypes:
+race_id                        object
+race_date              datetime64[ns]
+finish_position                 int64
+bracket_number                  int64
+horse_number                    int64
+horse_name                     object
+horse_id                       object
+sex_age                        object
+sex                            object
+age                             int64
+basis_weight                  float64
+jockey_name                    object
+jockey_id                      object
+finish_time_str                object
+finish_time_seconds           float64
+margin_str                     object
+margin_seconds                float64
+passing_order                  object
+last_3f_time                  float64
+win_odds                      float64
+popularity                      int64
+horse_weight                    int64
+horse_weight_change             int64
+trainer_name                   object
+trainer_id                     object
+owner_name                     object
+prize_money                   float64
+dtype: object
+2025-11-14 09:35:49,654 - root - INFO - features_df head:
+        race_id    horse_id  horse_number  race_date  bracket_number  age  basis_weight  horse_weight  horse_weight_change prize_total morning_odds morning_popularity career_stats career_starts career_wins career_places last_5_finishes  sex_牝  bracket_is_inner  bracket_is_middle  bracket_is_outer  past_1_finish_position_mean  past_3_finish_position_mean  past_5_finish_position_mean  career_win_rate  past_1_finish_time_seconds_mean  past_3_finish_time_seconds_mean  past_5_finish_time_seconds_mean  past_1_margin_seconds_mean  past_3_margin_seconds_mean  past_5_margin_seconds_mean  past_1_last_3f_time_mean  past_3_last_3f_time_mean  past_5_last_3f_time_mean  days_since_last_race  horse_weight_zscore  basis_weight_zscore  day       year    month
+0  202305020811  2017110144             1 2023-05-14               1    6          56.0           482                 -2.0        None         None               None         None          None        None          None            None      1                 1                  0                 0                          2.0                          2.0                          2.0              0.0                             92.2                             92.2                             92.2                        0.04                        0.04                        0.04                      33.6                      33.6                      33.6                   0.0             0.343977                  0.0   14  year=2023  month=5
+1  202305020811  2017110144             1 2023-05-14               1    6          56.0           482                 -2.0        None         None               None         None          None        None          None            None      1                 1                  0                 0                         11.0                         11.0                         11.0              0.0                             93.0                             93.0                             93.0                        0.05                        0.05                        0.05                      33.5                      33.5                      33.5                   0.0             0.343977                  0.0   14  year=2023  month=5
+2  202305020811  2017110144             1 2023-05-14               1    6          56.0           482                 -2.0        None         None               None         None          None        None          None            None      1                 1                  0                 0                          5.0                          5.0                          5.0              0.0                             92.7                             92.7                             92.7                        0.35                        0.35                        0.35                      33.8                      33.8                      33.8                   0.0             0.343977                  0.0   14  year=2023  month=5
+3  202305020811  2017110144             1 2023-05-14               1    6          56.0           482                 -2.0        None         None               None         None          None        None          None            None      1                 1                  0                 0                         14.0                         14.0                         14.0              0.0                             93.0                             93.0                             93.0                        0.04                        0.04                        0.04                      33.9                      33.9                      33.9                   0.0             0.343977                  0.0   14  year=2023  month=5
+4  202305020811  2017110144             1 2023-05-14               1    6          56.0           482                 -2.0        None         None               None         None          None        None          None            None      1                 1                  0                 0                          8.0                          8.0                          8.0              0.0                             92.9                             92.9                             92.9                        0.05                        0.05                        0.05                      33.9                      33.9                      33.9                   0.0             0.343977                  0.0   14  year=2023  month=5
+2025-11-14 09:35:49,657 - root - INFO - races_df head:
+        race_id  race_date  finish_position  bracket_number  horse_number horse_name    horse_id sex_age sex  age  basis_weight jockey_name jockey_id finish_time_str  finish_time_seconds margin_str  margin_seconds passing_order  last_3f_time  win_odds  popularity  horse_weight  horse_weight_change trainer_name trainer_id    owner_name  prize_money
+0  202305020811 2023-05-14                1               3             6     ソングライン  2018105355      牝5   牝    5          56.0        戸崎圭太     05386          1:32.2                 92.2                       0.00           8-6          33.2       7.6           4           488                    0           林徹      01163     サンデーレーシング      13349.0
+1  202305020811 2023-05-14                2               8            16        ソダシ  2018105233      牝5   牝    5          56.0         レーン     05585          1:32.2                 92.2        アタマ            0.04           2-2          33.6       4.6           3           488                    8         須貝尚介      01105  金子真人ホールディングス       5300.0
+2  202305020811 2023-05-14                3               1             2  スターズオンアース  2019104740      牝4   牝    4          56.0        ルメール     05339          1:32.3                 92.3        3/4            0.15           5-3          33.6       2.5           1           484                    0         高柳瑞樹      01118      社台レースホース       3350.0
+3  202305020811 2023-05-14                4               7            13     ディヴィーナ  2018104947      牝5   牝    5          56.0        Ｍ．デム     05212          1:32.4                 92.4          1            0.20          13-9          33.1     224.9          15           422                   -2         友道康夫      01061         佐々木主浩       2000.0
+4  202305020811 2023-05-14                5               2             3  サウンドビバーチェ  2019104057      牝4   牝    4          56.0        松山弘平     01126          1:32.7                 92.7      1.3/4            0.35           3-5          33.8      27.4           8           494                   -4         高柳大輔      01159          増田雄一       1300.0
+2025-11-14 09:35:49,657 - root - INFO - Using merge keys: ['race_id', 'horse_id']
+2025-11-14 09:35:49,706 - root - INFO - 特徴量とレース結果をマージしました。結果: 231680行
+2025-11-14 09:35:49,747 - root - INFO - 欠損値除去後、0行のデータで学習します。
+2025-11-14 09:35:49,747 - root - ERROR - 欠損値を除去した結果、学習データが0行になりました。
+2025-11-14 09:37:03,421 - root - INFO - ロギングが正常に設定されました。ログファイル: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\logs/2025/11/14/pipeline.log
+2025-11-14 09:37:03,421 - root - INFO - ============================================================
+2025-11-14 09:37:03,421 - root - INFO - Keiba AI μモデル学習パイプライン開始
+2025-11-14 09:37:03,421 - root - INFO - ============================================================
+2025-11-14 09:37:03,422 - root - INFO - 学習期間: 2023-05-01 - 2023-05-31
+2025-11-14 09:37:03,422 - root - INFO - 33個の特徴量をロードしました
+2025-11-14 09:37:03,437 - root - INFO - 読み込み成功 (pyarrow.dataset): 14480行 from C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\features\parquet
+2025-11-14 09:37:03,437 - root - INFO - 重複削除前の特徴量データ: 14480行
+2025-11-14 09:37:03,440 - root - INFO - 重複削除後の特徴量データ: 16行
+2025-11-14 09:37:03,446 - root - INFO - 全レース結果データをロードしました: 256行
+2025-11-14 09:37:03,448 - root - INFO - 学習期間にフィルタリング後: 256行
+2025-11-14 09:37:03,448 - root - INFO - Using merge keys: ['race_id', 'horse_id']
+2025-11-14 09:37:03,450 - root - INFO - 特徴量とレース結果をマージしました。結果: 256行
+2025-11-14 09:37:03,451 - root - INFO - 欠損値除去後、0行のデータで学習します。
+2025-11-14 09:37:03,451 - root - ERROR - 欠損値を除去した結果、学習データが0行になりました。
+2025-11-14 09:38:14,715 - root - INFO - ロギングが正常に設定されました。ログファイル: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\logs/2025/11/14/pipeline.log
+2025-11-14 09:38:14,715 - root - INFO - ============================================================
+2025-11-14 09:38:14,715 - root - INFO - Keiba AI μモデル学習パイプライン開始
+2025-11-14 09:38:14,715 - root - INFO - ============================================================
+2025-11-14 09:38:14,715 - root - INFO - 学習期間: 2023-05-01 - 2023-05-31
+2025-11-14 09:38:14,718 - root - INFO - 33個の特徴量をロードしました
+2025-11-14 09:38:14,735 - root - INFO - 読み込み成功 (pyarrow.dataset): 14480行 from C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\features\parquet
+2025-11-14 09:38:14,736 - root - INFO - 重複削除前の特徴量データ: 14480行
+2025-11-14 09:38:14,738 - root - INFO - 重複削除後の特徴量データ: 16行
+2025-11-14 09:38:14,743 - root - INFO - 全レース結果データをロードしました: 256行
+2025-11-14 09:38:14,746 - root - INFO - 学習期間にフィルタリング後: 256行
+2025-11-14 09:38:14,746 - root - INFO - Using merge keys: ['race_id', 'horse_id']
+2025-11-14 09:38:14,747 - root - INFO - 特徴量とレース結果をマージしました。結果: 256行
+2025-11-14 09:38:14,748 - root - INFO - 必須カラムの欠損値除去後: 256行
+2025-11-14 09:38:14,752 - root - INFO - 特徴量の欠損値を0で補完し、数値型に変換しました。
+2025-11-14 09:38:14,753 - root - INFO - μモデルの学習開始...
+2025-11-14 09:38:14,753 - root - INFO - Regressor (LGBMRegressor) を 'finish_time_seconds' で学習中...
+2025-11-14 09:38:14,866 - root - INFO - Regressor の学習完了
+2025-11-14 09:38:14,867 - root - INFO - Ranker (LGBMRanker) を 'finish_position' で学習中...
+2025-11-14 09:38:14,907 - root - INFO - Ranker の学習完了
+2025-11-14 09:38:14,917 - root - INFO - μモデルを keibaai\data\models\mu_model_v1 に保存しました
+2025-11-14 09:38:14,917 - root - INFO - ============================================================
+2025-11-14 09:38:14,917 - root - INFO - Keiba AI μモデル学習完了。モデルは keibaai/data/models/mu_model_v1 に保存されました。
+2025-11-14 09:38:14,917 - root - INFO - ============================================================

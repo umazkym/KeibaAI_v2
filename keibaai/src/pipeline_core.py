@@ -43,54 +43,43 @@ def load_config(config_path: str) -> Dict[str, Any]:
         raise
 
 
-def setup_logging(
-    level: str = 'INFO',
-    logging_config: Dict[str, Any] = None
-):
+def setup_logging(log_level: str, log_file: str, log_format: str):
     """
-    ロギングを設定する
-    
+    引数に基づいてロギングをシンプルに設定する
+
     Args:
-        level: ログレベル
-        logging_config: ロギング設定辞書 (log_file テンプレートを含む)
+        log_level (str): 'INFO', 'DEBUG' などのログレベル
+        log_file (str): ログファイルのフルパス
+        log_format (str): ログメッセージのフォーマット
     """
     try:
-        # ログファイルテンプレートを取得
-        if logging_config and 'log_file' in logging_config:
-            log_file_template = logging_config['log_file']
-        else:
-            log_file_template = 'data/logs/{YYYY}/{MM}/{DD}/default.log'
+        logger = logging.getLogger()
+        logger.handlers.clear()  # 既存のハンドラをクリア
+        logger.setLevel(log_level.upper())
+
+        formatter = logging.Formatter(log_format)
+
+        # ファイルハンドラ
+        if log_file:
+            Path(log_file).parent.mkdir(parents=True, exist_ok=True)
+            file_handler = logging.FileHandler(log_file, encoding='utf-8')
+            file_handler.setFormatter(formatter)
+            logger.addHandler(file_handler)
+
+        # コンソールハンドラ
+        stream_handler = logging.StreamHandler(sys.stdout)
+        stream_handler.setFormatter(formatter)
+        logger.addHandler(stream_handler)
         
-        # ログパスのプレースホルダを置換
-        now = datetime.now(timezone(timedelta(hours=9)))
-        log_path = log_file_template.format(
-            YYYY=now.year,
-            MM=f"{now.month:02}",
-            DD=f"{now.day:02}"
-        )
-        
-        log_dir = Path(log_path).parent
-        log_dir.mkdir(parents=True, exist_ok=True)
-        
-        # ロガー設定
-        logging.basicConfig(
-            level=level.upper(),
-            format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
-            handlers=[
-                logging.FileHandler(log_path, encoding='utf-8'),
-                logging.StreamHandler(sys.stdout)
-            ],
-            force=True  # 既存の設定を上書き
-        )
-        logging.info("ロギングが正常に設定されました")
-        
+        logging.info(f"ロギングが正常に設定されました。ログファイル: {log_file}")
+
     except Exception as e:
         # フォールバック (簡易ロギング)
         logging.basicConfig(
             level=logging.INFO,
-            format='%(asctime)s [%(levelname)s] %(name)s: %(message)s'
+            format='%(asctime)s [%(levelname)s] %(message)s'
         )
-        logging.error(f"ロギングの初期化に失敗しました: {e}")
+        logging.error(f"ロギングの初期化に失敗しました: {e}", exc_info=True)
         logging.info("簡易フォールバックロギングを使用します")
 
 

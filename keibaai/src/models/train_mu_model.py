@@ -23,139 +23,81 @@ import pandas as pd
 project_root = Path(__file__).resolve().parent.parent.parent
 sys.path.append(str(project_root))
 
+# 修正: インポートエラー時のメッセージを改善
 try:
-    from src.pipeline_core import setup_logging, load_config
+    from src.pipeline_core import setup_logging
     from src.utils.data_utils import load_parquet_data_by_date
     from src.models.model_train import MuEstimator
 except ImportError as e:
     print(f"エラー: 必要なモジュールのインポートに失敗しました: {e}")
-    print("プロジェクトルートが正しく設定されているか確認してください。")
+    print("PYTHONPATHが正しく設定されているか、またはプロジェクトルートから実行しているか確認してください。")
     print(f"sys.path: {sys.path}")
     sys.exit(1)
 
 def main():
     """メイン実行関数"""
     parser = argparse.ArgumentParser(description='Keiba AI μモデル学習パイプライン')
-    parser.add_argument(
-        '--start_date',
-        type=str,
-        required=True,
-        help='学習開始日 (YYYY-MM-DD)'
-    )
-    parser.add_argument(
-        '--end_date',
-        type=str,
-        required=True,
-        help='学習終了日 (YYYY-MM-DD)'
-    )
-    parser.add_argument(
-        '--output_dir',
-        type=str,
-        required=True,
-        help='学習済みモデルの保存先ディレクトリ (例: data/models/mu_model_v1)'
-    )
-    parser.add_argument(
-        '--config',
-        type=str,
-        default='configs/default.yaml',
-        help='基本設定ファイルパス'
-    )
-    parser.add_argument(
-        '--models_config',
-        type=str,
-        default='configs/models.yaml',
-        help='モデル設定ファイルパス'
-    )
-    parser.add_argument(
-        '--features_config',
-        type=str,
-        default='configs/features.yaml',
-        help='特徴量設定ファイルパス'
-    )
-    parser.add_argument(
-        '--log_level',
-        type=str,
-        default='INFO',
-        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
-        help='ログレベル'
-    )
+    parser.add_argument('--start_date', type=str, required=True, help='学習開始日 (YYYY-MM-DD)')
+    parser.add_argument('--end_date', type=str, required=True, help='学習終了日 (YYYY-MM-DD)')
+    parser.add_argument('--output_dir', type=str, required=True, help='学習済みモデルの保存先ディレクトリ')
+    parser.add_argument('--config', type=str, default='configs/default.yaml', help='基本設定ファイルパス')
+    parser.add_argument('--models_config', type=str, default='configs/models.yaml', help='モデル設定ファイルパス')
+    parser.add_argument('--features_config', type=str, default='configs/features.yaml', help='特徴量設定ファイルパス')
+    parser.add_argument('--log_level', type=str, default='INFO', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'], help='ログレベル')
 
     args = parser.parse_args()
 
-    # --- 0. 設定とロギング ---
+    # --- 0. 設定とロギングの初期化 ---
     try:
-        # 【修正箇所】 base_dir の定義を config ロードの直前に移動
-        # コマンド実行時のカレントディレクトリではなく、config ファイル基準の絶対パスにする
+        # config ファイルの場所を基準とする
         base_dir = Path(args.config).resolve().parent.parent
 
-        # 【修正箇所】 load_config (encoding なし) の代わりに、encoding を指定して config をロード
-        # これにより、Windows (cp932) 環境での config パースエラーを防ぐ
+        # UTF-8で設定ファイルを読み込む
         with open(args.config, 'r', encoding='utf-8') as f:
             config = yaml.safe_load(f)
-        
-        # 【!!! 修正箇所 !!!】
-        # config 内のプレースホルダ (${data_path}) を簡易的に解決
-        data_path_str = config.get('data_path', 'data')
-        
-        resolved_config = {}
-        for key, value in config.items():
-            if isinstance(value, str):
-                # ${data_path} を置換
-                resolved_value_str = value.replace('${data_path}', data_path_str)
-                
-                # パス関連のキー (末尾が _path) なら、絶対パスに解決 (log_file は除く)
-                if key.endswith('_path') and not Path(resolved_value_str).is_absolute():
-                     resolved_config[key] = str((base_dir / resolved_value_str).resolve())
-                else:
-                     resolved_config[key] = resolved_value_str
-            else:
-                 resolved_config[key] = value
-        
-        config = resolved_config
-        
-        # L89: paths = config.get('paths', {}) は、default.yaml の構造と合っていないため、
-        # config 自体を paths として扱う
-        paths = config 
-        
-        # encoding='utf-8' を指定
         with open(args.models_config, 'r', encoding='utf-8') as f:
             models_config = yaml.safe_load(f)
-        
-        # encoding='utf-8' を指定
         with open(args.features_config, 'r', encoding='utf-8') as f:
             features_config = yaml.safe_load(f)
 
-        # 【!!! 修正箇所 !!!】
-        # setup_logging を呼び出す
-        logging_config = config.get('logging', {})
+        # パス設定のプレースホルダーを解決
+        data_path = Path(config.get('data_path', 'data'))
+        if not data_path.is_absolute():
+            data_path = base_dir / data_path
+
+        for key, value in config.items():
+            if isinstance(value, str) and '${data_path}' in value:
+                config[key] = value.replace('${data_path}', str(data_path))
+
+            if key.endswith('_path') and not Path(config[key]).is_absolute():
+                config[key] = str(base_dir / config[key])
         
-        # logging_config の ${logs_path} を解決
-        if 'log_file' in logging_config:
-            logs_path = config.get('logs_path', 'data/logs') # ${data_path} は解決済み
-            
-            # config['logs_path'] が絶対パスでない場合は base_dir で解決
-            if not Path(logs_path).is_absolute():
-                logs_path = str(base_dir / logs_path)
-                
-            logging_config['log_file'] = logging_config['log_file'].replace('${logs_path}', logs_path)
-            
-            # log_file のパス自体も base_dir からの絶対パスに解決
-            if not Path(logging_config['log_file']).is_absolute():
-                logging_config['log_file'] = str(base_dir / logging_config['log_file'])
+        # ロギング設定
+        log_conf = config.get('logging', {})
+        log_file_template = log_conf.get('log_file', 'logs/pipeline.log')
+        
+        # ログパスのプレースホルダーを解決
+        if '${logs_path}' in log_file_template:
+            logs_path = Path(config.get('logs_path', str(data_path / 'logs')))
+            log_file_path = log_file_template.replace('${logs_path}', str(logs_path))
+        else:
+            log_file_path = str(base_dir / log_file_template)
 
-        setup_logging(args.log_level.upper(), logging_config)
-            
-    except FileNotFoundError as e:
-        # ロギング設定前にエラーが発生した場合に備えて print も残す
-        print(f"設定ファイルが見つかりません: {e}")
-        logging.error(f"設定ファイルが見つかりません: {e}")
-        sys.exit(1)
+        # ログファイルパスの日付フォーマットを置換
+        now = datetime.now()
+        log_file_path = now.strftime(log_file_path.replace('{YYYY}', '%Y').replace('{MM}', '%m').replace('{DD}', '%d'))
+        
+        # ログディレクトリを作成
+        Path(log_file_path).parent.mkdir(parents=True, exist_ok=True)
+        
+        # setup_loggingを呼び出す
+        setup_logging(log_level=args.log_level, log_file=log_file_path, log_format=log_conf.get('format'))
+
     except Exception as e:
-        # 予期せぬエラー（ロギング設定失敗など）をキャッチ
-        print(f"初期化中にエラーが発生しました: {e}")
-        logging.error(f"初期化中にエラーが発生しました: {e}", exc_info=True)
+        # フォールバックロギング
+        logging.basicConfig(level=logging.INFO, format='%(asctime)s [ERROR] %(message)s')
+        logging.error(f"ロギングの初期化に失敗しました: {e}", exc_info=True)
         sys.exit(1)
-
 
     logging.info("=" * 60)
     logging.info("Keiba AI μモデル学習パイプライン開始")
@@ -170,45 +112,85 @@ def main():
         logging.error(f"日付フォーマットエラー: {e}")
         sys.exit(1)
 
-    # --- 2. 特徴量データのロード ---
-    
-    # 【修正箇所】 config が正しくロードされたため、base_dir の定義を
-    # (L84) に移動済み。
-    # base_dir = Path(args.config).resolve().parent.parent # (L151) 削除
-    
-    # (L152) paths は (L110) で config に設定済み
-    features_path_str = paths.get('features_path', str(base_dir / 'data/features'))
+    # --- 2. データロードとマージ ---
+    # 2.1. 特徴量データのロード
+    features_path_str = config.get('features_path', str(base_dir / 'data/features'))
     features_dir = Path(features_path_str) / 'parquet'
     
-    # 特徴量リストを読み込む
     try:
-        # encoding='utf-8' を指定
-        with open(features_dir / "feature_names.yaml", 'r', encoding='utf-8') as f:
+        feature_names_path = Path(features_path_str) / "feature_names.yaml"
+        with open(feature_names_path, 'r', encoding='utf-8') as f:
             feature_names = yaml.safe_load(f)
         logging.info(f"{len(feature_names)}個の特徴量をロードしました")
     except FileNotFoundError:
-         # エラーメッセージを修正し、絶対パスを表示
-         logging.error(f"特徴量リスト (feature_names.yaml) が見つかりません: {features_dir.resolve()}")
+         logging.error(f"特徴量リスト (feature_names.yaml) が見つかりません: {feature_names_path}")
          sys.exit(1)
 
-    # 学習データをロード
     features_df = load_parquet_data_by_date(features_dir, start_dt, end_dt, date_col='race_date')
     
     if features_df.empty:
         logging.error(f"期間 {args.start_date} - {args.end_date} の特徴量データが見つかりません。")
         sys.exit(1)
+
+    # 特徴量データは馬ごとに一意であるべきため、重複を除外
+    if features_df.duplicated(subset=['race_id', 'horse_id']).any():
+        logging.warning("特徴量データに重複が見つかりました。重複を削除します。（上流の `generate_features` の修正を推奨）")
+        logging.info(f"重複削除前の特徴量データ: {len(features_df)}行")
+        features_df = features_df.drop_duplicates(subset=['race_id', 'horse_id'], keep='first')
+        logging.info(f"重複削除後の特徴量データ: {len(features_df)}行")
+    
+    # 2.2. レース結果データ（目的変数）のロード
+    parsed_data_path = config.get('parsed_data_path', str(base_dir / 'data/parsed'))
+    races_parquet_path = Path(parsed_data_path) / 'parquet' / 'races' / 'races.parquet'
+    
+    try:
+        races_df = pd.read_parquet(races_parquet_path)
+        logging.info(f"全レース結果データをロードしました: {len(races_df)}行")
         
-    # 学習に必要な目的変数が存在するか確認
-    if 'finish_position' not in features_df.columns or 'finish_time_seconds' not in features_df.columns:
-        logging.error("学習に必要な目的変数 (finish_position, finish_time_seconds) が特徴量データにありません。")
+        # 学習期間でフィルタリング
+        races_df['race_date'] = pd.to_datetime(races_df['race_date'])
+        races_df = races_df[(races_df['race_date'] >= start_dt) & (races_df['race_date'] <= end_dt)].copy()
+        logging.info(f"学習期間にフィルタリング後: {len(races_df)}行")
+
+    except FileNotFoundError:
+        logging.error(f"レース結果ファイルが見つかりません: {races_parquet_path}")
+        sys.exit(1)
+
+    # 2.3. 特徴量と目的変数のマージ
+    merge_keys = ['race_id', 'horse_id']
+    if not all(key in features_df.columns for key in merge_keys):
+        if 'horse_id' not in features_df.columns and 'race_id' in features_df.columns:
+            logging.warning("特徴量データに 'horse_id' がありません。'race_id' のみでマージを試みます。")
+            merge_keys = ['race_id']
+        else:
+            logging.error(f"特徴量データに結合キー {merge_keys} が不足しています。")
+            sys.exit(1)
+    
+    logging.info(f"Using merge keys: {merge_keys}")
+            
+    target_cols = ['finish_position', 'finish_time_seconds']
+    races_subset_df = races_df[merge_keys + target_cols].copy()
+
+    merged_df = pd.merge(features_df, races_subset_df, on=merge_keys, how='inner')
+    logging.info(f"特徴量とレース結果をマージしました。結果: {len(merged_df)}行")
+
+    if merged_df.empty:
+        logging.error("マージの結果、データが0行になりました。race_idやhorse_idが一致しません。")
+        sys.exit(1)
+
+    # 2.4. 学習データの最終チェック
+    required_cols = target_cols + ['race_id']
+    missing_cols = [col for col in required_cols if col not in merged_df.columns]
+    if missing_cols:
+        logging.error(f"マージ後のデータに学習に必要なカラム {missing_cols} がありません。")
         sys.exit(1)
         
-    # 欠損値を含む行を削除 (学習のため)
-    features_df = features_df.dropna(subset=feature_names + ['finish_position', 'finish_time_seconds', 'race_id'])
-    logging.info(f"欠損値除去後、{len(features_df)}行のデータで学習します。")
+    # 目的変数などが欠損している行のみを削除
+    final_df = merged_df.dropna(subset=required_cols)
+    logging.info(f"必須カラムの欠損値除去後: {len(final_df)}行")
 
-    if features_df.empty:
-        logging.error("欠損値を除去した結果、学習データが0行になりました。")
+    if final_df.empty:
+        logging.error("必須カラムの欠損値を除去した結果、学習データが0行になりました。")
         sys.exit(1)
 
     # --- 3. モデル学習 ---
@@ -216,11 +198,20 @@ def main():
     estimator = MuEstimator(mu_model_config)
     
     try:
+        # 学習に使う特徴量カラムの欠損値を0で埋める
+        # また、object型のカラムが残っている場合、数値に変換を試みる
+        for col in feature_names:
+            if final_df[col].dtype == 'object':
+                final_df[col] = pd.to_numeric(final_df[col], errors='coerce').fillna(0)
+        
+        final_df[feature_names] = final_df[feature_names].fillna(0)
+        logging.info("特徴量の欠損値を0で補完し、数値型に変換しました。")
+
         estimator.train(
-            features_df=features_df,
+            features_df=final_df,
             feature_names=feature_names,
-            target_regressor='finish_time_seconds', # 仕様書 参照
-            target_ranker='finish_position',     # 仕様書 参照
+            target_regressor='finish_time_seconds',
+            target_ranker='finish_position',
             group_col='race_id'
         )
     except Exception as e:
@@ -229,12 +220,8 @@ def main():
 
     # --- 4. モデル保存 ---
     try:
-        # output_dir も Path オブジェクトとして渡す
         output_path = Path(args.output_dir)
         estimator.save_model(output_path)
-        
-        # (仕様書 3.4.2 に基づき、メタデータもDBに保存するのが望ましいが、ここではファイル保存のみ)
-        
     except Exception as e:
         logging.error(f"学習済みμモデルの保存に失敗しました: {e}", exc_info=True)
         sys.exit(1)
