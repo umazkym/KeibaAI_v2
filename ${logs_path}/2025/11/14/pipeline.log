@@ -84,3 +84,199 @@
 2025-11-14 21:42:03,869 - root - INFO - ============================================================
 2025-11-14 21:42:03,869 - root - INFO - Keiba AI μモデル評価パイプライン完了
 2025-11-14 21:42:03,870 - root - INFO - ============================================================
+2025-11-14 21:45:03,414 - root - INFO - ロギングが正常に設定されました。ログファイル: ${logs_path}/2025/11/14/pipeline.log
+2025-11-14 21:45:03,414 - root - INFO - ============================================================
+2025-11-14 21:45:03,414 - root - INFO - Keiba AI μモデル評価パイプライン開始
+2025-11-14 21:45:03,414 - root - INFO - ============================================================
+2025-11-14 21:45:03,414 - root - INFO - 評価期間: 2024-01-01 - 2024-12-31
+2025-11-14 21:45:03,415 - root - INFO - 評価対象モデル: keibaai/data/models/mu_model_v2
+2025-11-14 21:45:03,420 - root - INFO - μモデルを keibaai\data\models\mu_model_v2 からロードしました
+2025-11-14 21:45:03,421 - root - INFO - 33個の特徴量を持つモデルをロードしました
+2025-11-14 21:45:05,001 - root - INFO - 読み込み成功: 491555行 from 68 files
+2025-11-14 21:45:05,442 - root - INFO - 評価用データの準備完了: 46752行
+2025-11-14 21:45:05,591 - root - ERROR - 予測の実行中にエラーが発生しました: Could not convert string '20221057622022106999202210063920221006602022105244' to numeric
+Traceback (most recent call last):
+  File "C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\src\models\evaluate_model.py", line 125, in main
+    predictions = estimator.predict(final_df)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\src\models\model_train.py", line 127, in predict
+    score_regressor_norm = features_df.groupby('race_id').transform(
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\zk-ht\AppData\Local\Programs\Python\Python312\Lib\site-packages\pandas\core\groupby\generic.py", line 1815, in transform
+    return self._transform(
+           ^^^^^^^^^^^^^^^^
+  File "C:\Users\zk-ht\AppData\Local\Programs\Python\Python312\Lib\site-packages\pandas\core\groupby\groupby.py", line 2021, in _transform
+    return self._transform_general(func, engine, engine_kwargs, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\zk-ht\AppData\Local\Programs\Python\Python312\Lib\site-packages\pandas\core\groupby\generic.py", line 1732, in _transform_general
+    path, res = self._choose_path(fast_path, slow_path, group)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\zk-ht\AppData\Local\Programs\Python\Python312\Lib\site-packages\pandas\core\groupby\generic.py", line 1834, in _choose_path
+    res = slow_path(group)
+          ^^^^^^^^^^^^^^^^
+  File "C:\Users\zk-ht\AppData\Local\Programs\Python\Python312\Lib\site-packages\pandas\core\groupby\generic.py", line 1827, in <lambda>
+    slow_path = lambda group: group.apply(
+                              ^^^^^^^^^^^^
+  File "C:\Users\zk-ht\AppData\Local\Programs\Python\Python312\Lib\site-packages\pandas\core\frame.py", line 10374, in apply
+    return op.apply().__finalize__(self, method="apply")
+           ^^^^^^^^^^
+  File "C:\Users\zk-ht\AppData\Local\Programs\Python\Python312\Lib\site-packages\pandas\core\apply.py", line 916, in apply
+    return self.apply_standard()
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\zk-ht\AppData\Local\Programs\Python\Python312\Lib\site-packages\pandas\core\apply.py", line 1063, in apply_standard
+    results, res_index = self.apply_series_generator()
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\zk-ht\AppData\Local\Programs\Python\Python312\Lib\site-packages\pandas\core\apply.py", line 1081, in apply_series_generator
+    results[i] = self.func(v, *self.args, **self.kwargs)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\zk-ht\AppData\Local\Programs\Python\Python312\Lib\site-packages\pandas\core\groupby\generic.py", line 1828, in <lambda>
+    lambda x: func(x, *args, **kwargs), axis=self.axis
+              ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\src\models\model_train.py", line 128, in <lambda>
+    lambda x: (x - x.mean()) / (x.std() + 1e-6)
+                   ^^^^^^^^
+  File "C:\Users\zk-ht\AppData\Local\Programs\Python\Python312\Lib\site-packages\pandas\core\series.py", line 6549, in mean
+    return NDFrame.mean(self, axis, skipna, numeric_only, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\zk-ht\AppData\Local\Programs\Python\Python312\Lib\site-packages\pandas\core\generic.py", line 12420, in mean
+    return self._stat_function(
+           ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\zk-ht\AppData\Local\Programs\Python\Python312\Lib\site-packages\pandas\core\generic.py", line 12377, in _stat_function
+    return self._reduce(
+           ^^^^^^^^^^^^^
+  File "C:\Users\zk-ht\AppData\Local\Programs\Python\Python312\Lib\site-packages\pandas\core\series.py", line 6457, in _reduce
+    return op(delegate, skipna=skipna, **kwds)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\zk-ht\AppData\Local\Programs\Python\Python312\Lib\site-packages\pandas\core\nanops.py", line 147, in f
+    result = alt(values, axis=axis, skipna=skipna, **kwds)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\zk-ht\AppData\Local\Programs\Python\Python312\Lib\site-packages\pandas\core\nanops.py", line 404, in new_func
+    result = func(values, axis=axis, skipna=skipna, mask=mask, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\zk-ht\AppData\Local\Programs\Python\Python312\Lib\site-packages\pandas\core\nanops.py", line 720, in nanmean
+    the_sum = _ensure_numeric(the_sum)
+              ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\zk-ht\AppData\Local\Programs\Python\Python312\Lib\site-packages\pandas\core\nanops.py", line 1701, in _ensure_numeric
+    raise TypeError(f"Could not convert string '{x}' to numeric")
+TypeError: Could not convert string '20221057622022106999202210063920221006602022105244' to numeric
+2025-11-14 21:46:03,932 - root - INFO - ロギングが正常に設定されました。ログファイル: ${logs_path}/2025/11/14/pipeline.log
+2025-11-14 21:46:03,932 - root - INFO - ============================================================
+2025-11-14 21:46:03,932 - root - INFO - Keiba AI μモデル評価パイプライン開始
+2025-11-14 21:46:03,932 - root - INFO - ============================================================
+2025-11-14 21:46:03,932 - root - INFO - 評価期間: 2024-01-01 - 2024-12-31
+2025-11-14 21:46:03,932 - root - INFO - 評価対象モデル: keibaai/data/models/mu_model_v2
+2025-11-14 21:46:03,938 - root - INFO - μモデルを keibaai\data\models\mu_model_v2 からロードしました
+2025-11-14 21:46:03,939 - root - INFO - 33個の特徴量を持つモデルをロードしました
+2025-11-14 21:46:05,561 - root - INFO - 読み込み成功: 491555行 from 68 files
+2025-11-14 21:46:05,998 - root - INFO - 評価用データの準備完了: 46752行
+2025-11-14 21:46:06,980 - root - INFO - 予測スコアの計算が完了しました。
+2025-11-14 21:46:06,980 - root - INFO - 評価指標の計算を開始します...
+2025-11-14 21:46:07,014 - root - INFO - [Regressor評価] タイム予測RMSE: 21.9437 秒
+2025-11-14 21:46:08,005 - root - INFO - [Ranker評価] スピアマン順位相関係数 (予測スコア vs 着順):
+2025-11-14 21:46:08,005 - root - INFO -   - 平均: 0.1103
+2025-11-14 21:46:08,005 - root - INFO -   - 中央値: 0.1172
+2025-11-14 21:46:08,006 - root - INFO -   - 標準偏差: 0.2987
+2025-11-14 21:46:08,006 - root - INFO -   (注: 予測スコアが高いほど良い順位と予測するため、この値が負に大きく振れるほど良いモデルです)
+2025-11-14 21:46:08,006 - root - INFO - ============================================================
+2025-11-14 21:46:08,006 - root - INFO - Keiba AI μモデル評価パイプライン完了
+2025-11-14 21:46:08,006 - root - INFO - ============================================================
+2025-11-14 21:48:05,849 - root - INFO - ロギングが正常に設定されました。ログファイル: ${logs_path}/2025/11/14/pipeline.log
+2025-11-14 21:48:05,849 - root - INFO - ============================================================
+2025-11-14 21:48:05,849 - root - INFO - Keiba AI μモデル評価パイプライン開始
+2025-11-14 21:48:05,850 - root - INFO - ============================================================
+2025-11-14 21:48:05,850 - root - INFO - 評価期間: 2024-01-01 - 2024-12-31
+2025-11-14 21:48:05,850 - root - INFO - 評価対象モデル: keibaai/data/models/mu_model_v2
+2025-11-14 21:48:05,855 - root - INFO - μモデルを keibaai\data\models\mu_model_v2 からロードしました
+2025-11-14 21:48:05,855 - root - INFO - 33個の特徴量を持つモデルをロードしました
+2025-11-14 21:48:07,404 - root - INFO - 読み込み成功: 491555行 from 68 files
+2025-11-14 21:48:07,840 - root - INFO - 評価用データの準備完了: 46752行
+2025-11-14 21:48:08,787 - root - INFO - 予測スコアの計算が完了しました。
+2025-11-14 21:48:08,787 - root - INFO - 評価指標の計算を開始します...
+2025-11-14 21:48:08,825 - root - INFO - [Regressor評価] タイム予測RMSE: 21.9437 秒
+2025-11-14 21:48:09,833 - root - INFO - [Ranker単体評価] スピアマン順位相関係数 (Rankerスコア vs 着順):
+2025-11-14 21:48:09,833 - root - INFO -   - 平均: 0.1509
+2025-11-14 21:48:09,833 - root - INFO -   - 中央値: 0.1643
+2025-11-14 21:48:09,834 - root - INFO -   - 標準偏差: 0.2944
+2025-11-14 21:48:10,757 - root - INFO - [総合スコア評価] スピアマン順位相関係数 (予測スコア vs 着順):
+2025-11-14 21:48:10,758 - root - INFO -   - 平均: 0.1103
+2025-11-14 21:48:10,758 - root - INFO -   - 中央値: 0.1172
+2025-11-14 21:48:10,758 - root - INFO -   - 標準偏差: 0.2987
+2025-11-14 21:48:10,758 - root - INFO -   (注: 予測スコアが高いほど良い順位と予測するため、この値が負に大きく振れるほど良いモデルです)
+2025-11-14 21:48:10,759 - root - INFO - ============================================================
+2025-11-14 21:48:10,759 - root - INFO - Keiba AI μモデル評価パイプライン完了
+2025-11-14 21:48:10,759 - root - INFO - ============================================================
+2025-11-14 21:51:55,184 - root - INFO - ロギングが正常に設定されました。ログファイル: ${logs_path}/2025/11/14/pipeline.log
+2025-11-14 21:51:55,185 - root - INFO - ============================================================
+2025-11-14 21:51:55,185 - root - INFO - Keiba AI μモデル評価パイプライン開始
+2025-11-14 21:51:55,185 - root - INFO - ============================================================
+2025-11-14 21:51:55,185 - root - INFO - 評価期間: 2024-01-01 - 2024-12-31
+2025-11-14 21:51:55,185 - root - INFO - 評価対象モデル: keibaai/data/models/mu_model_v3
+2025-11-14 21:51:55,218 - root - INFO - μモデルを keibaai\data\models\mu_model_v3 からロードしました
+2025-11-14 21:51:55,218 - root - INFO - 33個の特徴量を持つモデルをロードしました
+2025-11-14 21:51:57,258 - root - INFO - 読み込み成功: 587127行 from 80 files
+2025-11-14 21:51:57,758 - root - INFO - 評価用データの準備完了: 46752行
+2025-11-14 21:51:58,730 - root - INFO - 予測スコアの計算が完了しました。
+2025-11-14 21:51:58,730 - root - INFO - 評価指標の計算を開始します...
+2025-11-14 21:51:58,763 - root - INFO - [Regressor評価] タイム予測RMSE: 24.2836 秒
+2025-11-14 21:51:59,781 - root - INFO - [Ranker単体評価] スピアマン順位相関係数 (Rankerスコア vs 着順):
+2025-11-14 21:51:59,781 - root - INFO -   - 平均: 0.0531
+2025-11-14 21:51:59,782 - root - INFO -   - 中央値: 0.0559
+2025-11-14 21:51:59,782 - root - INFO -   - 標準偏差: 0.2962
+2025-11-14 21:52:00,749 - root - INFO - [総合スコア評価] スピアマン順位相関係数 (予測スコア vs 着順):
+2025-11-14 21:52:00,749 - root - INFO -   - 平均: 0.0260
+2025-11-14 21:52:00,749 - root - INFO -   - 中央値: 0.0269
+2025-11-14 21:52:00,749 - root - INFO -   - 標準偏差: 0.2992
+2025-11-14 21:52:00,750 - root - INFO -   (注: 予測スコアが高いほど良い順位と予測するため、この値が負に大きく振れるほど良いモデルです)
+2025-11-14 21:52:00,750 - root - INFO - ============================================================
+2025-11-14 21:52:00,750 - root - INFO - Keiba AI μモデル評価パイプライン完了
+2025-11-14 21:52:00,750 - root - INFO - ============================================================
+2025-11-14 22:22:17,823 - root - INFO - ロギングが正常に設定されました。ログファイル: ${logs_path}/2025/11/14/pipeline.log
+2025-11-14 22:22:17,823 - root - INFO - ============================================================
+2025-11-14 22:22:17,823 - root - INFO - Keiba AI μモデル評価パイプライン開始
+2025-11-14 22:22:17,824 - root - INFO - ============================================================
+2025-11-14 22:22:17,824 - root - INFO - 評価期間: 2024-01-01 - 2024-12-31
+2025-11-14 22:22:17,824 - root - INFO - 評価対象モデル: keibaai/data/models/mu_model_v4
+2025-11-14 22:22:17,859 - root - INFO - μモデルを keibaai\data\models\mu_model_v4 からロードしました
+2025-11-14 22:22:17,859 - root - INFO - 33個の特徴量を持つモデルをロードしました
+2025-11-14 22:22:20,056 - root - INFO - 読み込み成功: 682699行 from 92 files
+2025-11-14 22:22:20,528 - root - INFO - 評価用データの準備完了: 46752行
+2025-11-14 22:22:21,583 - root - INFO - 予測スコアの計算が完了しました。
+2025-11-14 22:22:21,583 - root - INFO - 評価指標の計算を開始します...
+2025-11-14 22:22:21,626 - root - INFO - [Regressor評価] タイム予測RMSE: 24.2836 秒
+2025-11-14 22:22:22,636 - root - INFO - [Ranker単体評価] スピアマン順位相関係数 (Rankerスコア vs 着順):
+2025-11-14 22:22:22,637 - root - INFO -   - 平均: 0.0531
+2025-11-14 22:22:22,637 - root - INFO -   - 中央値: 0.0559
+2025-11-14 22:22:22,637 - root - INFO -   - 標準偏差: 0.2962
+2025-11-14 22:22:23,696 - root - INFO - [総合スコア評価] スピアマン順位相関係数 (予測スコア vs 着順):
+2025-11-14 22:22:23,696 - root - INFO -   - 平均: 0.0260
+2025-11-14 22:22:23,697 - root - INFO -   - 中央値: 0.0269
+2025-11-14 22:22:23,697 - root - INFO -   - 標準偏差: 0.2992
+2025-11-14 22:22:23,697 - root - INFO -   (注: 予測スコアが高いほど良い順位と予測するため、この値が負に大きく振れるほど良いモデルです)
+2025-11-14 22:22:23,697 - root - INFO - ============================================================
+2025-11-14 22:22:23,697 - root - INFO - Keiba AI μモデル評価パイプライン完了
+2025-11-14 22:22:23,697 - root - INFO - ============================================================
+2025-11-14 22:23:04,991 - root - INFO - ロギングが正常に設定されました。ログファイル: ${logs_path}/2025/11/14/pipeline.log
+2025-11-14 22:23:04,991 - root - INFO - ============================================================
+2025-11-14 22:23:04,991 - root - INFO - Keiba AI μモデル評価パイプライン開始
+2025-11-14 22:23:04,991 - root - INFO - ============================================================
+2025-11-14 22:23:04,991 - root - INFO - 評価期間: 2024-01-01 - 2024-12-31
+2025-11-14 22:23:04,991 - root - INFO - 評価対象モデル: keibaai/data/models/mu_model_v4
+2025-11-14 22:23:05,024 - root - INFO - μモデルを keibaai\data\models\mu_model_v4 からロードしました
+2025-11-14 22:23:05,024 - root - INFO - 33個の特徴量を持つモデルをロードしました
+2025-11-14 22:23:07,304 - root - INFO - 読み込み成功: 682699行 from 92 files
+2025-11-14 22:23:07,779 - root - INFO - 評価用データの準備完了: 46752行
+2025-11-14 22:23:08,831 - root - INFO - 予測スコアの計算が完了しました。
+2025-11-14 22:23:08,831 - root - INFO - 評価指標の計算を開始します...
+2025-11-14 22:23:08,866 - root - INFO - [Regressor評価] タイム予測RMSE: 24.2836 秒
+2025-11-14 22:23:09,876 - root - INFO - [Ranker単体評価] スピアマン順位相関係数 (Rankerスコア vs 着順):
+2025-11-14 22:23:09,876 - root - INFO -   - 平均: 0.0531
+2025-11-14 22:23:09,876 - root - INFO -   - 中央値: 0.0559
+2025-11-14 22:23:09,876 - root - INFO -   - 標準偏差: 0.2962
+2025-11-14 22:23:10,803 - root - INFO - [総合スコア評価] スピアマン順位相関係数 (予測スコア vs 着順):
+2025-11-14 22:23:10,803 - root - INFO -   - 平均: 0.0260
+2025-11-14 22:23:10,803 - root - INFO -   - 中央値: 0.0269
+2025-11-14 22:23:10,804 - root - INFO -   - 標準偏差: 0.2992
+2025-11-14 22:23:10,804 - root - INFO -   (注: 予測スコアが高いほど良い順位と予測するため、この値が負に大きく振れるほど良いモデルです)
+2025-11-14 22:23:10,804 - root - INFO - ============================================================
+2025-11-14 22:23:10,804 - root - INFO - Keiba AI μモデル評価パイプライン完了
+2025-11-14 22:23:10,804 - root - INFO - ============================================================

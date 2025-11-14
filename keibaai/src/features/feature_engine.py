@@ -56,28 +56,32 @@ class FeatureEngine:
                 suffixes=('', '_profile')
             )
         
-        # (3) 基本特徴量の生成 (仕様書 6.2 basic_features)
+        # (3) 過去の戦績から集計特徴量を生成
+        if not results_history_df.empty:
+            df = self._add_horse_history_features(df, results_history_df)
+
+        # (4) 基本特徴量の生成 (仕様書 6.2 basic_features)
         df = self._add_basic_features(df)
         
-        # (4) 過去走集約 (仕様書 6.2 past_performance_aggregation)
+        # (5) 過去走集約 (仕様書 6.2 past_performance_aggregation)
         if not results_history_df.empty:
             df = self._add_past_performance_features(df, results_history_df)
 
-        # (5) 血統特徴量 (仕様書 6.2 pedigree_features)
+        # (6) 血統特徴量 (仕様書 6.2 pedigree_features)
         if not pedigree_df.empty:
             df = self._add_pedigree_features(df, pedigree_df, results_history_df)
 
-        # (6) 騎手・調教師特徴量 (仕様書 6.2 jockey_trainer_features)
+        # (7) 騎手・調教師特徴量 (仕様書 6.2 jockey_trainer_features)
         if not results_history_df.empty:
              df = self._add_jockey_trainer_features(df, results_history_df)
 
-        # (7) レース内正規化 (仕様書 6.2 within_race_normalization)
+        # (8) レース内正規化 (仕様書 6.2 within_race_normalization)
         df = self._add_relative_features(df)
         
-        # (8) 欠損値処理 (仕様書 6.2 missing_value_strategy)
+        # (9) 欠損値処理 (仕様書 6.2 missing_value_strategy)
         df = self._handle_missing_values(df)
 
-        # (9) 特徴量リストの確定
+        # (10) 特徴量リストの確定
         self.feature_names_ = self._select_features(df)
         
         logging.info(f"特徴量生成完了: {len(self.feature_names_)}個の特徴量を生成")
@@ -92,6 +96,54 @@ class FeatureEngine:
         final_cols = list(dict.fromkeys(final_cols))
         
         return df[final_cols]
+
+    def _add_horse_history_features(self, df: pd.DataFrame, history_df: pd.DataFrame) -> pd.DataFrame:
+        """
+        馬の過去の全成績から集計特徴量を生成する (リーク対策版)
+        (prize_total, career_starts, career_wins など)
+        """
+        logging.debug("馬の過去成績集約特徴量を追加中...")
+        
+        # is_target_race フラグを準備
+        # history_df にはないカラムを追加することで、マージ後の識別を容易にする
+        history_df = history_df.copy()
+        history_df['is_target_race'] = 0
+        df = df.copy()
+        df['is_target_race'] = 1
+        
+        # 結合して時系列に並べる
+        combined = pd.concat([history_df, df], ignore_index=True)
+        # df と history_df に重複するレースがある場合、df側を優先
+        combined = combined.drop_duplicates(subset=['race_id', 'horse_id'], keep='last')
+        
+        # 日付でソートするためにdatetime型に変換
+        combined['race_date'] = pd.to_datetime(combined['race_date']).dt.tz_localize(None)
+        combined = combined.sort_values(by=['horse_id', 'race_date'], ascending=[True, True])
+        
+        # is_win と prize_money を準備
+        combined['is_win'] = (combined['finish_position'] == 1).astype(int)
+        if 'prize_money' not in combined.columns:
+            combined['prize_money'] = 0
+        combined['prize_money'] = combined['prize_money'].fillna(0)
+
+        grouped = combined.groupby('horse_id', sort=False)
+        
+        # expanding/cumsum と shift を使って、各レース時点での過去の累計を計算
+        combined['career_starts'] = grouped.cumcount() # 0から始まるので、これが過去の出走回数になる
+        combined['career_wins'] = grouped['is_win'].cumsum().shift(1).fillna(0)
+        combined['prize_total'] = grouped['prize_money'].cumsum().shift(1).fillna(0)
+        
+        # 予測対象のレースデータに、計算した特徴量をマージ
+        feature_cols = ['race_id', 'horse_id', 'career_starts', 'career_wins', 'prize_total']
+        target_races_with_features = combined[combined['is_target_race'] == 1][feature_cols]
+        
+        # 元のdfからis_target_raceを削除
+        df = df.drop(columns=['is_target_race'])
+        
+        # マージ
+        df = df.merge(target_races_with_features, on=['race_id', 'horse_id'], how='left')
+        
+        return df
 
     def _add_basic_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -123,50 +175,80 @@ class FeatureEngine:
 
     def _add_past_performance_features(self, df: pd.DataFrame, history_df: pd.DataFrame) -> pd.DataFrame:
         """
-        仕様書 6.2 past_performance_aggregation に基づく過去走集約
+        仕様書 6.2 past_performance_aggregation に基づく過去走集約 (バグ修正版)
         """
         logging.debug("過去走集約特徴量を追加中...")
-        
-        history = history_df.copy()
-        
-        # horse_id と race_date が必要
-        if 'horse_id' not in history.columns or 'race_date' not in history.columns:
+
+        if 'horse_id' not in history_df.columns or 'race_date' not in history_df.columns:
             logging.warning("history_df に 'horse_id' または 'race_date' がないため、過去走集約をスキップします。")
             return df
-            
-        history['race_date'] = pd.to_datetime(history['race_date']).dt.tz_localize(None)
+
+        # --- 特徴量計算 ---
+        # 1. 履歴データと予測対象データを結合して、時系列でソート
+        #    これにより、shift() を使って安全に過去のデータを参照できる
+        history_df['is_target_race'] = 0
+        df['is_target_race'] = 1
         
+        combined = pd.concat([history_df, df], ignore_index=True)
+        
+        # race_id と horse_id で重複を削除 (df と history_df の重複分)
+        combined = combined.drop_duplicates(subset=['race_id', 'horse_id'], keep='last')
+        
+        combined['race_date'] = pd.to_datetime(combined['race_date']).dt.tz_localize(None)
+        
+        # 過去から未来へソート
+        combined = combined.sort_values(by=['horse_id', 'race_date'], ascending=[True, True])
+
+        # 2. horse_id でグループ化し、rolling/expanding で特徴量を計算
+        grouped = combined.groupby('horse_id')
+
         # 集約対象カラム
         agg_cols = self.config.get('past_performance_aggregation', {}).get('columns', [
             'finish_position', 'finish_time_seconds', 'margin_seconds', 'last_3f_time'
         ])
-        
-        # 集約ウィンドウ
         windows = self.config.get('past_performance_aggregation', {}).get('windows', [1, 3, 5])
-        
-        # horse_id ごとに過去走をソート
-        history = history.sort_values(by=['horse_id', 'race_date'], ascending=[True, False])
-        
-        # --- グローバル集約 ---
-        grouped = history.groupby('horse_id')
-        
+
         for col in agg_cols:
-            if col not in history.columns:
+            if col not in combined.columns:
                 continue
             
-            # (1) Rolling Mean
-            # shift(1) を使い、今走を含めない過去N走の集約を行う
+            # shift(1) を使い、今走を含めない過去の成績を参照する
+            shifted = grouped[col].shift(1)
+            
             for w in windows:
                 feat_name = f'past_{w}_{col}_mean'
-                df[feat_name] = grouped[col].rolling(window=w, min_periods=1).mean().shift(1).reset_index(level=0, drop=True)
+                combined[feat_name] = shifted.rolling(window=w, min_periods=1).mean()
 
-            # (2) Total Win Rate
-            if col == 'finish_position':
-                 history['is_win'] = (history['finish_position'] == 1).astype(int)
-                 df['career_win_rate'] = grouped['is_win'].expanding().mean().shift(1).reset_index(level=0, drop=True)
+        # 勝率
+        if 'finish_position' in combined.columns:
+            combined['is_win'] = (combined['finish_position'] == 1).astype(int)
+            # expanding().mean() でキャリア勝率を計算し、shift()で今走を含めない
+            career_win_rate = grouped['is_win'].expanding().mean().shift(1)
+            career_win_rate = career_win_rate.reset_index(level=0, drop=True)
+            combined['career_win_rate'] = career_win_rate
+
+        # 前走からの日数
+        combined['days_since_last_race'] = grouped['race_date'].diff().dt.days
+
+        # 3. 計算した特徴量を元のdfに戻す
+        #    is_target_race == 1 の行が、もともと予測対象だった行
+        feature_cols_to_merge = [
+            f'past_{w}_{c}_mean' for w in windows for c in agg_cols
+        ] + ['career_win_rate', 'days_since_last_race']
         
-        # (3) Days Since Last Race
-        df['days_since_last_race'] = grouped['race_date'].diff().dt.days.abs().shift(1).reset_index(level=0, drop=True)
+        key_cols = ['race_id', 'horse_id']
+        
+        # 生成された特徴量カラムのみを抽出
+        final_feature_cols = [col for col in feature_cols_to_merge if col in combined.columns]
+        
+        # 予測対象のレースデータに、計算した特徴量をマージ
+        target_races_with_features = combined[combined['is_target_race'] == 1][key_cols + final_feature_cols]
+        
+        # 元のdfからis_target_raceを削除
+        df = df.drop(columns=['is_target_race'])
+        
+        # マージ
+        df = df.merge(target_races_with_features, on=key_cols, how='left')
 
         return df
 

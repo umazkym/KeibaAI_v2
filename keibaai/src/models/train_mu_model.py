@@ -155,7 +155,7 @@ def main():
 
     # 2.6. 欠損値処理
     required_cols = target_cols + ['race_id']
-    final_df = merged_df.dropna(subset=required_cols)
+    final_df = merged_df.dropna(subset=required_cols).copy()
     logging.info(f"必須カラムの欠損値除去後: {len(final_df)}行")
 
     if final_df.empty:

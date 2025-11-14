@@ -141,7 +141,31 @@ def main():
     except Exception as e:
         logging.error(f"Regressor評価中にエラー: {e}")
 
-    # 4.2 Ranker評価 (Spearman's Rank Correlation)
+    # 4.2 Ranker単体評価 (Spearman's Rank Correlation)
+    try:
+        pred_ranker = estimator.model_ranker.predict(final_df[feature_names])
+        final_df['predicted_ranker_score'] = pred_ranker
+        
+        correlations_ranker = []
+        for race_id, group in final_df.groupby('race_id'):
+            if len(group) > 1:
+                corr, _ = spearmanr(group['predicted_ranker_score'], group['finish_position'])
+                if not np.isnan(corr):
+                    correlations_ranker.append(corr)
+        
+        if correlations_ranker:
+            avg_corr_ranker = np.mean(correlations_ranker)
+            median_corr_ranker = np.median(correlations_ranker)
+            std_corr_ranker = np.std(correlations_ranker)
+            logging.info(f"[Ranker単体評価] スピアマン順位相関係数 (Rankerスコア vs 着順):")
+            logging.info(f"  - 平均: {avg_corr_ranker:.4f}")
+            logging.info(f"  - 中央値: {median_corr_ranker:.4f}")
+            logging.info(f"  - 標準偏差: {std_corr_ranker:.4f}")
+    except Exception as e:
+        logging.error(f"Ranker単体評価中にエラー: {e}")
+
+
+    # 4.3 総合スコア評価 (Spearman's Rank Correlation)
     try:
         correlations = []
         for race_id, group in final_df.groupby('race_id'):
@@ -154,7 +178,7 @@ def main():
             avg_corr = np.mean(correlations)
             median_corr = np.median(correlations)
             std_corr = np.std(correlations)
-            logging.info(f"[Ranker評価] スピアマン順位相関係数 (予測スコア vs 着順):")
+            logging.info(f"[総合スコア評価] スピアマン順位相関係数 (予測スコア vs 着順):")
             logging.info(f"  - 平均: {avg_corr:.4f}")
             logging.info(f"  - 中央値: {median_corr:.4f}")
             logging.info(f"  - 標準偏差: {std_corr:.4f}")
@@ -162,7 +186,7 @@ def main():
         else:
             logging.warning("相関係数を計算できるレースがありませんでした。")
     except Exception as e:
-        logging.error(f"Ranker評価中にエラー: {e}")
+        logging.error(f"総合スコア評価中にエラー: {e}")
 
 
     logging.info("=" * 60)

@@ -1,0 +1,81 @@
+import pandas as pd
+import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+from pathlib import Path
+import sys
+
+# プロジェクトルートをパスに追加
+project_root = Path().resolve()
+keibaai_path = project_root / 'keibaai'
+if str(keibaai_path) not in sys.path:
+    sys.path.append(str(keibaai_path))
+
+from src.utils.data_utils import load_parquet_data_by_date
+
+start_date = '2023-01-01'
+end_date = '2023-12-31'
+
+features_dir = project_root / 'keibaai' / 'data' / 'features' / 'parquet'
+races_path = project_root / 'keibaai' / 'data' / 'parsed' / 'parquet' / 'races' / 'races.parquet'
+
+features_df = load_parquet_data_by_date(features_dir, pd.to_datetime(start_date), pd.to_datetime(end_date), date_col='race_date')
+races_df = pd.read_parquet(races_path)
+
+print(f"特徴量データ: {features_df.shape}")
+print(f"レース結果データ: {races_df.shape}")
+
+merge_keys = ['race_id', 'horse_id']
+
+# キーのクリーンアップ
+for df in [features_df, races_df]:
+    for key in merge_keys:
+        if key in df.columns:
+            df[key] = df[key].astype(str).str.strip()
+
+# 重複排除
+features_df = features_df.drop_duplicates(subset=merge_keys, keep='first')
+
+# 結合
+target_cols = ['finish_position', 'finish_time_seconds']
+merged_df = pd.merge(
+    features_df,
+    races_df[merge_keys + target_cols],
+    on=merge_keys,
+    how='inner'
+)
+
+# 欠損値処理
+merged_df = merged_df.dropna(subset=target_cols)
+feature_names = [col for col in features_df.columns if col not in ['race_id', 'horse_id', 'horse_number', 'race_date']]
+for col in feature_names:
+    if col in merged_df.columns and merged_df[col].dtype == 'object':
+        merged_df[col] = pd.to_numeric(merged_df[col], errors='coerce')
+merged_df[feature_names] = merged_df[feature_names].fillna(0)
+
+print(f"結合後のデータ: {merged_df.shape}")
+
+# 分析対象カラム
+analysis_cols = feature_names + ['finish_position']
+corr_matrix = merged_df[analysis_cols].corr(method='spearman')
+
+# 着順との相関を抽出
+finish_position_corr = corr_matrix['finish_position'].sort_values(ascending=False)
+
+print("着順 (finish_position) と各特徴量のスピアマン相関係数:")
+print(finish_position_corr)
+
+plt.style.use('seaborn-v0_8-whitegrid')
+plt.rcParams['font.family'] = 'Meiryo' # Windowsの場合
+
+top_corr = pd.concat([finish_position_corr.head(15), finish_position_corr.tail(15)])
+top_corr = top_corr.drop('finish_position', errors='ignore')
+
+plt.figure(figsize=(12, 10))
+sns.barplot(x=top_corr.values, y=top_corr.index, palette='coolwarm')
+plt.title('着順 (finish_position) との相関が高い特徴量 (Top 30)', fontsize=16)
+plt.xlabel('スピアマン相関係数', fontsize=12)
+plt.ylabel('特徴量', fontsize=12)
+plt.axvline(x=0, color='black', linewidth=0.8)
+plt.tight_layout()
+plt.show()

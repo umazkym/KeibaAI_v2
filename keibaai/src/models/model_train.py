@@ -119,17 +119,34 @@ class MuEstimator:
         # Ranker はスコアを直接出力 (値が大きいほど順位が良い)
         score_ranker = self.model_ranker.predict(X)
         
-        # 3. アンサンブル (Z-score正規化後に加重平均)
-        # レースごとの正規化ではなく、バッチ全体で正規化
-        score_regressor_norm = (score_regressor - np.mean(score_regressor)) / (np.std(score_regressor) + 1e-6)
-        score_ranker_norm = (score_ranker - np.mean(score_ranker)) / (np.std(score_ranker) + 1e-6)
-        
+        # 3. アンサンブル (レースごとにZ-score正規化後に加重平均)
+        if 'race_id' not in features_df.columns:
+            raise ValueError("race_id が特徴量DataFrameに含まれていません。レースごとの正規化に必要です。")
+
+        # 正規化のための一時的なDataFrameを作成
+        temp_df = pd.DataFrame({
+            'race_id': features_df['race_id'],
+            'score_regressor': score_regressor,
+            'score_ranker': score_ranker
+        })
+
+        # レースごとに正規化
+        temp_df['score_regressor_norm'] = temp_df.groupby('race_id')['score_regressor'].transform(
+            lambda x: (x - x.mean()) / (x.std() + 1e-6)
+        )
+        temp_df['score_ranker_norm'] = temp_df.groupby('race_id')['score_ranker'].transform(
+            lambda x: (x - x.mean()) / (x.std() + 1e-6)
+        )
+
+        # stdが0の場合（例：レースに1頭しかいない）にNaNが発生する可能性があるため、0で埋める
+        temp_df.fillna(0, inplace=True)
+
         final_score = (
-            score_regressor_norm * ensemble_weight_regressor +
-            score_ranker_norm * ensemble_weight_ranker
+            temp_df['score_regressor_norm'] * ensemble_weight_regressor +
+            temp_df['score_ranker_norm'] * ensemble_weight_ranker
         )
         
-        return final_score
+        return final_score.values
 
     def save_model(self, model_dir: str):
         """
