@@ -1,0 +1,73 @@
+import pandas as pd
+import numpy as np
+from pathlib import Path
+import sys
+
+pd.set_option('display.max_rows', 200)
+
+# プロジェクトルートをパスに追加
+project_root = Path().resolve()
+keibaai_path = project_root / 'keibaai'
+if str(keibaai_path) not in sys.path:
+    sys.path.append(str(keibaai_path))
+
+parsed_data_dir = project_root / 'keibaai' / 'data' / 'parsed' / 'parquet'
+
+data_paths = {
+    "races": parsed_data_dir / 'races' / 'races.parquet',
+    "shutuba": parsed_data_dir / 'shutuba',
+    "horses": parsed_data_dir / 'horses' / 'horses.parquet',
+    "pedigrees": parsed_data_dir / 'pedigrees' / 'pedigrees.parquet',
+    "results": parsed_data_dir / 'results' # This seems to be missing from the file tree, but let's check
+}
+
+print("調査対象パス:")
+for name, path in data_paths.items():
+    print(f"- {name}: {path}")
+
+def analyze_nulls(df: pd.DataFrame, name: str):
+    """DataFrameの欠損率を計算して表示する"""
+    if df.empty:
+        print(f"\n--- {name} ---")
+        print("DataFrameが空です。")
+        return
+    
+    null_counts = df.isnull().sum()
+    null_percentages = (null_counts / len(df)) * 100
+    
+    report = pd.DataFrame({
+        'null_count': null_counts,
+        'null_percentage': null_percentages
+    })
+    
+    report = report.sort_values(by='null_percentage', ascending=False)
+    
+    print(f"\n--- 分析レポート: {name} ---")
+    print(f"総行数: {len(df)}")
+    print(report)
+
+loaded_dfs = {}
+
+for name, path in data_paths.items():
+    try:
+        if path.is_dir():
+            # パーティション化されたParquetディレクトリの場合
+            all_files = list(path.glob('**/*.parquet'))
+            if not all_files:
+                print(f"\n--- {name} ---")
+                print(f"ディレクトリにParquetファイルが見つかりません: {path}")
+                continue
+            df = pd.concat([pd.read_parquet(f) for f in all_files], ignore_index=True)
+        elif path.is_file():
+            df = pd.read_parquet(path)
+        else:
+            print(f"\n--- {name} ---")
+            print(f"パスが見つかりません: {path}")
+            continue
+            
+        loaded_dfs[name] = df
+        analyze_nulls(df, name)
+        
+    except Exception as e:
+        print(f"\n--- {name} ---")
+        print(f"データの読み込みまたは分析中にエラーが発生しました: {e}")
