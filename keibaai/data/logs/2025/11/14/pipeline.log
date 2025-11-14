@@ -330,3 +330,88 @@ dtype: object
 2025-11-14 09:38:14,917 - root - INFO - ============================================================
 2025-11-14 09:38:14,917 - root - INFO - Keiba AI μモデル学習完了。モデルは keibaai/data/models/mu_model_v1 に保存されました。
 2025-11-14 09:38:14,917 - root - INFO - ============================================================
+2025-11-14 09:40:22,944 - root - INFO - ロギングが正常に設定されました。ログファイル: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\logs/2025/11/14/pipeline.log
+2025-11-14 09:40:22,944 - root - INFO - ============================================================
+2025-11-14 09:40:22,944 - root - INFO - Keiba AI μモデル学習パイプライン開始
+2025-11-14 09:40:22,944 - root - INFO - ============================================================
+2025-11-14 09:40:22,944 - root - INFO - 学習期間: 2023-05-01 - 2023-05-31
+2025-11-14 09:40:22,945 - root - INFO - 33個の特徴量をロードしました
+2025-11-14 09:40:22,960 - root - INFO - 読み込み成功 (pyarrow.dataset): 14480行 from C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\features\parquet
+2025-11-14 09:40:22,962 - root - WARNING - 特徴量データに重複が見つかりました。重複を削除します。（上流の `generate_features` の修正を推奨）
+2025-11-14 09:40:22,962 - root - INFO - 重複削除前の特徴量データ: 14480行
+2025-11-14 09:40:22,963 - root - INFO - 重複削除後の特徴量データ: 16行
+2025-11-14 09:40:22,968 - root - INFO - 全レース結果データをロードしました: 256行
+2025-11-14 09:40:22,970 - root - INFO - 学習期間にフィルタリング後: 256行
+2025-11-14 09:40:22,970 - root - INFO - Using merge keys: ['race_id', 'horse_id']
+2025-11-14 09:40:22,972 - root - INFO - 特徴量とレース結果をマージしました。結果: 256行
+2025-11-14 09:40:22,972 - root - INFO - 必須カラムの欠損値除去後: 256行
+2025-11-14 09:40:22,976 - root - INFO - 特徴量の欠損値を0で補完し、数値型に変換しました。
+2025-11-14 09:40:22,976 - root - INFO - μモデルの学習開始...
+2025-11-14 09:40:22,976 - root - INFO - Regressor (LGBMRegressor) を 'finish_time_seconds' で学習中...
+2025-11-14 09:40:23,059 - root - INFO - Regressor の学習完了
+2025-11-14 09:40:23,059 - root - INFO - Ranker (LGBMRanker) を 'finish_position' で学習中...
+2025-11-14 09:40:23,099 - root - INFO - Ranker の学習完了
+2025-11-14 09:40:23,106 - root - INFO - μモデルを keibaai\data\models\mu_model_v1 に保存しました
+2025-11-14 09:40:23,106 - root - INFO - ============================================================
+2025-11-14 09:40:23,106 - root - INFO - Keiba AI μモデル学習完了。モデルは keibaai/data/models/mu_model_v1 に保存されました。
+2025-11-14 09:40:23,107 - root - INFO - ============================================================
+2025-11-14 09:53:27,098 - root - INFO - ロギングが正常に設定されました。ログファイル: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\logs/2025/11/14/pipeline.log
+2025-11-14 09:53:27,098 - root - INFO - ============================================================
+2025-11-14 09:53:27,099 - root - INFO - Keiba AI μモデル学習パイプライン開始
+2025-11-14 09:53:27,099 - root - INFO - ============================================================
+2025-11-14 09:53:27,099 - root - INFO - 学習期間: 2023-05-01 - 2023-05-31
+2025-11-14 09:53:27,100 - root - INFO - 33個の特徴量をロードしました
+2025-11-14 09:53:27,104 - root - WARNING - pyarrow.datasetでの読み込みに失敗しました（フォールバック実行）: Error creating dataset. Could not read schema from 'C:/Users/zk-ht/Keiba/Keiba_AI_v2/keibaai/data/features/parquet/feature_names.yaml'. Is this a 'parquet' file?: Could not open Parquet input source 'C:/Users/zk-ht/Keiba/Keiba_AI_v2/keibaai/data/features/parquet/feature_names.yaml': Parquet magic bytes not found in footer. Either the file is corrupted or this is not a parquet file.
+2025-11-14 09:53:27,181 - root - INFO - 読み込み成功 (フォールバック): 17630行 from 6 files
+2025-11-14 09:53:27,197 - root - INFO - 全レース結果データをロードしました: 256行
+2025-11-14 09:53:27,199 - root - INFO - 学習期間にフィルタリング後: 256行
+2025-11-14 09:53:27,199 - root - INFO - Using merge keys: ['race_id', 'horse_id']
+2025-11-14 09:53:27,270 - root - INFO - 特徴量とレース結果をマージしました。結果: 282080行
+2025-11-14 09:53:27,337 - root - INFO - 必須カラムの欠損値除去後: 282080行
+2025-11-14 09:53:27,526 - root - INFO - 特徴量の欠損値を0で補完し、数値型に変換しました。
+2025-11-14 09:53:27,526 - root - INFO - μモデルの学習開始...
+2025-11-14 09:53:27,554 - root - INFO - Regressor (LGBMRegressor) を 'finish_time_seconds' で学習中...
+2025-11-14 09:53:27,921 - root - INFO - Regressor の学習完了
+2025-11-14 09:53:27,922 - root - INFO - Ranker (LGBMRanker) を 'finish_position' で学習中...
+2025-11-14 09:53:28,231 - root - ERROR - μモデルの学習中にエラーが発生しました: Number of rows 282080 exceeds upper limit of 10000 for a query
+Traceback (most recent call last):
+  File "C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\src\models\train_mu_model.py", line 203, in main
+    estimator.train(
+  File "C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\src\models\model_train.py", line 84, in train
+    self.model_ranker.fit(X_rank, y_rank_sorted, group=group_counts)
+  File "C:\Users\zk-ht\AppData\Local\Programs\Python\Python312\Lib\site-packages\lightgbm\sklearn.py", line 1780, in fit
+    super().fit(
+  File "C:\Users\zk-ht\AppData\Local\Programs\Python\Python312\Lib\site-packages\lightgbm\sklearn.py", line 1049, in fit
+    self._Booster = train(
+                    ^^^^^^
+  File "C:\Users\zk-ht\AppData\Local\Programs\Python\Python312\Lib\site-packages\lightgbm\engine.py", line 297, in train
+    booster = Booster(params=params, train_set=train_set)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\zk-ht\AppData\Local\Programs\Python\Python312\Lib\site-packages\lightgbm\basic.py", line 3660, in __init__
+    _safe_call(
+  File "C:\Users\zk-ht\AppData\Local\Programs\Python\Python312\Lib\site-packages\lightgbm\basic.py", line 313, in _safe_call
+    raise LightGBMError(_LIB.LGBM_GetLastError().decode("utf-8"))
+lightgbm.basic.LightGBMError: Number of rows 282080 exceeds upper limit of 10000 for a query
+2025-11-14 09:55:03,116 - root - INFO - ロギングが正常に設定されました。ログファイル: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\logs/2025/11/14/pipeline.log
+2025-11-14 09:55:03,116 - root - INFO - ============================================================
+2025-11-14 09:55:03,116 - root - INFO - Keiba AI μモデル学習パイプライン開始
+2025-11-14 09:55:03,116 - root - INFO - ============================================================
+2025-11-14 09:55:03,116 - root - INFO - 学習期間: 2023-05-01 - 2023-05-31
+2025-11-14 09:55:03,117 - root - INFO - 33個の特徴量をロードしました
+2025-11-14 09:55:03,120 - root - WARNING - pyarrow.datasetでの読み込みに失敗しました（フォールバック実行）: Error creating dataset. Could not read schema from 'C:/Users/zk-ht/Keiba/Keiba_AI_v2/keibaai/data/features/parquet/feature_names.yaml'. Is this a 'parquet' file?: Could not open Parquet input source 'C:/Users/zk-ht/Keiba/Keiba_AI_v2/keibaai/data/features/parquet/feature_names.yaml': Parquet magic bytes not found in footer. Either the file is corrupted or this is not a parquet file.
+2025-11-14 09:55:03,188 - root - INFO - 読み込み成功 (フォールバック): 17630行 from 6 files
+2025-11-14 09:55:03,204 - root - INFO - 全レース結果データをロードしました: 256行
+2025-11-14 09:55:03,208 - root - INFO - 結合キーを文字列に変換し、空白を除去しました。
+2025-11-14 09:55:03,211 - root - WARNING - 特徴量データに重複 (17614行) が見つかりました。重複を排除します。
+2025-11-14 09:55:03,215 - root - INFO - 特徴量とレース結果をマージしました。結果: 256行
+2025-11-14 09:55:03,215 - root - INFO - 必須カラムの欠損値除去後: 256行
+2025-11-14 09:55:03,218 - root - INFO - 特徴量の欠損値を0で補完し、数値型に変換しました。
+2025-11-14 09:55:03,218 - root - INFO - μモデルの学習開始...
+2025-11-14 09:55:03,219 - root - INFO - Regressor (LGBMRegressor) を 'finish_time_seconds' で学習中...
+2025-11-14 09:55:03,301 - root - INFO - Regressor の学習完了
+2025-11-14 09:55:03,301 - root - INFO - Ranker (LGBMRanker) を 'finish_position' で学習中...
+2025-11-14 09:55:03,344 - root - INFO - Ranker の学習完了
+2025-11-14 09:55:03,351 - root - INFO - μモデルを keibaai\data\models\mu_model_v1 に保存しました
+2025-11-14 09:55:03,352 - root - INFO - ============================================================
+2025-11-14 09:55:03,352 - root - INFO - Keiba AI μモデル学習完了。モデルは keibaai/data/models/mu_model_v1 に保存されました。
+2025-11-14 09:55:03,352 - root - INFO - ============================================================

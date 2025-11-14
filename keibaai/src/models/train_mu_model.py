@@ -1,14 +1,10 @@
 #!/usr/bin/env python3
 # src/models/train_mu_model.py
 """
-μモデル (MuEstimator) 学習実行スクリプト
-仕様書 13.3章, 19.3.2章 に基づく実装
-
-実行例:
-python src/models/train_mu_model.py \
-    --start_date 2020-01-01 \
-    --end_date 2023-12-31 \
-    --output_dir data/models/mu_model_v1
+μモデル (MuEstimator) 学習実行スクリプト (v3 - 堅牢化版)
+- 結合キーのクリーンアップ機能を追加
+- feature_names.yamlの自動移動機能を追加
+- 応急処置的な重複排除処理を、キーのクリーンアップを前提とした正規処理に変更
 """
 
 import argparse
@@ -18,20 +14,18 @@ from datetime import datetime
 from pathlib import Path
 import yaml
 import pandas as pd
+import shutil
 
 # プロジェクトルート (keibaai ディレクトリ) をパスに追加
 project_root = Path(__file__).resolve().parent.parent.parent
 sys.path.append(str(project_root))
 
-# 修正: インポートエラー時のメッセージを改善
 try:
     from src.pipeline_core import setup_logging
     from src.utils.data_utils import load_parquet_data_by_date
     from src.models.model_train import MuEstimator
 except ImportError as e:
     print(f"エラー: 必要なモジュールのインポートに失敗しました: {e}")
-    print("PYTHONPATHが正しく設定されているか、またはプロジェクトルートから実行しているか確認してください。")
-    print(f"sys.path: {sys.path}")
     sys.exit(1)
 
 def main():
@@ -49,52 +43,31 @@ def main():
 
     # --- 0. 設定とロギングの初期化 ---
     try:
-        # config ファイルの場所を基準とする
         base_dir = Path(args.config).resolve().parent.parent
-
-        # UTF-8で設定ファイルを読み込む
         with open(args.config, 'r', encoding='utf-8') as f:
             config = yaml.safe_load(f)
         with open(args.models_config, 'r', encoding='utf-8') as f:
             models_config = yaml.safe_load(f)
-        with open(args.features_config, 'r', encoding='utf-8') as f:
-            features_config = yaml.safe_load(f)
-
-        # パス設定のプレースホルダーを解決
+        
         data_path = Path(config.get('data_path', 'data'))
         if not data_path.is_absolute():
             data_path = base_dir / data_path
-
         for key, value in config.items():
-            if isinstance(value, str) and '${data_path}' in value:
+            if isinstance(value, str):
                 config[key] = value.replace('${data_path}', str(data_path))
-
             if key.endswith('_path') and not Path(config[key]).is_absolute():
                 config[key] = str(base_dir / config[key])
         
-        # ロギング設定
         log_conf = config.get('logging', {})
         log_file_template = log_conf.get('log_file', 'logs/pipeline.log')
-        
-        # ログパスのプレースホルダーを解決
-        if '${logs_path}' in log_file_template:
-            logs_path = Path(config.get('logs_path', str(data_path / 'logs')))
-            log_file_path = log_file_template.replace('${logs_path}', str(logs_path))
-        else:
-            log_file_path = str(base_dir / log_file_template)
-
-        # ログファイルパスの日付フォーマットを置換
+        logs_path = Path(config.get('logs_path', str(data_path / 'logs')))
+        log_file_path = log_file_template.replace('${logs_path}', str(logs_path))
         now = datetime.now()
         log_file_path = now.strftime(log_file_path.replace('{YYYY}', '%Y').replace('{MM}', '%m').replace('{DD}', '%d'))
         
-        # ログディレクトリを作成
-        Path(log_file_path).parent.mkdir(parents=True, exist_ok=True)
-        
-        # setup_loggingを呼び出す
         setup_logging(log_level=args.log_level, log_file=log_file_path, log_format=log_conf.get('format'))
 
     except Exception as e:
-        # フォールバックロギング
         logging.basicConfig(level=logging.INFO, format='%(asctime)s [ERROR] %(message)s')
         logging.error(f"ロギングの初期化に失敗しました: {e}", exc_info=True)
         sys.exit(1)
@@ -104,73 +77,65 @@ def main():
     logging.info("=" * 60)
     logging.info(f"学習期間: {args.start_date} - {args.end_date}")
 
-    # --- 1. 日付範囲の決定 ---
-    try:
-        start_dt = datetime.strptime(args.start_date, '%Y-%m-%d')
-        end_dt = datetime.strptime(args.end_date, '%Y-%m-%d')
-    except ValueError as e:
-        logging.error(f"日付フォーマットエラー: {e}")
-        sys.exit(1)
+    start_dt = datetime.strptime(args.start_date, '%Y-%m-%d')
+    end_dt = datetime.strptime(args.end_date, '%Y-%m-%d')
 
-    # --- 2. データロードとマージ ---
-    # 2.1. 特徴量データのロード
+    # --- 1. 特徴量リスト(feature_names.yaml)の読み込み ---
     features_path_str = config.get('features_path', str(base_dir / 'data/features'))
-    features_dir = Path(features_path_str) / 'parquet'
+    features_dir = Path(features_path_str)
+    parquet_dir = features_dir / 'parquet'
     
+    # generate_featuresがparquetディレクトリに作成する可能性があるため、存在すれば移動
+    source_yaml = parquet_dir / "feature_names.yaml"
+    dest_yaml = features_dir / "feature_names.yaml"
+    if source_yaml.exists() and not dest_yaml.exists():
+        try:
+            shutil.move(str(source_yaml), str(dest_yaml))
+            logging.info(f"{source_yaml} を {dest_yaml} に移動しました。")
+        except Exception as e:
+            logging.warning(f"feature_names.yamlの移動に失敗: {e}")
+
     try:
-        feature_names_path = Path(features_path_str) / "feature_names.yaml"
-        with open(feature_names_path, 'r', encoding='utf-8') as f:
+        with open(dest_yaml, 'r', encoding='utf-8') as f:
             feature_names = yaml.safe_load(f)
         logging.info(f"{len(feature_names)}個の特徴量をロードしました")
     except FileNotFoundError:
-         logging.error(f"特徴量リスト (feature_names.yaml) が見つかりません: {feature_names_path}")
+         logging.error(f"特徴量リスト (feature_names.yaml) が見つかりません: {dest_yaml}")
          sys.exit(1)
 
-    features_df = load_parquet_data_by_date(features_dir, start_dt, end_dt, date_col='race_date')
-    
+    # --- 2. データロードと前処理 ---
+    # 2.1. 特徴量データのロード
+    features_df = load_parquet_data_by_date(parquet_dir, start_dt, end_dt, date_col='race_date')
     if features_df.empty:
         logging.error(f"期間 {args.start_date} - {args.end_date} の特徴量データが見つかりません。")
         sys.exit(1)
-
-    # 特徴量データは馬ごとに一意であるべきため、重複を除外
-    if features_df.duplicated(subset=['race_id', 'horse_id']).any():
-        logging.warning("特徴量データに重複が見つかりました。重複を削除します。（上流の `generate_features` の修正を推奨）")
-        logging.info(f"重複削除前の特徴量データ: {len(features_df)}行")
-        features_df = features_df.drop_duplicates(subset=['race_id', 'horse_id'], keep='first')
-        logging.info(f"重複削除後の特徴量データ: {len(features_df)}行")
     
-    # 2.2. レース結果データ（目的変数）のロード
+    # 2.2. レース結果データのロード
     parsed_data_path = config.get('parsed_data_path', str(base_dir / 'data/parsed'))
     races_parquet_path = Path(parsed_data_path) / 'parquet' / 'races' / 'races.parquet'
-    
     try:
         races_df = pd.read_parquet(races_parquet_path)
         logging.info(f"全レース結果データをロードしました: {len(races_df)}行")
-        
-        # 学習期間でフィルタリング
-        races_df['race_date'] = pd.to_datetime(races_df['race_date'])
-        races_df = races_df[(races_df['race_date'] >= start_dt) & (races_df['race_date'] <= end_dt)].copy()
-        logging.info(f"学習期間にフィルタリング後: {len(races_df)}行")
-
     except FileNotFoundError:
         logging.error(f"レース結果ファイルが見つかりません: {races_parquet_path}")
         sys.exit(1)
 
-    # 2.3. 特徴量と目的変数のマージ
+    # 2.3. 結合キーのクリーンアップ (最重要)
     merge_keys = ['race_id', 'horse_id']
-    if not all(key in features_df.columns for key in merge_keys):
-        if 'horse_id' not in features_df.columns and 'race_id' in features_df.columns:
-            logging.warning("特徴量データに 'horse_id' がありません。'race_id' のみでマージを試みます。")
-            merge_keys = ['race_id']
-        else:
-            logging.error(f"特徴量データに結合キー {merge_keys} が不足しています。")
-            sys.exit(1)
+    for df in [features_df, races_df]:
+        for key in merge_keys:
+            if key in df.columns:
+                df[key] = df[key].astype(str).str.strip()
+    logging.info("結合キーを文字列に変換し、空白を除去しました。")
+
+    # 2.4. 特徴量データの重複排除
+    if features_df.duplicated(subset=merge_keys).any():
+        logging.warning(f"特徴量データに重複 ({features_df.duplicated(subset=merge_keys).sum()}行) が見つかりました。重複を排除します。")
+        features_df = features_df.drop_duplicates(subset=merge_keys, keep='first')
     
-    logging.info(f"Using merge keys: {merge_keys}")
-            
+    # 2.5. データのマージ
     target_cols = ['finish_position', 'finish_time_seconds']
     races_subset_df = races_df[merge_keys + target_cols].copy()
-
     merged_df = pd.merge(features_df, races_subset_df, on=merge_keys, how='inner')
     logging.info(f"特徴量とレース結果をマージしました。結果: {len(merged_df)}行")
 
@@ -178,14 +143,8 @@ def main():
         logging.error("マージの結果、データが0行になりました。race_idやhorse_idが一致しません。")
         sys.exit(1)
 
-    # 2.4. 学習データの最終チェック
+    # 2.6. 欠損値処理
     required_cols = target_cols + ['race_id']
-    missing_cols = [col for col in required_cols if col not in merged_df.columns]
-    if missing_cols:
-        logging.error(f"マージ後のデータに学習に必要なカラム {missing_cols} がありません。")
-        sys.exit(1)
-        
-    # 目的変数などが欠損している行のみを削除
     final_df = merged_df.dropna(subset=required_cols)
     logging.info(f"必須カラムの欠損値除去後: {len(final_df)}行")
 
@@ -199,10 +158,9 @@ def main():
     
     try:
         # 学習に使う特徴量カラムの欠損値を0で埋める
-        # また、object型のカラムが残っている場合、数値に変換を試みる
         for col in feature_names:
-            if final_df[col].dtype == 'object':
-                final_df[col] = pd.to_numeric(final_df[col], errors='coerce').fillna(0)
+            if col in final_df.columns and final_df[col].dtype == 'object':
+                final_df[col] = pd.to_numeric(final_df[col], errors='coerce')
         
         final_df[feature_names] = final_df[feature_names].fillna(0)
         logging.info("特徴量の欠損値を0で補完し、数値型に変換しました。")

@@ -104,6 +104,11 @@ class FeatureEngine:
             # 存在しないカラムを除外して続行
             final_cols = [col for col in final_cols if col in df.columns]
 
+        # 最終的な重複排除
+        if df.duplicated(subset=['race_id', 'horse_id']).any():
+            logging.warning(f"特徴量生成の最終段階で重複が検出されました。重複を排除します。")
+            df = df.drop_duplicates(subset=['race_id', 'horse_id'], keep='first')
+
         return df[final_cols]
 
     def _add_basic_features(self, df: pd.DataFrame) -> pd.DataFrame:
