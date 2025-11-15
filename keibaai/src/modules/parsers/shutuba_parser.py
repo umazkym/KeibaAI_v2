@@ -9,7 +9,7 @@ from typing import Dict, List, Optional
 from pathlib import Path
 
 import pandas as pd
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, element
 
 # common_utils のインポートパスを修正 (プロジェクトルートからの相対パスを想定)
 try:
@@ -46,11 +46,11 @@ def parse_shutuba_html(file_path: str, race_id: str = None) -> pd.DataFrame:
     netkeiba.comの出馬表ページには基本情報のみが含まれ、
     以下のフィールドは取得できません:
     - prize_total (獲得賞金)
-    - morning_odds (前日オッズ)
-    - morning_popularity (前日人気)
     - career_stats (戦績)
     - last_5_finishes (直近5走)
     - owner_name (馬主名)
+    
+    (※ morning_odds, morning_popularity は取得できるように修正)
     
     これらは別ページ（馬詳細ページ等）から取得する必要があります。
     """
@@ -64,7 +64,7 @@ def parse_shutuba_html(file_path: str, race_id: str = None) -> pd.DataFrame:
     
     try:
         html_text = html_bytes.decode('euc_jp', errors='replace')
-    except:
+    except Exception:
         html_text = html_bytes.decode('utf-8', errors='replace')
     
     soup = BeautifulSoup(html_text, 'lxml')
@@ -83,6 +83,7 @@ def parse_shutuba_html(file_path: str, race_id: str = None) -> pd.DataFrame:
     # class 'HorseList' を持つ <tr> のみを取得
     for tr in shutuba_table.find_all('tr', class_='HorseList'):
         try:
+            # ▼▼▼ 修正: tr タグ自体を parse_shutuba_row に渡す ▼▼▼
             row_data = parse_shutuba_row(tr, race_id)
             if row_data:
                 # レース日付を追加
@@ -99,11 +100,17 @@ def parse_shutuba_html(file_path: str, race_id: str = None) -> pd.DataFrame:
     return df
 
 
+def parse_shutuba_row(tr: element.Tag, race_id: str) -> Optional[Dict]:
+    """
+    出馬表テーブルの1行をパース（修正版 - scratchedフラグ対応）
+    """
+    
+    # ▼▼▼ 修正: scratchedフラグ判定 ▼▼▼
+    # <tr class="HorseList Cancel ..."> の場合 True になる
+    tr_classes = tr.get('class', [])
+    is_scratched = 'Cancel' in tr_classes
+    # ▲▲▲ 修正 ▲▲▲
 
-def parse_shutuba_row(tr, race_id: str) -> Optional[Dict]:
-    """
-    出馬表テーブルの1行をパース（修正版 - scratchedフラグ追加）
-    """
     cells = tr.find_all('td')
     
     if len(cells) < 8:
@@ -111,10 +118,9 @@ def parse_shutuba_row(tr, race_id: str) -> Optional[Dict]:
     
     row_data = {'race_id': race_id}
     
-    # ▼▼▼ 追加: scratchedフラグ ▼▼▼
-    # 出馬表の時点では出走取消は通常不明なので、デフォルトでFalse
-    row_data['scratched'] = False
-    # ▲▲▲ 追加 ▲▲▲
+    # ▼▼▼ 修正: scratchedフラグをセット ▼▼▼
+    row_data['scratched'] = is_scratched
+    # ▲▲▲ 修正 ▲▲▲
     
     # 枠番
     bracket_text = cells[0].get_text(strip=True)
@@ -125,13 +131,16 @@ def parse_shutuba_row(tr, race_id: str) -> Optional[Dict]:
     row_data['horse_number'] = parse_int_or_none(horse_num_text)
     
     # 馬名・馬ID
-    horse_link = cells[3].find('a', href=re.compile(r'/horse/\d+'))
+    # 取消馬は <td class="Cancel_Txt">取消</td> が cell[2] に入るため、
+    # 馬名 (HorseInfo) は cell[3] になる
+    horse_info_cell = cells[3]
+    horse_link = horse_info_cell.find('a', href=re.compile(r'/horse/\d+'))
     if horse_link:
         row_data['horse_name'] = horse_link.get_text(strip=True)
         horse_id_match = re.search(r'/horse/(\d+)', horse_link['href'])
         row_data['horse_id'] = horse_id_match.group(1) if horse_id_match else None
     else:
-        row_data['horse_name'] = cells[3].get_text(strip=True)
+        row_data['horse_name'] = horse_info_cell.get_text(strip=True)
         row_data['horse_id'] = None
     
     # 性齢
@@ -212,8 +221,18 @@ def extract_race_id_from_filename(file_path: str) -> str:
     ファイル名からレースIDを抽出
     """
     filename = Path(file_path).stem
+    # shutuba_202305020811... から 202305020811 を抽出
     match = re.search(r'(\d{12})', filename)
-    return match.group(1) if match else None
+    if match:
+        return match.group(1)
+    
+    # race_202305020811... のような別プレフィックスにも対応
+    match = re.search(r'_(\d{12})', filename)
+    if match:
+        return match.group(1)
+
+    logging.warning(f"ファイル名 {filename} から race_id (12桁) を抽出できませんでした。")
+    return None
 
 
 def extract_race_date_from_html(soup: BeautifulSoup, race_id: str) -> Optional[str]:
