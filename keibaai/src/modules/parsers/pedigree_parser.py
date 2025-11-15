@@ -1,6 +1,5 @@
 """
-血統情報パーサ (修正版)
-netkeiba.com の血統ページから情報を抽出
+血統情報パーサ (修正版 - ancestor_id英字対応)
 """
 
 import re
@@ -68,11 +67,11 @@ def parse_pedigree_html(file_path: str, horse_id: str = None) -> pd.DataFrame:
 
 def normalize_ancestor_id(ancestor_id: str) -> Optional[str]:
     """
-    祖先馬IDを正規化（修正版）
+    祖先馬IDを正規化（修正版 - 英字対応）
     
     修正ポイント:
-    1. 外国馬ID「000」を明示的に除外
-    2. 数字のみを抽出し、全ゼロパターンを除外
+    1. 英数字を許可（数字のみの制限を解除）
+    2. 外国馬ID「000」を除外
     3. JRA馬IDの桁数チェック（4-10桁）
     
     Args:
@@ -84,8 +83,10 @@ def normalize_ancestor_id(ancestor_id: str) -> Optional[str]:
     if not ancestor_id or ancestor_id.strip() == '':
         return None
 
-    # 数字のみを抽出
-    cleaned = re.sub(r'[^\d]', '', ancestor_id).strip()
+    # ▼▼▼ 修正箇所: 英数字を抽出（数字のみではない） ▼▼▼
+    # 英数字のみを抽出（記号やスペースは削除）
+    cleaned = re.sub(r'[^a-zA-Z0-9]', '', ancestor_id).strip()
+    # ▲▲▲ 修正箇所 ▲▲▲
 
     if not cleaned:
         return None
@@ -96,12 +97,15 @@ def normalize_ancestor_id(ancestor_id: str) -> Optional[str]:
         return None
 
     # 全ゼロパターンを除外（000以外の桁数でも）
-    if cleaned == '0' * len(cleaned):
+    # ただし、英字が含まれる場合は除外しない（例: 000a00fe2a は有効）
+    if cleaned.isdigit() and cleaned == '0' * len(cleaned):
         return None
 
-    # JRA馬IDの桁数チェック（通常4-10桁）
+    # ▼▼▼ 修正箇所: 桁数チェックを英数字混在IDにも対応 ▼▼▼
+    # JRA馬IDおよび英数字混在IDの桁数チェック（4-10桁）
     if len(cleaned) < 4 or len(cleaned) > 10:
         return None
+    # ▲▲▲ 修正箇所 ▲▲▲
 
     return cleaned
 

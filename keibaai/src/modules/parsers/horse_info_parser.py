@@ -149,11 +149,14 @@ def parse_horse_profile(file_path: str, horse_id: str = None) -> Dict:
             profile['birth_date'] = parse_birth_date(birth_text)
         
         # 調教師
-        elif '調教師' in label:
-            trainer_link = td.find('a', href=re.compile(r'/trainer/\d+'))
+        if '調教師' in label:
+            trainer_link = td.find('a', href=re.compile(r'/trainer/'))
             if trainer_link:
                 profile['trainer_name'] = trainer_link.get_text(strip=True)
-                trainer_id_match = re.search(r'/trainer/(\d+)', trainer_link['href'])
+                
+                # /trainer/{id} 形式のURL
+                # {id} は英数字の組み合わせ
+                trainer_id_match = re.search(r'/trainer/([a-zA-Z0-9]+)', trainer_link['href'])
                 profile['trainer_id'] = trainer_id_match.group(1) if trainer_id_match else None
         
         # 馬主

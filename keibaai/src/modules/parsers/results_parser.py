@@ -249,7 +249,6 @@ def parse_result_row(tr, race_id: str, race_date: Optional[str]) -> Optional[Dic
     row_data['horse_weight'] = horse_weight
     row_data['horse_weight_change'] = weight_change
     
-    # --- 適応的セルインデックス検索 ---
     # 調教師 (cells[15] or [18])
     row_data['trainer_name'] = None
     row_data['trainer_id'] = None
@@ -260,9 +259,15 @@ def parse_result_row(tr, race_id: str, race_date: Optional[str]) -> Optional[Dic
             if trainer_link:
                 row_data['trainer_name'] = trainer_link.get_text(strip=True)
                 href = trainer_link['href']
-                trainer_id_match = re.search(r'/trainer/result/recent/(\d+)', href)
+                
+                # パターン1: /trainer/result/recent/{id}
+                # パターン2: /trainer/{id}
+                # {id} は英数字の組み合わせ（例: "05622", "a0043"）
+                
+                trainer_id_match = re.search(r'/trainer/result/recent/([a-zA-Z0-9]+)', href)
                 if not trainer_id_match:
-                    trainer_id_match = re.search(r'/trainer/(\d+)', href)
+                    trainer_id_match = re.search(r'/trainer/([a-zA-Z0-9]+)', href)
+                
                 row_data['trainer_id'] = trainer_id_match.group(1) if trainer_id_match else None
                 break
 

@@ -104,13 +104,16 @@ def parse_margin_to_seconds(margin_str: str) -> Optional[float]:
         return None
     
     # JRAの基準などを参考に、一般的な値をマッピング
+    # ▼▼▼ 修正箇所: "大"を追加 ▼▼▼
     special_margins = {
         '同着': 0.0,
         'ハナ': 0.02,
         'アタマ': 0.04,
         'クビ': 0.05,
-        '大差': 5.0, # 大きな値として仮定
+        '大差': 5.0,
+        '大': 5.0,  # ← 追加（"大差"と同等の扱い）
     }
+    # ▲▲▲ 修正箇所 ▲▲▲
     
     if margin_str in special_margins:
         return special_margins[margin_str]

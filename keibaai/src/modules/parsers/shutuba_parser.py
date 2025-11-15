@@ -99,22 +99,22 @@ def parse_shutuba_html(file_path: str, race_id: str = None) -> pd.DataFrame:
     return df
 
 
+
 def parse_shutuba_row(tr, race_id: str) -> Optional[Dict]:
     """
-    出馬表テーブルの1行をパース（修正版）
-    
-    修正ポイント:
-    1. jockey_id: 複数URLパターン対応
-    2. trainer_id: 複数URLパターン対応 (BugFix)
-    3. HTMLに存在しないフィールドはNoneに設定
-    4. セル数チェックの強化
+    出馬表テーブルの1行をパース（修正版 - scratchedフラグ追加）
     """
     cells = tr.find_all('td')
     
-    if len(cells) < 8:  # 最小限のセル数チェック
+    if len(cells) < 8:
         return None
     
     row_data = {'race_id': race_id}
+    
+    # ▼▼▼ 追加: scratchedフラグ ▼▼▼
+    # 出馬表の時点では出走取消は通常不明なので、デフォルトでFalse
+    row_data['scratched'] = False
+    # ▲▲▲ 追加 ▲▲▲
     
     # 枠番
     bracket_text = cells[0].get_text(strip=True)
@@ -145,37 +145,31 @@ def parse_shutuba_row(tr, race_id: str) -> Optional[Dict]:
     weight_text = cells[5].get_text(strip=True)
     row_data['basis_weight'] = parse_float_or_none(weight_text)
     
-    # 騎手名・騎手ID (修正: 複数パターン対応)
+    # 騎手名・騎手ID（英数字対応）
     jockey_link = cells[6].find('a', href=re.compile(r'/jockey/'))
     if jockey_link:
         row_data['jockey_name'] = jockey_link.get_text(strip=True)
         href = jockey_link['href']
-        # パターン1: /jockey/result/recent/数字
-        jockey_id_match = re.search(r'/jockey/result/recent/(\d+)', href)
+        jockey_id_match = re.search(r'/jockey/result/recent/([a-zA-Z0-9]+)', href)
         if not jockey_id_match:
-            # パターン2: /jockey/数字
-            jockey_id_match = re.search(r'/jockey/(\d+)', href)
+            jockey_id_match = re.search(r'/jockey/([a-zA-Z0-9]+)', href)
         row_data['jockey_id'] = jockey_id_match.group(1) if jockey_id_match else None
     else:
         row_data['jockey_name'] = cells[6].get_text(strip=True)
         row_data['jockey_id'] = None
     
-    # ▼▼▼ 修正箇所（バグ修正） ▼▼▼
-    # 調教師名・調教師ID (修正: 複数パターン対応)
+    # 調教師名・調教師ID（英数字対応）
     trainer_link = cells[7].find('a', href=re.compile(r'/trainer/'))
     if trainer_link:
         row_data['trainer_name'] = trainer_link.get_text(strip=True)
         href = trainer_link['href']
-        # パターン1: /trainer/result/recent/数字
-        trainer_id_match = re.search(r'/trainer/result/recent/(\d+)', href)
+        trainer_id_match = re.search(r'/trainer/result/recent/([a-zA-Z0-9]+)', href)
         if not trainer_id_match:
-            # パターン2: /trainer/数字
-            trainer_id_match = re.search(r'/trainer/(\d+)', href)
+            trainer_id_match = re.search(r'/trainer/([a-zA-Z0-9]+)', href)
         row_data['trainer_id'] = trainer_id_match.group(1) if trainer_id_match else None
     else:
         row_data['trainer_name'] = cells[7].get_text(strip=True)
         row_data['trainer_id'] = None
-    # ▲▲▲ 修正箇所 ▲▲▲
     
     # 馬体重（前走）
     if len(cells) > 8:
@@ -186,8 +180,6 @@ def parse_shutuba_row(tr, race_id: str) -> Optional[Dict]:
     else:
         row_data['horse_weight'] = None
         row_data['horse_weight_change'] = None
-
-    # --- ▼▼▼ 修正箇所 (エラー内容.txt に基づく) ▼▼▼
 
     # 前日オッズ (morning_odds) - cells[9]
     if len(cells) > 9:
@@ -204,17 +196,13 @@ def parse_shutuba_row(tr, race_id: str) -> Optional[Dict]:
         row_data['morning_popularity'] = None
 
     # 以下のフィールドは出馬表HTMLには含まれていないため、Noneに設定
-    # （これらは馬詳細ページやオッズページから取得する必要がある）
-    row_data['owner_name'] = None  # 馬主名: 出馬表には未掲載
-    row_data['prize_total'] = None  # 獲得賞金: 出馬表には未掲載
-    
-    # career_stats, last_5_finishes なども同様にHTMLに存在しない
+    row_data['owner_name'] = None
+    row_data['prize_total'] = None
     row_data['career_stats'] = None
     row_data['career_starts'] = None
     row_data['career_wins'] = None
     row_data['career_places'] = None
     row_data['last_5_finishes'] = None
-    # --- ▲▲▲ 修正箇所 ▲▲▲ ---
 
     return row_data
 
