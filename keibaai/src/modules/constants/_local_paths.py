@@ -1,5 +1,9 @@
 class LocalPaths:
-    HTML_RACE_DIR = "data/raw/html/race"
-    HTML_SHUTUBA_DIR = "data/raw/html/shutuba"
-    HTML_HORSE_DIR = "data/raw/html/horse"
-    HTML_PED_DIR = "data/raw/html/ped"
+    HTML_RACE_DIR = "keibaai/data/raw/html/race"
+    HTML_SHUTUBA_DIR = "keibaai/data/raw/html/shutuba"
+    HTML_HORSE_DIR = "keibaai/data/raw/html/horse"
+    HTML_PED_DIR = "keibaai/data/raw/html/ped"
+    
+    # キャッシュログ
+    MASTER_DIR = "keibaai/data/master"
+    HORSE_CACHE_LOG_PATH = "keibaai/data/master/horse_cache_log.csv"

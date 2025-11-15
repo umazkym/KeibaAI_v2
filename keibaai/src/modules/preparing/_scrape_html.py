@@ -9,11 +9,15 @@ import random
 import logging
 from typing import List, Optional, Dict
 from pathlib import Path
+from datetime import datetime, timedelta
 
+import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
+from multiprocessing import Pool, cpu_count
+from tqdm import tqdm
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -312,9 +316,10 @@ def scrape_html_race(race_id_list: List[str], skip: bool = True) -> List[str]:
     return updated_paths
 
 
-def scrape_html_shutuba(race_id_list: List[str], skip: bool = True) -> List[str]:
+def scrape_html_shutuba(race_id_list: List[str], skip: bool = True, force_today_refresh: bool = True) -> List[str]:
     """
     出馬表HTMLを取得して.bin形式で保存
+    force_today_refresh=Trueの場合、レース当日であればキャッシュを無視して再取得する
     """
     logger.info(f'出馬表HTMLを取得中（{len(race_id_list)}件）')
     
@@ -322,10 +327,21 @@ def scrape_html_shutuba(race_id_list: List[str], skip: bool = True) -> List[str]
     session = get_robust_session()
     os.makedirs(LocalPaths.HTML_SHUTUBA_DIR, exist_ok=True)
     
+    today_str = datetime.now().strftime('%Y%m%d')
+
     for race_id in race_id_list:
         filename = os.path.join(LocalPaths.HTML_SHUTUBA_DIR, f'{race_id}.bin')
         
-        if skip and os.path.exists(filename):
+        # スキップ条件の判定
+        do_skip = skip
+        if force_today_refresh:
+            # race_idの先頭8文字が開催日 (YYYYMMDD)
+            kaisai_date_str = race_id[:8]
+            if kaisai_date_str == today_str:
+                logger.info(f"本日開催レースのため、強制的に再取得します: {race_id}")
+                do_skip = False
+
+        if do_skip and os.path.exists(filename):
             logger.debug(f'スキップ: {race_id} (既存)')
             continue
             
@@ -350,21 +366,56 @@ def scrape_html_shutuba(race_id_list: List[str], skip: bool = True) -> List[str]
     return updated_paths
 
 
-def scrape_html_horse(horse_id_list: List[str], skip: bool = True) -> List[str]:
+def _load_horse_cache() -> pd.DataFrame:
+    """馬のキャッシュログを読み込む"""
+    log_path = LocalPaths.HORSE_CACHE_LOG_PATH
+    if os.path.exists(log_path):
+        logger.info(f"キャッシュログを読み込みます: {log_path}")
+        try:
+            df = pd.read_csv(log_path, dtype={'horse_id': str})
+            # 'last_updated' 列を datetime 型に変換
+            df['last_updated'] = pd.to_datetime(df['last_updated'])
+            return df.set_index('horse_id')
+        except Exception as e:
+            logger.error(f"キャッシュログの読み込みに失敗しました: {e}")
+            # 読み込み失敗時は空のDataFrameを返す
+            return pd.DataFrame(columns=['last_updated']).set_index('horse_id')
+    else:
+        return pd.DataFrame(columns=['horse_id', 'last_updated']).set_index('horse_id')
+
+def _save_horse_cache(cache_df: pd.DataFrame):
+    """馬のキャッシュログを保存する"""
+    log_path = LocalPaths.HORSE_CACHE_LOG_PATH
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    try:
+        # インデックスをリセットして 'horse_id' を列に戻す
+        cache_df.reset_index().to_csv(log_path, index=False)
+        logger.info(f"キャッシュログを保存しました: {log_path}")
+    except Exception as e:
+        logger.error(f"キャッシュログの保存に失敗しました: {e}")
+
+
+def scrape_html_horse(horse_id_list: List[str], skip: bool = True, cache_ttl_days: int = 7) -> List[str]:
     """
     馬情報HTMLを取得して.bin形式で保存
-    プロフィールと成績を分けて保存
+    プロフィールと成績を分けて保存し、成績はキャッシュの鮮度を考慮する
     """
-    logger.info(f'馬情報HTMLを取得中（{len(horse_id_list)}件）')
+    logger.info(f'馬情報HTMLを取得中（{len(horse_id_list)}件, TTL: {cache_ttl_days}日）')
     
     updated_paths = []
     session = get_robust_session()
     os.makedirs(LocalPaths.HTML_HORSE_DIR, exist_ok=True)
     
+    # キャッシュログを読み込む
+    cache_df = _load_horse_cache()
+    
+    # 更新があったかどうかのフラグ
+    cache_updated = False
+
     for horse_id in horse_id_list:
-        # プロフィール
+        # --- 1. プロフィール (不変データ) ---
+        # ファイルが存在しない場合のみ取得
         profile_filename = os.path.join(LocalPaths.HTML_HORSE_DIR, f'{horse_id}_profile.bin')
-        
         if not (skip and os.path.exists(profile_filename)):
             url = UrlPaths.HORSE_URL + horse_id
             html_content = fetch_html_robust_get(url, session)
@@ -374,23 +425,40 @@ def scrape_html_horse(horse_id_list: List[str], skip: bool = True) -> List[str]:
                     with open(profile_filename, 'wb') as f:
                         f.write(html_content)
                     updated_paths.append(profile_filename)
-                    logger.info(f'保存: {profile_filename}')
+                    logger.info(f'保存 (プロフィール): {profile_filename}')
                 except Exception as e:
                     logger.error(f'保存エラー: {horse_id}_profile - {e}')
-                    
-        # 過去成績（AJAX）
+        else:
+            logger.debug(f'スキップ (プロフィール既存): {profile_filename}')
+
+        # --- 2. 過去成績 (鮮度管理データ) ---
+        should_fetch_perf = False
+        if not skip:
+            should_fetch_perf = True
+        else:
+            # キャッシュを確認
+            if horse_id in cache_df.index:
+                last_updated = cache_df.loc[horse_id, 'last_updated']
+                if datetime.now() - last_updated > timedelta(days=cache_ttl_days):
+                    logger.info(f"キャッシュ期限切れ: {horse_id} (最終更新: {last_updated})")
+                    should_fetch_perf = True
+                else:
+                    logger.debug(f"キャッシュ有効: {horse_id}")
+            else:
+                logger.info(f"新規の馬: {horse_id}")
+                should_fetch_perf = True
+
         perf_filename = os.path.join(LocalPaths.HTML_HORSE_DIR, f'{horse_id}_perf.bin')
-        
-        if not (skip and os.path.exists(perf_filename)):
+        if should_fetch_perf:
             ajax_url = 'https://db.netkeiba.com/horse/ajax_horse_results.html'
             headers = {
                 "Referer": UrlPaths.HORSE_URL + horse_id,
                 "X-Requested-With": "XMLHttpRequest"
             }
             
-            # パラメータ付きでリクエスト
             ajax_session = get_robust_session()
             try:
+                time.sleep(random.uniform(MIN_SLEEP_SECONDS, MAX_SLEEP_SECONDS))
                 response = ajax_session.get(
                     ajax_url, 
                     params={'id': horse_id},
@@ -399,24 +467,32 @@ def scrape_html_horse(horse_id_list: List[str], skip: bool = True) -> List[str]:
                 )
                 
                 if response.status_code == 200:
-                    # AJAXレスポンスはJSON形式の場合がある
                     try:
                         json_data = response.json()
-                        if 'data' in json_data:
-                            perf_html = json_data['data'].encode('euc-jp', errors='replace')
-                        else:
-                            perf_html = response.content
-                    except:
+                        perf_html = json_data['data'].encode('euc-jp', errors='replace')
+                    except (ValueError, KeyError):
                         perf_html = response.content
                         
                     with open(perf_filename, 'wb') as f:
                         f.write(perf_html)
                     updated_paths.append(perf_filename)
-                    logger.info(f'保存: {perf_filename}')
+                    logger.info(f'保存 (過去成績): {perf_filename}')
+                    
+                    # キャッシュログを更新
+                    cache_df.loc[horse_id, 'last_updated'] = datetime.now()
+                    cache_updated = True
+                else:
+                    logger.warning(f"AJAX取得失敗 (Status: {response.status_code}): {horse_id}_perf")
                     
             except Exception as e:
                 logger.error(f'AJAX取得エラー: {horse_id}_perf - {e}')
-                
+        else:
+            logger.debug(f'スキップ (過去成績キャッシュ有効): {perf_filename}')
+
+    # 更新があった場合のみキャッシュを保存
+    if cache_updated:
+        _save_horse_cache(cache_df)
+            
     return updated_paths
 
 
@@ -474,9 +550,27 @@ def scrape_html_ped(horse_id_list: List[str], skip: bool = True) -> List[str]:
     return updated_paths
 
 
+def _worker_extract_horse_ids(filepath: str) -> set:
+    """単一のHTMLファイルから馬IDを抽出するワーカー関数"""
+    horse_ids = set()
+    try:
+        with open(filepath, 'rb') as f:
+            html_content = f.read()
+            
+        soup = BeautifulSoup(html_content, "lxml", from_encoding='euc-jp')
+        
+        for a in soup.find_all('a', href=re.compile(r'/horse/\d+')):
+            match = re.search(r'/horse/(\d+)', a.get('href', ''))
+            if match:
+                horse_ids.add(match.group(1))
+    except Exception:
+        # loggerはマルチプロセスで問題を起こすことがあるため、ここではシンプルに無視
+        pass
+    return horse_ids
+
 def extract_horse_ids_from_html(html_dir: str) -> set:
     """
-    保存済みのレースHTMLから馬IDを抽出
+    保存済みのレースHTMLから馬IDを並列処理で抽出
     
     Args:
         html_dir: HTMLディレクトリパス
@@ -486,28 +580,31 @@ def extract_horse_ids_from_html(html_dir: str) -> set:
     """
     logger.info(f'馬IDを抽出中: {html_dir}')
     
-    horse_ids = set()
+    all_horse_ids = set()
     
-    for filename in os.listdir(html_dir):
-        if not filename.endswith('.bin'):
-            continue
-            
-        filepath = os.path.join(html_dir, filename)
+    # 処理対象のファイルパスリストを作成
+    filepaths = [os.path.join(html_dir, f) for f in os.listdir(html_dir) if f.endswith('.bin')]
+    
+    if not filepaths:
+        logger.warning(f"対象ファイルが見つかりません: {html_dir}")
+        return all_horse_ids
+
+    # CPUのコア数に基づいてプロセス数を決定
+    num_processes = cpu_count()
+    logger.info(f"{num_processes}個のプロセスを使用して並列処理を開始します。")
+
+    # チャンクサイズを計算してオーバーヘッドを削減
+    chunksize, extra = divmod(len(filepaths), num_processes * 4)
+    if extra:
+        chunksize += 1
+    logger.info(f"チャンクサイズを {chunksize} に設定しました。")
+
+    with Pool(processes=num_processes) as pool:
+        # imap_unordered に chunksize を指定
+        results_iterator = pool.imap_unordered(_worker_extract_horse_ids, filepaths, chunksize=chunksize)
         
-        try:
-            with open(filepath, 'rb') as f:
-                html_content = f.read()
-                
-            soup = BeautifulSoup(html_content, "lxml", from_encoding='euc-jp')
+        for horse_id_set in tqdm(results_iterator, total=len(filepaths), desc=f"馬IDを抽出中 ({os.path.basename(html_dir)})"):
+            all_horse_ids.update(horse_id_set)
             
-            # レース結果テーブルから馬IDを抽出
-            for a in soup.find_all('a', href=re.compile(r'/horse/\d+')):
-                match = re.search(r'/horse/(\d+)', a.get('href', ''))
-                if match:
-                    horse_ids.add(match.group(1))
-                    
-        except Exception as e:
-            logger.warning(f'馬ID抽出エラー: {filename} - {e}')
-            
-    logger.info(f'抽出完了: {len(horse_ids)}頭')
-    return horse_ids
+    logger.info(f'抽出完了: {len(all_horse_ids)}頭')
+    return all_horse_ids

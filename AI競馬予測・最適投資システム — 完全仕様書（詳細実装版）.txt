@@ -328,18 +328,18 @@ keibaai/
 ### 3.2 ストレージ構成
 
 
-/data/keibaai/
+keibaai/data/
 ├── raw/
 │   ├── html/
 │   │   ├── race/
-│   │   │   └── {race_id}_{data_version}.bin
+│   │   │   └── {race_id}.bin
 │   │   ├── shutuba/
-│   │   │   └── {race_id}_{data_version}.bin
+│   │   │   └── {race_id}.bin
 │   │   ├── horse/
-│   │   │   ├── {horse_id}_profile_{data_version}.bin
-│   │   │   └── {horse_id}_perf_{data_version}.bin
+│   │   │   ├── {horse_id}_profile.bin
+│   │   │   └── {horse_id}_perf.bin
 │   │   └── ped/
-│   │       └── {horse_id}_{data_version}.bin
+│   │       └── {horse_id}.bin
 │   └── json/
 │       └── jra_odds/
 │           └── {race_id}_{snapshot_ts}.json
@@ -676,123 +676,71 @@ CREATE INDEX idx_parse_failures_failed_ts ON parse_failures(failed_ts);
 
 
 
-# 4. データ取得パイプライン
+# 4. データ取得パイプライン (HTML基礎データ)
 
-## 概要（改訂方針）
+## 4.1 目的と位置づけ
 
-本章はスクレイピング／データ取得に関する方針と実装仕様を明確化します。重要な改訂点は以下です。
+本パイプラインの目的は、レース予測モデルの学習と推論に必要となる**基礎的なHTMLデータ**を `netkeiba.com` から取得し、ローカルに保存することです。
 
-1. **JRAオッズを2系統で扱う**（バックテスト用の「過去スナップショット（特に締切 5 分前オッズ）」と、当日のリアルタイム取得（締切直前オッズ）を厳密に分離して収集・保存する）。バックテストは過去の締切直前スナップショットを必須とするため、その取得フローを Pipeline 1 に組み込みます。
+ここで取得するデータは、レース結果、出馬表、馬のプロフィール、過去成績、血統情報などであり、オッズ予測や期待値計算を行うための前段階のデータ収集プロセスと位置づけられます。オッズ情報の取得は、本パイプラインとは別の専用プロセスとして扱います。
 
-2. **オッズデータのスキーマと保存場所を明確にする**。raw JSON（immutable）とパース後 Parquet（解析用）を両方保管し、それぞれメタデータを SQLite に記録します。
+## 4.2 機能概要
 
-3. **当日オッズ取得は専用スクリプトで一括取得**。`src/scripts/run_scrape_jra_odds_daily.py` は既に仕様書に完全実装例が存在するが（当日取得の説明・サンプル実装参照）、バックテスト用過去スナップショット収集は別に確立する必要がある。
+本パイプラインは、以下の機能を提供します。
 
----
-
-## 4.1 全体設計（再掲・改訂）
-
-* **深夜バッチ（Nightly）**: 静的データ（過去のレースHTML、出馬表、馬プロフィール、過去成績など）を取得・保存するフェーズ。ここでは **過去の JRA オッズ（5 分前スナップショット）を取得しない**。深夜バッチは主に特徴量生成のための基礎データを確保する。
-
-  * **過去オッズスナップショット収集（Historical Odds Ingestion）**: 仕様書公開時点で残っているアーカイブまたは提供されている過去データを利用して、**過去すべてのレースについて「締切 5 分前を模したスナップショット」**を生成・保存する工程を、深夜バッチのデータ取得フローに追加する。可能な限り JRA または公的ソースからの「5 分前オッズの履歴」を直接取得するのが理想で、入手不可の場合はオプションの代替手順（後述）を採る。
-* **当日午前（締切直前取得）**: 当日レースについて、`src/scripts/run_scrape_jra_odds_daily.py` を用いてリアルタイムに締切直前オッズを取得し、`data/raw/json/jra_odds/` に snapshot_time を付与して保存する。詳細は 4.5 を参照。
+1.  **データ保存場所の統一**: 全てのデータは `keibaai/data/` ディレクトリ以下に集約されます。
+2.  **キャッシュ戦略**: データ特性に応じたキャッシュ戦略を実装し、効率的な差分取得を行います。
+3.  **出馬表取得の最適化**: レース当日はキャッシュを無視して最新の情報を取得します。
+4.  **ローカル処理の高速化**: ファイルベースの処理（馬ID抽出）を並列化し、処理時間を短縮します。
 
 ---
 
-## 4.2 用語と要件（オッズ関連）
+## 4.3 ステップ・バイ・ステップによるHTML収集詳解
 
-* **JRA_5min_Odds（市場オッズ）**
+処理は `_scrape_html.py` 内の関数群によって、以下の順序で実行されます。
 
-  * 定義: レース締切の約 **5 分前** に記録された市場オッズのスナップショット（単勝・複勝・馬連等、各券種）を指す。バックテストと期待値計算（Pipeline 4 / Pipeline 5 の期待値計算）ではこの時点のオッズを「市場オッズ」として用いる。
-  * 保存要件: 各ファイルは `race_id` と `snapshot_time`（ISO8601+09:00）を必ず含む JSON とし、ファイル名は `<race_id>__snapshot_<YYYYMMDDTHHMMSS+09:00>__data_version.json` 形式とする。生データは immutable bytes で保存し、メタデータ（取得手段、HTTPステータス、fetch_time 等）を SQLite に保存する。
+### ステップ1: 開催日の取得
+- **関数:** `scrape_kaisai_date`
+- **処理:** 指定された期間内のレース開催日をカレンダーページから取得します。
 
-* **AI_FairOdds（AI理論オッズ／公正オッズ）**
+### ステップ2: レースIDの取得
+- **関数:** `scrape_race_id_list`
+- **処理:** 開催日ごとにレース一覧ページにアクセスし、その日に開催される全てのレースIDを取得します。
 
-  * 定義: モデルが推定した「真の勝率 p（0〜1）」に基づく公正オッズ `AI_FairOdds = 1 / p`（小数オッズ）を指す。Task B（理論オッズ予測）は **確定オッズの模倣ではなく、この「公正オッズ（または真の勝率 p）」を予測することを目的とする**。設計の理由と学習ターゲットは Chapter 7 に詳述する（モデル学習と使用目的の整合を取るため）。（Task B 定義の核心的改訂）※本章ではオッズの保存・変換フローに集中する。
+### ステップ3: レース関連HTMLの保存
 
----
+#### 3-a. レース結果HTML
+- **関数:** `scrape_html_race`
+- **保存先:** `keibaai/data/raw/html/race/`
+- **処理:** ファイルが存在しない場合のみ、レース結果ページをダウンロードし、`.bin`形式で保存します。
 
-## 4.3 パイプラインフロー（深夜バッチ vs 当日オッズ取得 vs 過去オッズ収集）
+#### 3-b. 出馬表HTML
+- **関数:** `scrape_html_shutuba`
+- **保存先:** `keibaai/data/raw/html/shutuba/`
+- **処理:** `force_today_refresh` 引数（デフォルト: True）に基づき、レース開催日が実行日当日の場合は、キャッシュを無視して常に最新の出馬表を再取得します。それ以外の場合は、ファイルが存在しなければ取得します。
 
-### 深夜バッチ（Nightly） — 既存通り（ただし JRA 5min オッズは取得しない）
+### ステップ4: 馬IDの集約
+- **関数:** `extract_horse_ids_from_html`
+- **対象:** `keibaai/data/raw/html/race/*.bin`
+- **処理:** 保存済みの全レース結果HTMLを解析し、出走したすべての馬のIDを抽出します。この処理は、`multiprocessing` を利用して並列化されており、CPUコアを最大限に活用して高速に実行されます。
 
-1. 設定ロード、ログ設定。
-2. `scrape_kaisai_dates` → 開催日一覧を取得（過去日中心）。
-3. `scrape_race_id_list` → レースID一覧取得。
-4. `scrape_html_race` / `scrape_html_shutuba` → レースHTML・出馬表HTML 保存（差分のみ）。
-5. `phase_1_get_all_horse_ids` → 馬IDを収集。
-6. `phase_2_intelligent_fetch` → horse profile / performance / pedigree を差分取得。
-7. 保存・メタデータ記録。
-   （注: この段階では JRA オッズは取得しない。）
+### ステップ5: 馬関連HTMLの保存
 
-### 過去オッズスナップショット収集（Historical Odds Ingestion） — **新規必須フロー**
+- **関数:** `scrape_html_horse`, `scrape_html_ped`
+- **キャッシュ戦略:** 馬データは、その特性に応じて以下の通りインテリジェントな差分取得を行います。
+  - **対象ログ:** `keibaai/data/master/horse_cache_log.csv`
 
-**目的**: バックテストを正確に実行するために、過去レースについて「締切 5 分前」の市場オッズ履歴（可能なら実際に記録された snapshot）を用意する。以下を実行する。
+#### 5-a. プロフィール (`_profile.bin`)
+- **保存先:** `keibaai/data/raw/html/horse/`
+- **鮮度:** 不変データ。ファイルが存在しない場合のみ取得します。
 
-1. **入手可能な場合（推奨）**: JRA または公的/公式のオッズ履歴データを入手し、原始的な snapshot_time を保持したまま ingest する。
-2. **入手不可の場合（代替）**: 次善案として「レース締切に最も近い公開オッズ記録（例: 締切 10 分前、締切 1 分前等）から 5 分前に最も近い snapshot を選定して標準化する」。この代替は必ずメタデータに「実際の snapshot_time と '5 分前相当' の差分」を記録する。
-3. **補修データ（シミュレーション）**: どうしても過去 5 分前の記録が存在しない年次分については、バックテスト結果を解釈する際のバイアスを必ず明示（例えば「推定 5 分前オッズを用いた推測」）すること。
-4. **スキーマ**: 各 record は最低限 `race_id`, `snapshot_time`, `market_type`, `selection`, `odds`, `source`（official/archive/estimated）を含むこと。保存は `data/raw/json/jra_odds/`（生JSON）→ `data/parsed/parquet/odds/`（Parquet）へ変換するパイプラインを用意する。パーサは snapshot_time を `snapshot_dt` カラムに変換し `year/month/day` でパーティション保存する。
+#### 5-b. 過去成績 (`_perf.bin`)
+- **保存先:** `keibaai/data/raw/html/horse/`
+- **鮮度:** 可変データ。キャッシュログを参照し、最終取得日から**7日以上経過**した場合、または新規の馬の場合のみ再取得します。取得に成功するとログの時刻が更新されます。
 
-### 当日オッズ取得（締切直前 — 当日午前） — 既存スクリプトの明確化
-
-1. 当日の開催レース一覧取得（`get_today_race_ids`）。
-2. `src/scripts/run_scrape_jra_odds_daily.py` を実行し、レースごとに `_scrape_jra_odds.scrape_and_save_jra_odds` を呼び出す。スクリプトは間隔制御、バックオフ、メタデータ保存を行う。取得結果は `data/raw/json/jra_odds/` に `snapshot_time` を含めて保存する（ファイル名規約は 4.2 に従う）。
-
----
-
-## 4.4 `_scrape_jra_odds.py` とパーサ（仕様）
-
-* **低レイヤ実装**: `scrape_and_save_jra_odds(race_id, output_dir, timeout, headless)` は単一レースの HTML/JSON を取得してパースし、**必ず snapshot_time を付与して JSON 保存する**。取得時のローカル時刻ではなく、ページに表示されている「オッズのスナップショット時刻」を優先して `snapshot_time` とする。取得できない場合は `snapshot_time` に `fetch_time` を入れ、`source='fetch_time_substitute'` を付与する。（低レイヤは失敗を raise する設計。上位ラッパーがリトライ制御を行う。）
-
-* **JSON スキーマ（必須フィールド）**:
-
-```json
-{
-  "race_id": "202306050101",
-  "snapshot_time": "2023-06-05T11:25:00+09:00",
-  "source": "jra_official | jra_archive | estimated | fetch_time_substitute",
-  "market": {
-    "win": {
-      "1": {"odds": 3.5, "popularity": 2},
-      "2": {"odds": 7.2, "popularity": 5},
-      ...
-    },
-    "place": { ... },
-    "exacta": { "1-2": {"odds": 12.5}, ... }
-  },
-  "raw_html": "optional (if saved)",
-  "data_version": "vYYYYMMDD_HHMMSS"
-}
-```
-
----
-
-## 4.5 JRAオッズ一括取得スクリプト（`src/scripts/run_scrape_jra_odds_daily.py`）
-
-（仕様書にある「完全実装」を踏襲するが、**当日取得だけでなく過去スナップショット ingest 時の差異**を管理できるように拡張することを明記する。）
-
-* スクリプトは引数 `--date`（取得対象日）に加え、`--mode`（`today` / `historical_ingest`）を受け取る。
-
-  * `today`：当日締切直前の一括取得（既存動作）。
-  * `historical_ingest`：指定された期間の過去オッズアーカイブを ingest するためのモード（外部アーカイブファイルや API、手動投入された JSON を正規化・保存する）。このモードはバックテストの事前準備に必須。
-
-* 再試行・間隔制御・メタ保存・異常通知等は既存通り実装する。取得結果は `data/raw/json/jra_odds/` に保存し、パースは別プロセス（`src/parsers/parse_all_odds.py`）で Parquet に変換する。
-
----
-
-## 4.6 パーサ（JSON -> Parquet）
-
-* `src/parsers/parse_all_odds.py` は `data/raw/json/jra_odds/` のファイルから `snapshot_time` を抽出し、馬単位の行指向データ（`race_id, snapshot_time, market_type, selection, odds, popularity, source, data_version`）を作成、`data/parsed/parquet/odds/` に `year/month/day` でパーティション保存する。既存の `jra_odds_parser` 実装を拡張して、`source` と `snapshot_time` 欠損時の扱い（サブスティテューションのフラグ）を明示する。
-
----
-
-## 4.7 運用上の注意点
-
-1. **法務**: JRA/netkeiba の利用規約を必ず確認し、過去データの収集・保存が許可されているかを確認する（規約違反時は直ちに収集を中止）。
-2. **データ品質**: 過去スナップショットが欠落しているレースがある場合、バックテスト結果の解釈にバイアスが生じる。データ欠落はメタデータとして記録し、バックテスト実行時に欠落割合をレポートする。
-3. **メタデータ**: すべての取得ファイルに `source` と `fetch_method`、`fetch_time`、`note`（例: 'estimated_from_10min'）を残すこと。
-4. **保存容量**: raw JSON を immutable として大量に保存するため、バックアップ方針・ローテーションを事前に定義する（`scripts/backup_data.sh` の運用を推奨）。
+#### 5-c. 血統 (`.bin`)
+- **保存先:** `keibaai/data/raw/html/ped/`
+- **鮮度:** 不変データ。ファイルが存在しない場合のみ取得します。
 
 
 ## 5. データ整形パイプライン
