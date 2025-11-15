@@ -80,7 +80,7 @@ def parse_results_html(file_path: str, race_id: str = None) -> pd.DataFrame:
     except:
         html_text = html_bytes.decode('utf-8', errors='replace')
     
-    soup = BeautifulSoup(html_text, 'lxml')
+    soup = BeautifulSoup(html_text, 'html.parser')
 
     # --- (v1.0.3) 日付抽出 ---
     race_date = extract_race_date_from_html(soup, race_id)

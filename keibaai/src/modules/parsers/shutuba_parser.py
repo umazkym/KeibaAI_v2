@@ -187,18 +187,34 @@ def parse_shutuba_row(tr, race_id: str) -> Optional[Dict]:
         row_data['horse_weight'] = None
         row_data['horse_weight_change'] = None
 
+    # --- ▼▼▼ 修正箇所 (エラー内容.txt に基づく) ▼▼▼
+
+    # 前日オッズ (morning_odds) - cells[9]
+    if len(cells) > 9:
+        odds_text = cells[9].get_text(strip=True)
+        row_data['morning_odds'] = parse_float_or_none(odds_text)
+    else:
+        row_data['morning_odds'] = None
+
+    # 前日人気 (morning_popularity) - cells[10]
+    if len(cells) > 10:
+        pop_text = cells[10].get_text(strip=True)
+        row_data['morning_popularity'] = parse_int_or_none(pop_text)
+    else:
+        row_data['morning_popularity'] = None
+
     # 以下のフィールドは出馬表HTMLには含まれていないため、Noneに設定
     # （これらは馬詳細ページやオッズページから取得する必要がある）
-    
     row_data['owner_name'] = None  # 馬主名: 出馬表には未掲載
     row_data['prize_total'] = None  # 獲得賞金: 出馬表には未掲載
-    row_data['morning_odds'] = None  # 前日オッズ: 別途オッズAPIから取得
-    row_data['morning_popularity'] = None  # 前日人気: 別途オッズAPIから取得
-    row_data['career_stats'] = None  # 戦績: 馬詳細ページから取得
+    
+    # career_stats, last_5_finishes なども同様にHTMLに存在しない
+    row_data['career_stats'] = None
     row_data['career_starts'] = None
     row_data['career_wins'] = None
     row_data['career_places'] = None
-    row_data['last_5_finishes'] = None  # 直近5走: 馬詳細ページから取得
+    row_data['last_5_finishes'] = None
+    # --- ▲▲▲ 修正箇所 ▲▲▲ ---
 
     return row_data
 

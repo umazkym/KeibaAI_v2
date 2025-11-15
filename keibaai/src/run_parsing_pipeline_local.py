@@ -7,6 +7,7 @@ import yaml
 from datetime import datetime
 import sys
 import pandas as pd
+import os
 
 # プロジェクトルートをsys.pathに追加
 project_root = Path(__file__).resolve().parent.parent
@@ -64,7 +65,11 @@ def main():
         raw_race_html_dir = Path(cfg["default"]["raw_data_path"]) / "html" / "race"
         parsed_race_parquet_dir = Path(cfg["default"]["parsed_data_path"]) / "parquet" / "races"
         parsed_race_parquet_dir.mkdir(parents=True, exist_ok=True)
-        race_html_files = list(raw_race_html_dir.glob("*.html")) + list(raw_race_html_dir.glob("*.bin"))
+        race_html_files = []
+        for root, _, files in os.walk(raw_race_html_dir):
+            for file in files:
+                if file.endswith((".html", ".bin")):
+                    race_html_files.append(os.path.join(root, file))
         log.info(f"{len(race_html_files)}件のレース結果HTMLファイルが見つかりました。")
         all_results_df = []
         for html_file in race_html_files:
@@ -84,7 +89,11 @@ def main():
         raw_shutuba_html_dir = Path(cfg["default"]["raw_data_path"]) / "html" / "shutuba"
         parsed_shutuba_parquet_dir = Path(cfg["default"]["parsed_data_path"]) / "parquet" / "shutuba"
         parsed_shutuba_parquet_dir.mkdir(parents=True, exist_ok=True)
-        shutuba_html_files = list(raw_shutuba_html_dir.glob("*.html")) + list(raw_shutuba_html_dir.glob("*.bin"))
+        shutuba_html_files = []
+        for root, _, files in os.walk(raw_shutuba_html_dir):
+            for file in files:
+                if file.endswith((".html", ".bin")):
+                    shutuba_html_files.append(os.path.join(root, file))
         log.info(f"{len(shutuba_html_files)}件の出馬表HTMLファイルが見つかりました。")
         all_shutuba_df = []
         for html_file in shutuba_html_files:
@@ -104,15 +113,19 @@ def main():
         raw_horse_html_dir = Path(cfg["default"]["raw_data_path"]) / "html" / "horse"
         parsed_horse_parquet_dir = Path(cfg["default"]["parsed_data_path"]) / "parquet" / "horses"
         parsed_horse_parquet_dir.mkdir(parents=True, exist_ok=True)
-        horse_html_files = list(raw_horse_html_dir.glob("*.html")) + list(raw_horse_html_dir.glob("*.bin"))
+        horse_html_files = []
+        for root, _, files in os.walk(raw_horse_html_dir):
+            for file in files:
+                if file.endswith((".html", ".bin")):
+                    horse_html_files.append(os.path.join(root, file))
         log.info(f"{len(horse_html_files)}件の馬プロフィールHTMLファイルが見つかりました。")
-        all_horses_data = []
+        all_horses_data = {}
         for html_file in horse_html_files:
             data = pipeline_core.parse_with_error_handling(str(html_file), "horse_info_parser", horse_info_parser.parse_horse_profile, conn)
-            if data:
-                all_horses_data.append(data)
+            if data and 'horse_id' in data and data['horse_id']:
+                all_horses_data[data['horse_id']] = data
         if all_horses_data:
-            final_horses_df = pd.DataFrame(all_horses_data)
+            final_horses_df = pd.DataFrame(list(all_horses_data.values()))
             output_path = parsed_horse_parquet_dir / "horses.parquet"
             final_horses_df.to_parquet(output_path, index=False)
             log.info(f"馬プロフィールのパース結果をParquetファイルとして保存しました: {output_path} ({len(final_horses_df)}レコード)")
@@ -124,7 +137,11 @@ def main():
         raw_ped_html_dir = Path(cfg["default"]["raw_data_path"]) / "html" / "ped"
         parsed_ped_parquet_dir = Path(cfg["default"]["parsed_data_path"]) / "parquet" / "pedigrees"
         parsed_ped_parquet_dir.mkdir(parents=True, exist_ok=True)
-        ped_html_files = list(raw_ped_html_dir.glob("*.html")) + list(raw_ped_html_dir.glob("*.bin"))
+        ped_html_files = []
+        for root, _, files in os.walk(raw_ped_html_dir):
+            for file in files:
+                if file.endswith((".html", ".bin")):
+                    ped_html_files.append(os.path.join(root, file))
         log.info(f"{len(ped_html_files)}件の血統HTMLファイルが見つかりました。")
         all_pedigrees_df = []
         for html_file in ped_html_files:
