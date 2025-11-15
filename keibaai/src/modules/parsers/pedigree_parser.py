@@ -39,7 +39,7 @@ def parse_pedigree_html(file_path: str, horse_id: str = None) -> pd.DataFrame:
     except Exception:
         html_text = html_bytes.decode('utf-8', errors='replace')
 
-    soup = BeautifulSoup(html_text, 'lxml')
+    soup = BeautifulSoup(html_text, 'html.parser')
 
     blood_table = soup.find('table', class_='blood_table')
 

@@ -21,43 +21,27 @@ from .common_utils import (
 
 
 def is_profile_file(file_path: str) -> bool:
-    """
-    ファイルがプロフィールファイルかどうかを判定
+    file_path_obj = Path(file_path)
+    filename = file_path_obj.name.lower()
+    parent_dir = file_path_obj.parent.name.lower()
     
-    Args:
-        file_path: ファイルパス
-    
-    Returns:
-        True: プロフィールファイル
-        False: 成績ファイルまたは不明
-    """
-    filename = Path(file_path).name.lower()
-    
-    # 明示的に成績ファイルと判定できる場合
-    if '_perf' in filename:
+    # pedディレクトリのファイルは血統（プロフィールではない）
+    if parent_dir == 'ped':
         return False
     
-    # 明示的にプロフィールファイルと判定できる場合
-    if '_profile' in filename or 'profile' in filename:
+    # horseディレクトリ内で_perfを含む → 成績
+    if parent_dir == 'horse' and '_perf' in filename:
+        return False
+    
+    # それ以外のhorseディレクトリ内ファイル → プロフィール
+    if parent_dir == 'horse':
         return True
     
-    # .htmlファイルで、perfが含まれていない場合はプロフィールと判定
-    if filename.endswith('.html') and 'perf' not in filename:
+    # 新形式の判定（念のため）
+    if 'profile' in filename or ('horse_' in filename and 'perf' not in filename):
         return True
     
-    # .binファイルで、特に指定がない場合
-    # (旧形式では {horse_id}.bin がプロフィールの可能性が高い)
-    if filename.endswith('.bin'):
-        # ファイル名が数字のみ（拡張子除く）の場合、
-        # 血統ファイル（ped/ディレクトリ）との区別が必要
-        # horse/ディレクトリ内であればプロフィールと判定
-        stem = Path(file_path).stem
-        if stem.isdigit() and len(stem) == 10:
-            # 10桁の数字のみ = プロフィールの可能性
-            return True
-    
-    # 判定不能な場合はTrueを返し、パース時にエラーハンドリングで対応
-    return True
+    return False  # 不明な場合は安全側に倒す
 
 
 def parse_horse_profile(file_path: str, horse_id: str = None) -> Dict:
@@ -114,7 +98,7 @@ def parse_horse_profile(file_path: str, horse_id: str = None) -> Dict:
     except:
         html_text = html_bytes.decode('utf-8', errors='replace')
     
-    soup = BeautifulSoup(html_text, 'lxml')
+    soup = BeautifulSoup(html_text, 'html.parser')
     
     profile = {'horse_id': horse_id}
     
@@ -213,7 +197,7 @@ def parse_horse_performance(file_path: str, horse_id: str = None) -> pd.DataFram
     馬の過去成績HTMLをパース
     
     Args:
-        file_path: HTMLファイルパス（AJAX APIレスポンス）
+        file_path: HTMLファイルパス（AJAX APIレスポンスまたは _perf.bin）
         horse_id: 馬ID
     
     Returns:
@@ -256,12 +240,16 @@ def parse_horse_performance(file_path: str, horse_id: str = None) -> pd.DataFram
     with open(file_path, 'rb') as f:
         html_bytes = f.read()
     
+    # --- 修正点 ---
+    # euc_jp を優先に修正 (profileパーサーと統一)
+    # これにより _perf.bin ファイルも正しくデコードされる
     try:
-        html_text = html_bytes.decode('utf-8', errors='replace')
-    except:
         html_text = html_bytes.decode('euc_jp', errors='replace')
+    except:
+        html_text = html_bytes.decode('utf-8', errors='replace')
+    # --- 修正ここまで ---
     
-    soup = BeautifulSoup(html_text, 'lxml')
+    soup = BeautifulSoup(html_text, 'html.parser')
     
     # 過去成績テーブル
     perf_table = soup.find('table', class_='db_h_race_results')
@@ -274,6 +262,7 @@ def parse_horse_performance(file_path: str, horse_id: str = None) -> pd.DataFram
     
     tbody = perf_table.find('tbody')
     if not tbody:
+        logging.warning(f"成績テーブルにtbodyが見つかりません: {file_path}")
         return pd.DataFrame()
     
     for tr in tbody.find_all('tr'):
@@ -282,7 +271,7 @@ def parse_horse_performance(file_path: str, horse_id: str = None) -> pd.DataFram
             if row_data:
                 rows.append(row_data)
         except Exception as e:
-            logging.warning(f"行のパースエラー: {e}")
+            logging.warning(f"行のパースエラー: {e} in {file_path}")
             continue
     
     df = pd.DataFrame(rows)
@@ -455,6 +444,7 @@ def parse_distance_surface(distance_text: str) -> tuple:
         return (None, None, None)
     
     # パターン1: "芝1600良"
+    # "障" (障害) も考慮する場合は r'(障|芝|ダ)' のように修正
     match = re.match(r'(芝|ダ)(\d+)(良|稍重|重|不良)?', distance_text)
     if match:
         surface_abbr = match.group(1)
@@ -475,10 +465,18 @@ def parse_distance_surface(distance_text: str) -> tuple:
 
 
 def extract_horse_id_from_filename(file_path: str) -> str:
-    """
-    ファイル名から馬IDを抽出
-    例: 2023010101_profile_20251106T120000+09:00_sha256=abcd.bin → 2023010101
-    """
     filename = Path(file_path).stem
-    match = re.search(r'(\d{10})', filename)
-    return match.group(1) if match else None
+    
+    # 優先順位1: 新形式 (horse_/ped_プレフィックス)
+    match = re.search(r'(?:horse|ped)_([a-zA-Z0-9]{10})', filename)
+    if match:
+        return match.group(1)
+    
+    # 優先順位2: 旧形式 (先頭が10桁の数字)
+    match = re.match(r'^(\d{10})', filename)
+    if match:
+        return match.group(1)
+    
+    # フォールバック
+    logging.warning(f"ID抽出失敗: {filename}")
+    return None

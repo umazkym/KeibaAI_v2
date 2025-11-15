@@ -130,7 +130,7 @@ class FeatureEngine:
         # prize_money の有効率をチェック
         try:
             valid_prize_rate = history_df['prize_money'].notna().sum() / len(history_df)
-            if valid_prize_rate < 0.3:  # 30%未満の場合
+            if valid_prize_rate < 0.1:  # 10%未満の場合
                 logging.warning(f"prize_money の有効率が低すぎます ({valid_prize_rate:.1%})。賞金ベースの特徴量は信頼性が低いです。")
         except ZeroDivisionError:
              logging.warning("history_df は空（ZeroDivisionError）です。賞金ベースの特徴量生成をスキップします。")
