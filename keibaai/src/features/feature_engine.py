@@ -31,10 +31,7 @@ class FeatureEngine:
         """拡張版：馬過去成績データも活用"""
         
         # 既存の処理
-        df = super().generate_features(
-            shutuba_df, results_history_df, 
-            horse_profiles_df, pedigree_df
-        )
+        df = shutuba_df.copy()
         
         # 高度な特徴量の追加
         if horse_performance_df is not None and not horse_performance_df.empty:
