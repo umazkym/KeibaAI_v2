@@ -20,7 +20,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 
-from modules.constants import UrlPaths, LocalPaths
+from ..constants import UrlPaths, LocalPaths
 
 # ログ設定
 logger = logging.getLogger(__name__)
@@ -155,9 +155,19 @@ def scrape_kaisai_date(from_: str, to_: str) -> List[str]:
     """
     logger.info(f'開催日を取得中: {from_} から {to_}')
     
-    import pandas as pd
     try:
-        date_range = pd.date_range(start=from_, end=to_, freq='MS')
+        import pandas as pd
+    except ImportError as e:
+        logger.critical(f"pandas のインポートに失敗しました: {e}")
+        logger.critical("pandas が正しくインストールされているか確認してください。 pip install pandas")
+        return []
+        
+    try:
+        # 月のリストを重複なく作成する堅牢な方法
+        start_date = pd.to_datetime(from_)
+        end_date = pd.to_datetime(to_)
+        months = pd.date_range(start=start_date, end=end_date, freq='D').to_period('M').unique()
+        date_range = months.to_timestamp()
     except ValueError as e:
         logger.error(f"日付形式エラー: {e}")
         return []
@@ -185,12 +195,15 @@ def scrape_kaisai_date(from_: str, to_: str) -> List[str]:
                             # 日付範囲チェック
                             if from_.replace('-', '') <= kaisai_date <= to_.replace('-', ''):
                                 kaisai_date_list.append(kaisai_date)
+                else:
+                    logger.warning(f"カレンダーテーブルが見つかりません: {url}")
                                 
             except Exception as e:
                 logger.error(f"カレンダー解析エラー: {e}")
-                
+        else:
+            logger.warning(f"HTMLコンテンツの取得に失敗: {url}")
+            
     return sorted(list(set(kaisai_date_list)))
-
 
 def scrape_race_id_list(
     kaisai_date_list: List[str], 

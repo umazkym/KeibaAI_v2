@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# debug_scrape_html_v2.py
+# debug_scrape_html_v2.py (修正版)
 
 """
 _scrape_html.py の各関数を個別にデバッグ（動作検証）するためのスクリプト。
@@ -8,7 +8,7 @@ _scrape_html.py の各関数を個別にデバッグ（動作検証）するた�
 【実行方法】
 1. このスクリプトをプロジェクトルート（'keibaai'フォルダと同じ階層）に置く。
 2. プロジェクトルートから実行する:
-   python debug_scrape_html_v2.py
+   python debug_scrape_html.py
 """
 
 import logging
@@ -28,20 +28,21 @@ try:
 
     # 'keibaai' を追加 (例: from src.modules... のため)
     sys.path.append(str(keibaai_root))
-    # 'keibaai/src' を追加 (例: _scrape_html.py内の from modules... のため)
-    sys.path.append(str(keibaai_src_root))
 
     # インポートのテスト
     # run_scraping_pipeline_local.py に倣う
     from src.modules.preparing import _scrape_html
     from src.utils import data_utils
     
-    # LocalPaths は _scrape_html 経由でアクセスする
-    LocalPaths = _scrape_html.LocalPaths
+    # ★★★ 修正点 ★★★
+    # _scrape_html がインポートしているものと同じ LocalPaths を直接インポートする
+    # (sys.path に keibaai が追加されているため、 'src.modules' からインポートできる)
+    from src.modules.constants import LocalPaths
 
 except ImportError as e:
     print(f"モジュールのインポートに失敗しました: {e}")
     print("プロジェクトのインポート構造（PYTHONPATH）が正しいか確認してください。")
+    print("または、lxml, selenium, webdriver-manager などのライブラリが不足している可能性があります。")
     print(f"現在の sys.path: {sys.path}")
     sys.exit(1)
 except FileNotFoundError as e:
@@ -68,7 +69,7 @@ def clear_debug_cache(test_race_id, test_horse_id):
     """検証用のキャッシュを削除する"""
     log = logging.getLogger(__name__)
     
-    # _scrape_html.LocalPaths を使用
+    # LocalPaths を直接使用 (インポート済み)
     paths_to_clear = [
         Path(LocalPaths.HTML_RACE_DIR) / f"{test_race_id}.bin",
         Path(LocalPaths.HTML_SHUTUBA_DIR) / f"{test_race_id}.bin",
@@ -79,6 +80,7 @@ def clear_debug_cache(test_race_id, test_horse_id):
     
     log.info("--- 検証用キャッシュの削除開始 ---")
     for path in paths_to_clear:
+        # スクリプト実行（プロジェクトルート）からの相対パスとして扱う
         if path.exists():
             try:
                 path.unlink()
@@ -87,6 +89,12 @@ def clear_debug_cache(test_race_id, test_horse_id):
                 log.warning(f"削除失敗: {path} - {e}")
         else:
             log.info(f"存在しません (スキップ): {path}")
+            
+        # ディレクトリが存在しない場合のエラーチェック
+        if not path.parent.exists():
+            log.warning(f"キャッシュディレクトリが存在しません: {path.parent}")
+            # _scrape_html.py が実行時に作成するので、ここでは警告のみ
+            
     log.info("--- 検証用キャッシュの削除完了 ---")
 
 
@@ -119,7 +127,8 @@ def main():
             log.error("ステップ2: レースIDの取得に失敗しました。")
             return
         
-        test_race_id = race_ids[0] # 最初の1件だけテスト
+        # 2023-01-05 の最初のレースIDが使われるはず
+        test_race_id = race_ids[0] 
         log.info(f"ステップ2: 取得した全レースID数: {len(race_ids)}")
         log.info(f"ステップ2: 検証に使用するレースID: {test_race_id}")
 
@@ -146,10 +155,19 @@ def main():
 
         # === ステップ5: 馬ID抽出 ===
         log.info("--- 【ステップ5】馬ID抽出 (extract_horse_ids_from_html) 検証 ---")
-        raw_race_dir = Path(LocalPaths.HTML_RACE_DIR)
-        horse_ids = _scrape_html.extract_horse_ids_from_html(str(raw_race_dir))
+        
+        # LocalPaths を直接使用 (インポート済み)
+        # 実行場所（プロジェクトルート）からの相対パス
+        raw_race_dir_path = Path(LocalPaths.HTML_RACE_DIR)
+
+        if not raw_race_dir_path.exists():
+            log.error(f"ステップ5: 馬ID抽出対象のディレクトリが見つかりません: {raw_race_dir_path}")
+            log.error("ステップ3が正常に完了し、ファイルが保存されているか確認してください。")
+            return
+
+        horse_ids = _scrape_html.extract_horse_ids_from_html(str(raw_race_dir_path))
         if not horse_ids:
-            log.warning(f"ステップ5: 馬IDの抽出ができませんでした（{raw_race_dir}）")
+            log.warning(f"ステップ5: 馬IDの抽出ができませんでした（{raw_race_dir_path}）")
             # ステップ3で取得したレースIDに関連する馬がいない場合もあるため、処理は続行
         else:
             log.info(f"ステップ5: {len(horse_ids)} 頭の馬IDを抽出しました。")
