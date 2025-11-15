@@ -127,18 +127,49 @@ def parse_results_html(file_path: str, race_id: str = None) -> pd.DataFrame:
 
 def parse_result_row(tr, race_id: str, race_date: Optional[str]) -> Optional[Dict]:
     """
-    レース結果テーブルの1行をパース (v1.G.5)
+    レース結果テーブルの1行をパース (修正版)
     """
     cells = tr.find_all('td')
     
-    if len(cells) < 15: # 最小限のカラム数 (ヘッダ行などはここで弾かれる)
+    if len(cells) < 15:
         return None
     
     row_data = {'race_id': race_id, 'race_date': race_date}
     
-    # 着順
+    # ▼▼▼ 修正箇所: failed_to_finishフラグの実装 ▼▼▼
+    
+    # 着順テキストの取得
     finish_text = cells[0].get_text(strip=True)
-    row_data['finish_position'] = parse_int_or_none(finish_text)
+    
+    # 競走中止・失格等のキーワード定義
+    DNF_KEYWORDS = ['中止', '除外', '失格', '取消', '競走中止']
+    
+    # キーワードマッチング（大文字小文字を区別しない）
+    finish_text_lower = finish_text.lower()
+    is_dnf = any(keyword.lower() in finish_text_lower for keyword in DNF_KEYWORDS)
+    
+    if is_dnf:
+        # 完走しなかった場合
+        row_data['failed_to_finish'] = True
+        row_data['finish_position'] = None
+        row_data['scratched'] = False  # 出走取消ではない
+        
+        # 競走中止の理由を記録（オプション）
+        row_data['dnf_reason'] = finish_text
+        
+        logging.debug(f"競走中止を検出: {finish_text} (race_id: {race_id})")
+    else:
+        # 通常の着順
+        row_data['failed_to_finish'] = False
+        row_data['finish_position'] = parse_int_or_none(finish_text)
+        
+        # 着順がNullの場合は出走取消と判定
+        if row_data['finish_position'] is None:
+            row_data['scratched'] = True
+        else:
+            row_data['scratched'] = False
+    
+    # ▲▲▲ 修正箇所 ▲▲▲
     
     # 枠番
     bracket_text = cells[1].get_text(strip=True)
@@ -174,7 +205,6 @@ def parse_result_row(tr, race_id: str, race_date: Optional[str]) -> Optional[Dic
     if jockey_link:
         row_data['jockey_name'] = jockey_link.get_text(strip=True)
         href = jockey_link['href']
-        # 複数パターン対応
         jockey_id_match = re.search(r'/jockey/result/recent/(\d+)', href)
         if not jockey_id_match:
             jockey_id_match = re.search(r'/jockey/(\d+)', href)
@@ -195,9 +225,7 @@ def parse_result_row(tr, race_id: str, race_date: Optional[str]) -> Optional[Dic
     if row_data['finish_position'] == 1 and margin_text in ['---', '']:
         row_data['margin_seconds'] = 0.0
     else:
-        # --- ▼▼▼ 修正箇所 (v1.0.4) ▼▼▼ ---
         row_data['margin_seconds'] = parse_margin_to_seconds(margin_text)
-        # --- ▲▲▲ 修正箇所 ▲▲▲ ---
 
     # 通過順
     passing_text = cells[10].get_text(strip=True)
@@ -221,11 +249,10 @@ def parse_result_row(tr, race_id: str, race_date: Optional[str]) -> Optional[Dic
     row_data['horse_weight'] = horse_weight
     row_data['horse_weight_change'] = weight_change
     
-    # --- 適応的セルインデックス検索 (v1.0.1) ---
+    # --- 適応的セルインデックス検索 ---
     # 調教師 (cells[15] or [18])
     row_data['trainer_name'] = None
     row_data['trainer_id'] = None
-    # 典型的な位置 (15) または (18)
     for cell_idx in [15, 18]: 
         if len(cells) > cell_idx:
             cell = cells[cell_idx]
@@ -237,7 +264,7 @@ def parse_result_row(tr, race_id: str, race_date: Optional[str]) -> Optional[Dic
                 if not trainer_id_match:
                     trainer_id_match = re.search(r'/trainer/(\d+)', href)
                 row_data['trainer_id'] = trainer_id_match.group(1) if trainer_id_match else None
-                break # 見つかったらループ終了
+                break
 
     # 馬主 (cells[16] or [19])
     row_data['owner_name'] = None
@@ -245,7 +272,6 @@ def parse_result_row(tr, race_id: str, race_date: Optional[str]) -> Optional[Dic
         if len(cells) > cell_idx:
             cell = cells[cell_idx]
             owner_text = cell.get_text(strip=True)
-            # common_utils v1.0.1 の呼び出し
             normalized_owner = normalize_owner_name(owner_text)
             if normalized_owner:
                 row_data['owner_name'] = normalized_owner
@@ -257,7 +283,6 @@ def parse_result_row(tr, race_id: str, race_date: Optional[str]) -> Optional[Dic
         if len(cells) > cell_idx:
             cell = cells[cell_idx]
             prize_text = cell.get_text(strip=True)
-            # common_utils v1.0.1 の呼び出し
             prize_money = parse_prize_money(prize_text)
             if prize_money is not None:
                 row_data['prize_money'] = prize_money

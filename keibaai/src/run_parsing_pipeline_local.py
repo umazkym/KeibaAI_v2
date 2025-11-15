@@ -108,24 +108,54 @@ def main():
         else:
             log.warning("処理できる出馬表データがありませんでした。")
 
-        # --- 3. 馬プロフィールHTMLのパース ---
+        # --- 3. 馬プロフィールHTMLのパース (修正版) ---
         log.info("馬プロフィールHTMLのパース処理を開始します。")
         raw_horse_html_dir = Path(cfg["default"]["raw_data_path"]) / "html" / "horse"
         parsed_horse_parquet_dir = Path(cfg["default"]["parsed_data_path"]) / "parquet" / "horses"
         parsed_horse_parquet_dir.mkdir(parents=True, exist_ok=True)
+        
+        # ▼▼▼ 修正箇所1: プロフィールファイルのみをフィルタリング ▼▼▼
         horse_html_files = []
         for root, _, files in os.walk(raw_horse_html_dir):
             for file in files:
                 if file.endswith((".html", ".bin")):
-                    horse_html_files.append(os.path.join(root, file))
+                    full_path = os.path.join(root, file)
+                    # プロフィールファイルのみを対象とする
+                    if horse_info_parser.is_profile_file(full_path):
+                        horse_html_files.append(full_path)
+        # ▲▲▲ 修正箇所1 ▲▲▲
+        
         log.info(f"{len(horse_html_files)}件の馬プロフィールHTMLファイルが見つかりました。")
-        all_horses_data = {}
+        
+        # ▼▼▼ 修正箇所2: 辞書ではなくリストで管理 + 空データの除外 ▼▼▼
+        all_horses_data = []
+        
         for html_file in horse_html_files:
-            data = pipeline_core.parse_with_error_handling(str(html_file), "horse_info_parser", horse_info_parser.parse_horse_profile, conn)
+            data = pipeline_core.parse_with_error_handling(
+                str(html_file), 
+                "horse_info_parser", 
+                horse_info_parser.parse_horse_profile, 
+                conn
+            )
+            
+            # パース成功 かつ 空データではない場合のみ追加
             if data and 'horse_id' in data and data['horse_id']:
-                all_horses_data[data['horse_id']] = data
+                # '_is_empty'フラグがある場合はスキップ（成績ファイルを誤処理した場合）
+                if not data.get('_is_empty', False):
+                    all_horses_data.append(data)
+                else:
+                    log.debug(f"空データをスキップしました: {html_file}")
+        # ▲▲▲ 修正箇所2 ▲▲▲
+        
         if all_horses_data:
-            final_horses_df = pd.DataFrame(list(all_horses_data.values()))
+            final_horses_df = pd.DataFrame(all_horses_data)
+            
+            # ▼▼▼ 修正箇所3: 重複排除（最新データを優先） ▼▼▼
+            # horse_idでソートして、重複がある場合は最後（最新）を残す
+            final_horses_df = final_horses_df.sort_values(by='horse_id')
+            final_horses_df = final_horses_df.drop_duplicates(subset='horse_id', keep='last')
+            # ▲▲▲ 修正箇所3 ▲▲▲
+            
             output_path = parsed_horse_parquet_dir / "horses.parquet"
             final_horses_df.to_parquet(output_path, index=False)
             log.info(f"馬プロフィールのパース結果をParquetファイルとして保存しました: {output_path} ({len(final_horses_df)}レコード)")

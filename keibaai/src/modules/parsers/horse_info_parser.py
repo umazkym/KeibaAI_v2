@@ -1,5 +1,6 @@
 """
-馬プロフィール・過去成績パーサ
+馬プロフィール・過去成績パーサ (修正版)
+ファイル種別を判定し、プロフィールファイルのみを処理
 """
 
 import re
@@ -19,9 +20,52 @@ from .common_utils import (
 )
 
 
+def is_profile_file(file_path: str) -> bool:
+    """
+    ファイルがプロフィールファイルかどうかを判定
+    
+    Args:
+        file_path: ファイルパス
+    
+    Returns:
+        True: プロフィールファイル
+        False: 成績ファイルまたは不明
+    """
+    filename = Path(file_path).name.lower()
+    
+    # 明示的に成績ファイルと判定できる場合
+    if '_perf' in filename:
+        return False
+    
+    # 明示的にプロフィールファイルと判定できる場合
+    if '_profile' in filename or 'profile' in filename:
+        return True
+    
+    # .htmlファイルで、perfが含まれていない場合はプロフィールと判定
+    if filename.endswith('.html') and 'perf' not in filename:
+        return True
+    
+    # .binファイルで、特に指定がない場合
+    # (旧形式では {horse_id}.bin がプロフィールの可能性が高い)
+    if filename.endswith('.bin'):
+        # ファイル名が数字のみ（拡張子除く）の場合、
+        # 血統ファイル（ped/ディレクトリ）との区別が必要
+        # horse/ディレクトリ内であればプロフィールと判定
+        stem = Path(file_path).stem
+        if stem.isdigit() and len(stem) == 10:
+            # 10桁の数字のみ = プロフィールの可能性
+            return True
+    
+    # 判定不能な場合はTrueを返し、パース時にエラーハンドリングで対応
+    return True
+
+
 def parse_horse_profile(file_path: str, horse_id: str = None) -> Dict:
     """
     馬プロフィールHTMLをパース
+    
+    【重要】このパーサーはプロフィール情報のみを扱います。
+    成績ファイル (_perf.bin) は parse_horse_performance() を使用してください。
     
     Args:
         file_path: HTMLファイルパス
@@ -49,6 +93,14 @@ def parse_horse_profile(file_path: str, horse_id: str = None) -> Dict:
         - sex: str
         - coat_color: str (毛色)
     """
+    # ファイル種別チェック
+    if not is_profile_file(file_path):
+        logging.warning(f"成績ファイルをプロフィールパーサーで処理しようとしました: {file_path}")
+        # 成績ファイルの場合、horse_idのみを返す（空データとして扱う）
+        if horse_id is None:
+            horse_id = extract_horse_id_from_filename(file_path)
+        return {'horse_id': horse_id, '_is_empty': True}
+    
     logging.info(f"馬プロフィールパース開始: {file_path}")
     
     if horse_id is None:
@@ -73,53 +125,56 @@ def parse_horse_profile(file_path: str, horse_id: str = None) -> Dict:
         if h1:
             profile['horse_name'] = h1.get_text(strip=True)
     
-    # プロフィールテーブル
+    # プロフィールテーブルが見つからない場合、空データとして扱う
     profile_table = soup.find('table', class_='db_prof_table')
+    if not profile_table:
+        logging.warning(f"プロフィールテーブルが見つかりません（成績ファイルの可能性）: {file_path}")
+        profile['_is_empty'] = True
+        return profile
     
-    if profile_table:
-        rows = profile_table.find_all('tr')
+    rows = profile_table.find_all('tr')
+    
+    for row in rows:
+        th = row.find('th')
+        td = row.find('td')
         
-        for row in rows:
-            th = row.find('th')
-            td = row.find('td')
-            
-            if not th or not td:
-                continue
-            
-            label = th.get_text(strip=True)
-            
-            # 生年月日
-            if '生年月日' in label:
-                birth_text = td.get_text(strip=True)
-                profile['birth_date'] = parse_birth_date(birth_text)
-            
-            # 調教師
-            elif '調教師' in label:
-                trainer_link = td.find('a', href=re.compile(r'/trainer/\d+'))
-                if trainer_link:
-                    profile['trainer_name'] = trainer_link.get_text(strip=True)
-                    trainer_id_match = re.search(r'/trainer/(\d+)', trainer_link['href'])
-                    profile['trainer_id'] = trainer_id_match.group(1) if trainer_id_match else None
-            
-            # 馬主
-            elif '馬主' in label:
-                profile['owner_name'] = td.get_text(strip=True)
-            
-            # 生産者
-            elif '生産者' in label:
-                profile['breeder_name'] = td.get_text(strip=True)
-            
-            # 産地
-            elif '産地' in label:
-                profile['producing_area'] = td.get_text(strip=True)
-            
-            # 性別
-            elif '性別' in label:
-                profile['sex'] = td.get_text(strip=True)
-            
-            # 毛色
-            elif '毛色' in label:
-                profile['coat_color'] = td.get_text(strip=True)
+        if not th or not td:
+            continue
+        
+        label = th.get_text(strip=True)
+        
+        # 生年月日
+        if '生年月日' in label:
+            birth_text = td.get_text(strip=True)
+            profile['birth_date'] = parse_birth_date(birth_text)
+        
+        # 調教師
+        elif '調教師' in label:
+            trainer_link = td.find('a', href=re.compile(r'/trainer/\d+'))
+            if trainer_link:
+                profile['trainer_name'] = trainer_link.get_text(strip=True)
+                trainer_id_match = re.search(r'/trainer/(\d+)', trainer_link['href'])
+                profile['trainer_id'] = trainer_id_match.group(1) if trainer_id_match else None
+        
+        # 馬主
+        elif '馬主' in label:
+            profile['owner_name'] = td.get_text(strip=True)
+        
+        # 生産者
+        elif '生産者' in label:
+            profile['breeder_name'] = td.get_text(strip=True)
+        
+        # 産地
+        elif '産地' in label:
+            profile['producing_area'] = td.get_text(strip=True)
+        
+        # 性別
+        elif '性別' in label:
+            profile['sex'] = td.get_text(strip=True)
+        
+        # 毛色
+        elif '毛色' in label:
+            profile['coat_color'] = td.get_text(strip=True)
     
     # 血統情報（父・母・母父）
     blood_table = soup.find('table', class_='blood_table')
