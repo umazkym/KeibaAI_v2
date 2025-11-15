@@ -710,3 +710,26 @@ def extract_ancestor_details(td_tag):
 - **すべて具体的な抽出コード例を提示済み**
 
 これらは**推測ではなく、アップロードされた.bin ファイルに実際に存在するデータ**です。
+
+#修正内容
+##test\test_output\horses_performance.csv
+・passing_order を 4 つに分割して。
+・venue を分割することで回、場所、日目に分割して
+・winner_name は horse_id に変更して（<a href="https://db.netkeiba.com/horse/2023103146/">スタートレイン</a>のようになってます）
+・finish_time_str は秒数にしたデータにして
+・finish_time_str は秒数にしたデータ-上がり 3 ハロンのカラムを作って
+
+##test\test_output\horses.csv
+・height_cm,chest_girth_cm,cannon_bone_cm, prize_central, prize_regional,career_summary,main_wins,relatives を無くして
+・pedigrees.csv の取得方法を利用してこちらの csv に各代の複数の血統情報を工夫して結合して。（名前は必要なく、あくまで血統の horse_id のみ）
+・
+
+##test\test_output\races.csv
+・finish_position は前の馬との差を示されているので 1 馬身=0.2 としてタイムとは別の項目で変換してほしい。
+・passing_order を 4 つに分割して。
+・trainer_id,owner_name が取得できていない問題を解決して
+・finish_time_str は秒数にしたデータにして
+・finish_time_str は秒数にしたデータ-上がり 3 ハロンのカラムを作って
+
+##test\test_output\shutuba.csv
+・jockey_name は記号を入れ込まないようにして

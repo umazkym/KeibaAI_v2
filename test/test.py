@@ -104,15 +104,76 @@ def parse_distance(dist_str: Optional[str]) -> Tuple[Optional[int], Optional[str
         return distance, surface
     return None, None
 
+def parse_time_to_seconds(time_str: Optional[str]) -> Optional[float]:
+    """ '1:14.3' のようなタイム文字列を秒数 (74.3) に変換 """
+    if not time_str:
+        return None
+    
+    parts = time_str.split(':')
+    try:
+        if len(parts) == 2:
+            return float(parts[0]) * 60 + float(parts[1])
+        elif len(parts) == 1:
+            return float(parts[0])
+    except (ValueError, IndexError):
+        return None
+    return None
+
+def parse_passing_order(order_str: Optional[str]) -> Tuple[Optional[int], Optional[int], Optional[int], Optional[int]]:
+    """ '6-6-5-4' のような通過順文字列を4つのコーナーのタプルに変換 """
+    if not order_str:
+        return None, None, None, None
+    
+    # "1(2,3)" や "[1,2]" のような特殊な形式をクリーンアップ
+    order_str_cleaned = re.sub(r'[\(\)\[\]]', ',', order_str)
+    parts = [parse_int_or_none(p) for p in order_str_cleaned.split('-')]
+    
+    # parts の長さが4になるように None で埋める
+    parts.extend([None] * (4 - len(parts)))
+    
+    return parts[0], parts[1], parts[2], parts[3]
+
+def parse_margin_to_seconds(margin_str: Optional[str]) -> Optional[float]:
+    """ 着差文字列 ('1.1/2', 'ハナ', 'クビ') を秒数に変換 (1馬身=0.2秒) """
+    if not margin_str:
+        return None
+
+    margin_map = {
+        '大差': 2.0,
+        'ハナ': 0.02,
+        'アタマ': 0.1,
+        'クビ': 0.1,
+    }
+    if margin_str in margin_map:
+        return margin_map[margin_str]
+
+    try:
+        # '1.1/2' や '3/4' のような形式に対応
+        if '/' in margin_str:
+            parts = margin_str.split('.')
+            if len(parts) == 2: # '1.1/2' -> 1 + 1/2
+                integer_part = float(parts[0])
+                fraction_part = parts[1].split('/')
+                return round((integer_part + float(fraction_part[0]) / float(fraction_part[1])) * 0.2, 2)
+            else: # '3/4'
+                fraction_part = margin_str.split('/')
+                return round((float(fraction_part[0]) / float(fraction_part[1])) * 0.2, 2)
+        
+        # '5' のような単純な馬身差
+        return round(float(margin_str) * 0.2, 2)
+    except (ValueError, IndexError, TypeError):
+        return None
+
+
+
 # --- 1. レース結果パーサー (202001010101.bin) ---
 
 def parse_race_result(soup: BeautifulSoup, race_id: str) -> pd.DataFrame:
     """
     レース結果テーブル (`race_table_01`) を解析する
+    [修正]: `指示.md` に基づき、カラムの追加・変更を行う
     """
-    
-    # --- A, B, C: レースメタ情報の抽出 ---
-    metadata = extract_race_metadata(soup) # [修正] メタデータ抽出関数を先に呼ぶ
+    metadata = extract_race_metadata(soup)
     
     result_table = soup.find('table', class_='race_table_01')
     if not result_table:
@@ -121,24 +182,17 @@ def parse_race_result(soup: BeautifulSoup, race_id: str) -> pd.DataFrame:
 
     rows_data = []
     
-    rows = result_table.find_all('tr')
-    if not rows:
-        print(f"  [!] レース結果テーブルに tr が見つかりません。 (race_id: {race_id})")
-        return pd.DataFrame()
-
-    # ヘッダー行 (thを含む) を除外し、データ行 (tdを含む) のみを取得
-    data_rows = [row for row in rows if row.find('td')]
-    
+    data_rows = [row for row in result_table.find_all('tr') if row.find('td')]
     if not data_rows:
         print(f"  [!] レース結果テーブルにデータ行 (td) が見つかりません。 (race_id: {race_id})")
         return pd.DataFrame()
 
-    # D. 頭数を取得
     metadata['head_count'] = len(data_rows)
     
     for row in data_rows:
         cols = row.find_all('td')
-        if len(cols) < 18:  # データが不十分な行はスキップ
+        # 最低でも賞金より前の列(18列)は必要
+        if len(cols) < 18:
             continue
             
         row_data = metadata.copy()
@@ -160,35 +214,66 @@ def parse_race_result(soup: BeautifulSoup, race_id: str) -> pd.DataFrame:
             row_data['jockey_id'] = get_id_from_href(jockey_link.get('href'), 'jockey')
             row_data['jockey_name'] = safe_strip(jockey_link.get_text())
             
-            row_data['finish_time_str'] = safe_strip(cols[7].get_text())
-            row_data['margin_str'] = safe_strip(cols[8].get_text())
+            # --- タイム関連の修正 ---
+            finish_time_str = safe_strip(cols[7].get_text())
+            row_data['finish_time_str'] = finish_time_str
+            finish_time_sec = parse_time_to_seconds(finish_time_str)
+            row_data['finish_time_sec'] = finish_time_sec
             
-            # タイム指数、通過順、上がり (インデックスがズレる可能性があるため存在確認)
-            row_data['passing_order'] = safe_strip(cols[10].get_text())
-            row_data['last_3f_time'] = parse_float_or_none(cols[11].get_text())
+            # --- 着差の修正 ---
+            margin_str = safe_strip(cols[8].get_text())
+            row_data['margin_str'] = margin_str
+            row_data['margin_sec'] = parse_margin_to_seconds(margin_str)
             
+            # --- 通過順の修正 ---
+            passing_order_str = safe_strip(cols[10].get_text())
+            (
+                row_data['passing_order_1'],
+                row_data['passing_order_2'],
+                row_data['passing_order_3'],
+                row_data['passing_order_4']
+            ) = parse_passing_order(passing_order_str)
+
+            last_3f_time = parse_float_or_none(cols[11].get_text())
+            row_data['last_3f_time'] = last_3f_time
+
+            # --- 上がり3Fを除くタイムの計算 ---
+            if finish_time_sec is not None and last_3f_time is not None:
+                row_data['time_before_last_3f'] = round(finish_time_sec - last_3f_time, 1)
+            else:
+                row_data['time_before_last_3f'] = None
+
             row_data['win_odds'] = parse_float_or_none(cols[12].get_text())
             row_data['popularity'] = parse_int_or_none(cols[13].get_text())
             
             weight_str = safe_strip(cols[14].get_text())
             row_data['horse_weight'], row_data['horse_weight_change'] = parse_horse_weight(weight_str)
             
-            # 列のインデックスが可変 (16-18 or 19-21)
-            # 調教師
-            trainer_link = cols[15].find('a') or (cols[18].find('a') if len(cols) > 18 else None)
-            if trainer_link:
-                row_data['trainer_id'] = get_id_from_href(trainer_link.get('href'), 'trainer')
+            # --- 調教師・馬主の取得ロジック安定化 ---
+            # netkeibaのHTMLは列の数が変動するため、末尾から探す
+            # -1: 賞金, -2: 馬主, -3: 調教師
+            trainer_col_index = -3
+            owner_col_index = -2
             
-            # 馬主
-            owner_link = cols[16].find('a') or (cols[19].find('a') if len(cols) > 19 else None)
-            if owner_link:
-                row_data['owner_name'] = safe_strip(owner_link.get('title'))
+            # 賞金がない場合 (2着以降) はインデックスがズレる
+            # 賞金テキストが空欄かどうかで判断
+            last_col_text = safe_strip(cols[-1].get_text())
+            if not last_col_text or not last_col_text.replace(',', '').isdigit():
+                 trainer_col_index = -2
+                 owner_col_index = -1
+
+            if len(cols) > abs(trainer_col_index):
+                trainer_link = cols[trainer_col_index].find('a')
+                if trainer_link:
+                    row_data['trainer_id'] = get_id_from_href(trainer_link.get('href'), 'trainer')
             
+            if len(cols) > abs(owner_col_index):
+                owner_link = cols[owner_col_index].find('a')
+                if owner_link:
+                    row_data['owner_name'] = safe_strip(owner_link.get('title'))
+
             # 賞金
             prize_col_text = safe_strip(cols[17].get_text())
-            if (prize_col_text is None or not prize_col_text.strip()) and len(cols) > 20:
-                prize_col_text = safe_strip(cols[20].get_text())
-            
             prize_to_parse = prize_col_text.replace(',', '') if prize_col_text else None
             row_data['prize_money'] = parse_float_or_none(prize_to_parse)
 
@@ -327,17 +412,17 @@ def extract_shutuba_metadata(soup: BeautifulSoup) -> Dict[str, Any]:
 def parse_shutuba(soup: BeautifulSoup, race_id: str) -> pd.DataFrame:
     """
     出馬表テーブル (`Shutuba_Table`) を解析する
+    [修正]: `指示.md` に基づき、騎手名から記号を削除
     """
-    # --- [修正] B-3: メタデータ抽出 ---
     metadata = extract_shutuba_metadata(soup)
     
-    shutuba_table = soup.find('table', class_='Shutuba_Table') # [cite: 279]
+    shutuba_table = soup.find('table', class_='Shutuba_Table')
     if not shutuba_table:
         print(f"  [!] 出馬表テーブル (Shutuba_Table) が見つかりません。 (race_id: {race_id})")
         return pd.DataFrame()
 
     rows_data = []
-    rows = shutuba_table.find_all('tr', class_='HorseList') # [cite: 283]
+    rows = shutuba_table.find_all('tr', class_='HorseList')
     
     for row in rows:
         cols = row.find_all('td')
@@ -345,14 +430,11 @@ def parse_shutuba(soup: BeautifulSoup, race_id: str) -> pd.DataFrame:
             continue
             
         try:
-            # [修正] メタデータをマージ
             row_data = metadata.copy()
             row_data['race_id'] = race_id
             
             row_data['bracket_number'] = parse_int_or_none(cols[0].get_text())
             row_data['horse_number'] = parse_int_or_none(cols[1].get_text())
-            
-            # cols[2] は印 (schema.md B-2) だが、202001010102.bin [cite: 283] では入力欄
             
             horse_info_cell = cols[3]
             horse_link = horse_info_cell.find('a')
@@ -364,7 +446,14 @@ def parse_shutuba(soup: BeautifulSoup, race_id: str) -> pd.DataFrame:
             
             jockey_link = cols[6].find('a')
             row_data['jockey_id'] = get_id_from_href(jockey_link.get('href'), 'jockey')
-            row_data['jockey_name'] = safe_strip(jockey_link.get_text())
+            
+            # --- 騎手名の記号削除 ---
+            jockey_name_raw = safe_strip(jockey_link.get_text())
+            if jockey_name_raw:
+                # '▲' や '☆' などの記号を削除
+                row_data['jockey_name'] = re.sub(r'[^\w\s]', '', jockey_name_raw)
+            else:
+                row_data['jockey_name'] = None
 
             trainer_link = cols[7].find('a')
             row_data['trainer_id'] = get_id_from_href(trainer_link.get('href'), 'trainer')
@@ -376,7 +465,6 @@ def parse_shutuba(soup: BeautifulSoup, race_id: str) -> pd.DataFrame:
             row_data['morning_odds'] = parse_float_or_none(cols[9].get_text())
             row_data['morning_popularity'] = parse_int_or_none(cols[10].get_text())
             
-            # B-1. 馬具情報 (schema.md)
             row_data['blinkers'] = bool(horse_info_cell.find('span', class_='Blinker'))
 
             rows_data.append(row_data)
@@ -392,18 +480,16 @@ def parse_shutuba(soup: BeautifulSoup, race_id: str) -> pd.DataFrame:
 def parse_horse_profile(soup: BeautifulSoup, horse_id: str) -> Dict[str, Any]:
     """
     馬プロフィールテーブル (`db_prof_table`) [cite: 178] を解析する
+    [修正]: `指示.md` に基づき、不要なカラムを削除
     """
-    # [修正] schema.md C-1, C-2 および新規項目に合わせて、抽出対象カラムをすべてNoneで初期化
+    # [修正] 不要なカラムを削除
     profile_data = {
         'horse_id': horse_id,
         'horse_name': None, 'sex': None, 'coat_color': None,
         'birth_date': None, 'trainer_id': None, 'trainer_name': None,
         'owner_name': None, 'breeder_name': None, 'producing_area': None,
-        'sale_price': None, 'height_cm': None, 'chest_girth_cm': None,
-        'cannon_bone_cm': None, 'sire_id': None, 'sire_name': None,
-        'dam_id': None, 'dam_name': None, 'damsire_id': None, 'damsire_name': None,
-        'prize_central': None, 'prize_regional': None, 'career_summary': None,
-        'main_wins': None, 'relatives': None
+        'sale_price': None, 'sire_id': None, 'sire_name': None,
+        'dam_id': None, 'dam_name': None, 'damsire_id': None, 'damsire_name': None
     }
     
     # 馬名、性別、毛色
@@ -425,7 +511,7 @@ def parse_horse_profile(soup: BeautifulSoup, horse_id: str) -> Dict[str, Any]:
         print(f"  [!] 馬プロフィールテーブル (db_prof_table) が見つかりません。 (horse_id: {horse_id})")
         return profile_data
 
-    # [修正] 新規項目をth_mapに追加
+    # [修正] 不要なカラムを削除
     th_map = {
         '生年月日': 'birth_date',
         '調教師': 'trainer_name',
@@ -433,14 +519,6 @@ def parse_horse_profile(soup: BeautifulSoup, horse_id: str) -> Dict[str, Any]:
         '生産者': 'breeder_name',
         '産地': 'producing_area',
         'セリ取引価格': 'sale_price',
-        '馬体高(cm)': 'height_cm',
-        '胸囲(cm)': 'chest_girth_cm',
-        '管囲(cm)': 'cannon_bone_cm',
-        '獲得賞金(中央)': 'prize_central',
-        '獲得賞金(地方)': 'prize_regional',
-        '通算成績': 'career_summary',
-        '主な勝鞍': 'main_wins',
-        '近親馬': 'relatives',
     }
 
     for row in prof_table.find_all('tr'):
@@ -452,7 +530,6 @@ def parse_horse_profile(soup: BeautifulSoup, horse_id: str) -> Dict[str, Any]:
         th_text = safe_strip(th.get_text())
         if th_text in th_map:
             key = th_map[th_text]
-            # [修正] 改行や余分なスペースを整理
             value = ' '.join(td.get_text(strip=True).split())
             
             link = td.find('a')
@@ -461,18 +538,8 @@ def parse_horse_profile(soup: BeautifulSoup, horse_id: str) -> Dict[str, Any]:
                 profile_data[key] = safe_strip(link.get_text())
             elif key == 'owner_name' and link:
                  profile_data[key] = safe_strip(link.get_text())
-            # [修正] セリ取引価格が '-' の場合は文字列として保持
             elif key == 'sale_price':
                 profile_data[key] = value if value == '-' else parse_int_or_none(value)
-            elif key in ['prize_central', 'prize_regional']:
-                profile_data[key] = parse_int_or_none(value)
-            elif key in ['height_cm', 'chest_girth_cm']:
-                profile_data[key] = parse_int_or_none(value)
-            elif key == 'cannon_bone_cm':
-                profile_data[key] = parse_float_or_none(value)
-            # [修正] 近親馬の場合、複数のリンクを結合
-            elif key == 'relatives':
-                 profile_data[key] = ' | '.join([safe_strip(a.get_text()) for a in td.find_all('a')])
             elif link: # 生産者など
                  profile_data[key] = safe_strip(link.get_text())
             else:
@@ -513,9 +580,9 @@ def parse_horse_profile(soup: BeautifulSoup, horse_id: str) -> Dict[str, Any]:
 def parse_horse_performance(soup: BeautifulSoup, horse_id: str) -> pd.DataFrame:
     """
     馬の過去成績テーブル (`db_h_race_results`) を解析する
-    [修正]: カラムインデックスのずれを `2009100502_perf.bin` [cite: 265] に合わせて修正
+    [修正]: `指示.md` に基づき、カラムの追加・変更を行う
     """
-    perf_table = soup.find('table', class_='db_h_race_results') # [cite: 265]
+    perf_table = soup.find('table', class_='db_h_race_results')
     if not perf_table:
         print(f"  [!] 馬過去成績テーブル (db_h_race_results) が見つかりません。 (horse_id: {horse_id})")
         return pd.DataFrame()
@@ -529,75 +596,81 @@ def parse_horse_performance(soup: BeautifulSoup, horse_id: str) -> pd.DataFrame:
 
     for row in rows:
         cols = row.find_all('td')
-        # [修正] HTML [cite: 269] に基づき、最低カラム数を馬体重(index 24)のある 25 に設定
         if len(cols) < 25:
             continue
             
         try:
             row_data = {'horse_id': horse_id}
             
-            row_data['race_date'] = safe_strip(cols[0].get_text()) # [cite: 271]
-            row_data['venue'] = safe_strip(cols[1].get_text()) # [cite: 271]
-            row_data['weather'] = safe_strip(cols[2].get_text()) # [cite: 271]
-            row_data['race_number'] = parse_int_or_none(cols[3].get_text()) # [cite: 271]
+            row_data['race_date'] = safe_strip(cols[0].get_text())
             
-            race_link = cols[4].find('a') # [cite: 272]
+            # `venue` は `races.csv` とのマージで分割するため、ここではそのまま保持
+            row_data['venue'] = safe_strip(cols[1].get_text())
+            
+            row_data['weather'] = safe_strip(cols[2].get_text())
+            row_data['race_number'] = parse_int_or_none(cols[3].get_text())
+            
+            race_link = cols[4].find('a')
             if race_link:
                 row_data['race_name'] = safe_strip(race_link.get_text())
                 row_data['race_id'] = get_id_from_href(race_link.get('href'), 'race')
             
-            # cols[5] (映像) はスキップ
-            row_data['head_count'] = parse_int_or_none(cols[6].get_text()) # [cite: 273]
-            row_data['bracket_number'] = parse_int_or_none(cols[7].get_text()) # [cite: 273]
-            row_data['horse_number'] = parse_int_or_none(cols[8].get_text()) # [cite: 274]
-            row_data['win_odds'] = parse_float_or_none(cols[9].get_text()) # [cite: 274]
-            row_data['popularity'] = parse_int_or_none(cols[10].get_text()) # [cite: 274]
-            row_data['finish_position'] = parse_int_or_none(cols[11].get_text()) # [cite: 274]
+            row_data['head_count'] = parse_int_or_none(cols[6].get_text())
+            row_data['bracket_number'] = parse_int_or_none(cols[7].get_text())
+            row_data['horse_number'] = parse_int_or_none(cols[8].get_text())
+            row_data['win_odds'] = parse_float_or_none(cols[9].get_text())
+            row_data['popularity'] = parse_int_or_none(cols[10].get_text())
+            row_data['finish_position'] = parse_int_or_none(cols[11].get_text())
             
-            # 騎手名 (cols[12]) 
             jockey_cell = cols[12]
             jockey_link = jockey_cell.find('a')
             row_data['jockey_name'] = safe_strip(jockey_cell.get_text())
             if jockey_link:
-                 row_data['jockey_id'] = get_id_from_href(jockey_link.get('href'), 'jockey') # [修正] get_id_from_href()で対応
+                 row_data['jockey_id'] = get_id_from_href(jockey_link.get('href'), 'jockey')
             
-            row_data['basis_weight'] = parse_float_or_none(cols[13].get_text()) # [cite: 275]
+            row_data['basis_weight'] = parse_float_or_none(cols[13].get_text())
             
-            dist_str = safe_strip(cols[14].get_text()) # [cite: 276]
+            dist_str = safe_strip(cols[14].get_text())
             row_data['distance_m'], row_data['track_surface'] = parse_distance(dist_str)
             
-            # cols[15] (水分量) はスキップ
-            row_data['track_condition'] = safe_strip(cols[16].get_text()) # [cite: 276] [修正] インデックス 15 -> 16
-            # cols[17] (馬場指数) はスキップ
-            row_data['finish_time_str'] = safe_strip(cols[18].get_text()) # [cite: 278] [修正] インデックス 17 -> 18
-            row_data['margin_str'] = safe_strip(cols[19].get_text()) # [cite: 278] [修正] インデックス 18 -> 19
+            row_data['track_condition'] = safe_strip(cols[16].get_text())
             
-            # cols[20] (タイム指数) はスキップ
+            # --- タイム関連の修正 ---
+            finish_time_str = safe_strip(cols[18].get_text())
+            row_data['finish_time_str'] = finish_time_str
+            finish_time_sec = parse_time_to_seconds(finish_time_str)
+            row_data['finish_time_sec'] = finish_time_sec
             
-            # 通過順 (cols[21]) [cite: 280]
-            if len(cols) > 21:
-                row_data['passing_order'] = safe_strip(cols[21].get_text()) # [修正] インデックス 20 -> 21
+            row_data['margin_str'] = safe_strip(cols[19].get_text())
             
-            # cols[22] (ペース) はスキップ
+            # --- 通過順の修正 ---
+            passing_order_str = safe_strip(cols[21].get_text())
+            (
+                row_data['passing_order_1'],
+                row_data['passing_order_2'],
+                row_data['passing_order_3'],
+                row_data['passing_order_4']
+            ) = parse_passing_order(passing_order_str)
+            
+            last_3f_time = parse_float_or_none(cols[23].get_text())
+            row_data['last_3f_time'] = last_3f_time
+            
+            # --- 上がり3Fを除くタイムの計算 ---
+            if finish_time_sec is not None and last_3f_time is not None:
+                row_data['time_before_last_3f'] = round(finish_time_sec - last_3f_time, 1)
+            else:
+                row_data['time_before_last_3f'] = None
 
-            # 上がり3F (cols[23]) [cite: 280]
-            if len(cols) > 23:
-                row_data['last_3f_time'] = parse_float_or_none(cols[23].get_text()) # [修正] インデックス 22 -> 23
+            weight_str = safe_strip(cols[24].get_text())
+            row_data['horse_weight'], row_data['horse_weight_change'] = parse_horse_weight(weight_str)
             
-            # 馬体重 (cols[24]) 
-            if len(cols) > 24:
-                weight_str = safe_strip(cols[24].get_text()) # [修正] インデックス 23 -> 24
-                row_data['horse_weight'], row_data['horse_weight_change'] = parse_horse_weight(weight_str)
-            
-            # cols[25] (厩舎コメント), cols[26] (備考) はスキップ [cite: 282]
-            
-            # 勝ち馬 (cols[27]) [cite: 283]
+            # --- 勝ち馬IDの取得 ---
             if len(cols) > 27:
-                winner_link = cols[27].find('a') # [修正] インデックス 26 -> 27
+                winner_link = cols[27].find('a')
                 if winner_link:
-                    winner_text = winner_link.get_text()
-                    if winner_text:
-                        row_data['winner_name'] = safe_strip(winner_text.replace('(', '').replace(')', ''))
+                    row_data['winner_id'] = get_id_from_href(winner_link.get('href'), 'horse')
+                else:
+                    row_data['winner_id'] = None
 
             rows_data.append(row_data)
 
@@ -782,6 +855,31 @@ def main():
     if all_data["races"]:
         races_df = pd.concat(all_data["races"], ignore_index=True)
         races_df = races_df.drop_duplicates(subset=['race_id', 'horse_id'])
+        
+        # カラムの順序を整える
+        base_cols = [c for c in races_df.columns if 'passing_order_' not in c and c not in ['finish_time_sec', 'time_before_last_3f', 'margin_sec']]
+        time_cols = ['finish_time_sec', 'time_before_last_3f', 'margin_sec']
+        passing_cols = ['passing_order_1', 'passing_order_2', 'passing_order_3', 'passing_order_4']
+        
+        # finish_time_str の後ろにタイム関連カラムを挿入
+        try:
+            finish_time_idx = base_cols.index('finish_time_str')
+            new_order = base_cols[:finish_time_idx+1] + time_cols + base_cols[finish_time_idx+1:]
+        except ValueError:
+            new_order = base_cols + time_cols
+
+        # passing_order の後ろに分割カラムを挿入
+        try:
+            passing_order_idx = new_order.index('passing_order')
+            new_order = new_order[:passing_order_idx+1] + passing_cols + new_order[passing_order_idx+1:]
+            new_order.remove('passing_order') # 元のカラムは削除
+        except ValueError:
+            new_order += passing_cols
+
+        # 存在しないカラムがあった場合もエラーにならないようにする
+        final_cols = [col for col in new_order if col in races_df.columns]
+        races_df = races_df[final_cols]
+
         races_df.to_csv(os.path.join(output_dir, "races.csv"), index=False, encoding='utf-8-sig')
         print(f"  [>] races.csv (計 {len(races_df)} 行)")
 
@@ -791,40 +889,110 @@ def main():
         shutuba_df.to_csv(os.path.join(output_dir, "shutuba.csv"), index=False, encoding='utf-8-sig')
         print(f"  [>] shutuba.csv (計 {len(shutuba_df)} 行)")
 
+    # --- [修正] horses.csv と pedigrees.csv の処理を統合 ---
+    pedigree_pivot_df = pd.DataFrame()
+    if all_data["pedigrees"]:
+        pedigrees_df = pd.concat(all_data["pedigrees"], ignore_index=True)
+        
+        # 祖先の位置を特定するヘルパー
+        def get_ancestor_position(df_group):
+            df_group = df_group.sort_values(by='ancestor_birth_year', ascending=False, na_position='last')
+            df_group = df_group.drop_duplicates(subset=['horse_id', 'generation'], keep='first')
+            return df_group.reset_index(drop=True)
+
+        # 世代ごとに祖先IDを横持ちにする
+        pedigrees_df['ancestor_pos'] = pedigrees_df.groupby(['horse_id', 'generation']).cumcount()
+        
+        pedigree_pivot_df = pedigrees_df.pivot_table(
+            index='horse_id',
+            columns=['generation', 'ancestor_pos'],
+            values='ancestor_id',
+            aggfunc='first'
+        )
+
+        # MultiIndexをフラットなカラム名に変換
+        pedigree_pivot_df.columns = [f'g{gen}_p{pos+1}_id' for gen, pos in pedigree_pivot_df.columns]
+        pedigree_pivot_df = pedigree_pivot_df.reset_index()
+
+        print(f"  [+] 血統情報をピボット完了 (計 {len(pedigree_pivot_df)} 頭分)")
+
+
     if all_data["horses"]:
         horses_df = pd.DataFrame(all_data["horses"])
-        # [修正] horses.csv に schema.md C-1 と新規カラムが必ず含まれるようにする
+        horses_df = horses_df.drop_duplicates(subset=['horse_id'])
+
+        # [修正] 血統情報をマージ
+        if not pedigree_pivot_df.empty:
+            horses_df = pd.merge(horses_df, pedigree_pivot_df, on='horse_id', how='left')
+
+        # [修正] `指示.md` に基づきカラムを定義
         all_horse_cols = [
             'horse_id', 'horse_name', 'sex', 'coat_color', 'birth_date', 
             'trainer_id', 'trainer_name', 'owner_name', 'breeder_name', 
-            'producing_area', 'sale_price', 'height_cm', 'chest_girth_cm',
-            'cannon_bone_cm', 'sire_id', 'sire_name', 'dam_id', 'dam_name', 
-            'damsire_id', 'damsire_name', 'prize_central', 'prize_regional',
-            'career_summary', 'main_wins', 'relatives'
+            'producing_area', 'sale_price', 'sire_id', 'sire_name', 
+            'dam_id', 'dam_name', 'damsire_id', 'damsire_name'
         ]
+        # 血統カラムを追加
+        if not pedigree_pivot_df.empty:
+            ped_cols = [col for col in pedigree_pivot_df.columns if col != 'horse_id']
+            all_horse_cols.extend(sorted(ped_cols))
+
         # 存在しないカラムを None で追加
         for col in all_horse_cols:
             if col not in horses_df.columns:
                 horses_df[col] = None
+        
         # カラムの順序を整える
         horses_df = horses_df[all_horse_cols]
         
-        horses_df = horses_df.drop_duplicates(subset=['horse_id'])
         horses_df.to_csv(os.path.join(output_dir, "horses.csv"), index=False, encoding='utf-8-sig')
         print(f"  [>] horses.csv (計 {len(horses_df)} 行)")
 
     if all_data["horses_performance"]:
         horses_perf_df = pd.concat(all_data["horses_performance"], ignore_index=True)
-        # [修正] horses_performance.csv に race_id がない行 (地方競馬など) がある場合も考慮
         horses_perf_df = horses_perf_df.drop_duplicates(subset=['horse_id', 'race_date', 'race_name'])
+
+        # --- `venue` 分割のためのマージ処理 ---
+        if 'races_df' in locals() and not races_df.empty:
+            # `races_df` から開催情報を抽出
+            venue_info_df = races_df[['race_id', 'round_of_year', 'venue', 'day_of_meeting']].copy()
+            venue_info_df = venue_info_df.rename(columns={'venue': 'place'})
+            venue_info_df = venue_info_df.drop_duplicates(subset=['race_id'])
+            
+            # `horses_perf_df` にマージ
+            original_venue = horses_perf_df['venue'].copy()
+            horses_perf_df = pd.merge(horses_perf_df.drop(columns=['venue']), venue_info_df, on='race_id', how='left')
+            
+            # マージできなかった行 (地方競馬など) の `place` を元の `venue` で埋める
+            horses_perf_df['place'] = horses_perf_df['place'].fillna(original_venue)
+
+        # カラムの順序を調整
+        # 元の venue は place になったので、round_of_year, place, day_of_meeting を race_date の後方に配置
+        cols = horses_perf_df.columns.tolist()
+        new_order = [c for c in cols if c not in ['round_of_year', 'place', 'day_of_meeting']]
+        
+        # race_date のインデックスを探す
+        try:
+            race_date_index = new_order.index('race_date')
+            # race_date の直後に挿入
+            new_order.insert(race_date_index + 1, 'round_of_year')
+            new_order.insert(race_date_index + 2, 'place')
+            new_order.insert(race_date_index + 3, 'day_of_meeting')
+        except ValueError:
+            # race_date がない場合は末尾に追加
+            new_order.extend(['round_of_year', 'place', 'day_of_meeting'])
+            
+        horses_perf_df = horses_perf_df[new_order]
+
         horses_perf_df.to_csv(os.path.join(output_dir, "horses_performance.csv"), index=False, encoding='utf-8-sig')
         print(f"  [>] horses_performance.csv (計 {len(horses_perf_df)} 行)")
 
-    if all_data["pedigrees"]:
-        pedigrees_df = pd.concat(all_data["pedigrees"], ignore_index=True)
-        # 重複除去は parse_pedigree() 内で実施済み
-        pedigrees_df.to_csv(os.path.join(output_dir, "pedigrees.csv"), index=False, encoding='utf-8-sig')
-        print(f"  [>] pedigrees.csv (計 {len(pedigrees_df)} 行)")
+    # [修正] pedigrees.csv は horses.csv に統合されたため、単独での保存は不要
+    # if all_data["pedigrees"]:
+    #     pedigrees_df = pd.concat(all_data["pedigrees"], ignore_index=True)
+    #     # 重複除去は parse_pedigree() 内で実施済み
+    #     pedigrees_df.to_csv(os.path.join(output_dir, "pedigrees.csv"), index=False, encoding='utf-8-sig')
+    #     print(f"  [>] pedigrees.csv (計 {len(pedigrees_df)} 行)")
 
 if __name__ == "__main__":
     # [修正] main() が test ディレクトリを参照できるようにする
