@@ -1994,13 +1994,10 @@ def extract_horse_id_from_filename(file_path: str) -> str:
     match = re.search(r'(\d{10})', filename)
     return match.group(1) if match else None
 
-
-### 5.5 血統パーサ（parsers/pedigree_parser.py）
-
+### 5.5 血統パーサ（parsers/pedigree\_parser.py）
 
 """
-血統HTMLパーサ
-5代血統の完全抽出
+血統情報パーサ (修正版 - 世代情報(generation)カラム追加および構造的パース)
 """
 
 import re
@@ -2009,115 +2006,240 @@ from typing import Dict, List, Optional
 from pathlib import Path
 
 import pandas as pd
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, element
 
+# 世代特定用のマップ
 
-def parse_pedigree_html(file_path: str, horse_id: str = None) -> Dict:
-    """
-    血統HTMLをパース（5代血統）
+# (rowspan, height) -\> generation
+
+# 1代目(親) ～ 5代目(高祖父母の親)
+
+GENERATION\_MAP = {
+"16": 1, \# rowspan="16"
+"8": 2,  \# rowspan="8"
+"4": 3,  \# rowspan="4"
+"2": 4,  \# rowspan="2"
+"20": 5, \# height="20"
+}
+
+def parse\_pedigree\_html(file\_path: str, horse\_id: str = None) -\> pd.DataFrame:
+"""
+血統HTMLをパースしてDataFrameを返す (構造解析対応版)
+
+```
+Args:
+    file_path: HTMLファイルパス
+    horse_id: 馬ID
+
+Returns:
+    血統DataFrame (ロングフォーマット)
     
-    Args:
-        file_path: HTMLファイルパス
-        horse_id: 馬ID
+Columns:
+    - horse_id: str (対象馬ID)
+    - ancestor_id: str (祖先馬ID)
+    - ancestor_name: str (祖先馬名)
+    - generation: int (世代: 1=親, 2=祖父母, ...)
+"""
+logging.info(f"血統情報パース開始: {file_path}")
+
+if horse_id is None:
+    horse_id = extract_horse_id_from_filename(file_path)
+
+with open(file_path, 'rb') as f:
+    html_bytes = f.read()
+
+try:
+    html_text = html_bytes.decode('euc_jp', errors='replace')
+except Exception:
+    html_text = html_bytes.decode('utf-8', errors='replace')
+
+soup = BeautifulSoup(html_text, 'html.parser')
+
+blood_table = soup.find('table', class_='blood_table')
+
+if not blood_table:
+    logging.error(f"血統テーブルが見つかりません: {file_path}")
+    return pd.DataFrame()
+
+rows = []
+
+# 収集済みのIDを管理するセット（重複防止用）
+collected_ids = set()
+
+# blood_table 内のすべての <td> タグを取得
+all_tds = blood_table.find_all('td')
+
+for td in all_tds:
+    generation = None
     
-    Returns:
-        血統辞書
+    # 1. rowspan 属性で世代を特定
+    if td.has_attr('rowspan'):
+        rowspan_val = td.get('rowspan')
+        if rowspan_val in GENERATION_MAP:
+            generation = GENERATION_MAP[rowspan_val]
+    
+    # 2. rowspan がない場合、height 属性で世代を特定 (5代目)
+    elif td.has_attr('height'):
+        height_val = td.get('height')
+        if height_val in GENERATION_MAP:
+            generation = GENERATION_MAP[height_val]
+
+    # 世代が特定できた <td> のみ処理
+    if generation:
+        # <td> タグ内の馬リンク <a> を探す
+        link = td.find('a', href=re.compile(r'/horse/'))
         
-    Keys:
-        - horse_id: str
-        - sire_id: str (父)
-        - dam_id: str (母)
-        - sire_sire_id: str (父父)
-        - sire_dam_id: str (父母)
-        - dam_sire_id: str (母父)
-        - dam_dam_id: str (母母)
-        - sire_sire_sire_id: str (父父父)
-        - ... (5代まで、計62頭)
-        - sire_name, dam_name, ... (各馬名)
-    """
-    logging.info(f"血統パース開始: {file_path}")
-    
-    if horse_id is None:
-        horse_id = extract_horse_id_from_filename(file_path)
-    
-    with open(file_path, 'rb') as f:
-        html_bytes = f.read()
-    
-    try:
-        html_text = html_bytes.decode('utf-8', errors='replace')
-    except:
-        html_text = html_bytes.decode('euc_jp', errors='replace')
-    
-    soup = BeautifulSoup(html_text, 'lxml')
-    
-    pedigree = {'horse_id': horse_id}
-    
-    # blood_table を検索
-    blood_table = soup.find('table', class_='blood_table')
-    
-    if not blood_table:
-        logging.warning(f"blood_table が見つかりません: {file_path}")
-        return pedigree
-    
-    # 血統テーブルの構造を解析
-    # netkeibaの血統テーブルは以下の構造:
-    # - tr要素が馬の世代ごとに並んでいる
-    # - tdのrowspan属性で世代の深さを表現
-    
-    all_horses = []
-    
-    # すべての馬リンクを取得
-    horse_links = blood_table.find_all('a', href=re.compile(r'/horse/\d+'))
-    
-    for link in horse_links:
-        horse_name = link.get_text(strip=True)
-        horse_id_match = re.search(r'/horse/(\d+)', link['href'])
-        horse_id_val = horse_id_match.group(1) if horse_id_match else None
-        
-        all_horses.append({
-            'name': horse_name,
-            'id': horse_id_val
-        })
-    
-    # 血統ツリーの構造をマッピング
-    # 簡易版: 最初の数頭を主要血統として格納
-    if len(all_horses) > 0:
-        pedigree['sire_id'] = all_horses[0]['id']
-        pedigree['sire_name'] = all_horses[0]['name']
-    
-    if len(all_horses) > 1:
-        pedigree['dam_id'] = all_horses[1]['id']
-        pedigree['dam_name'] = all_horses[1]['name']
-    
-    if len(all_horses) > 2:
-        pedigree['sire_sire_id'] = all_horses[2]['id']
-        pedigree['sire_sire_name'] = all_horses[2]['name']
-    
-    if len(all_horses) > 3:
-        pedigree['sire_dam_id'] = all_horses[3]['id']
-        pedigree['sire_dam_name'] = all_horses[3]['name']
-    
-    if len(all_horses) > 4:
-        pedigree['dam_sire_id'] = all_horses[4]['id']
-        pedigree['dam_sire_name'] = all_horses[4]['name']
-    
-    if len(all_horses) > 5:
-        pedigree['dam_dam_id'] = all_horses[5]['id']
-        pedigree['dam_dam_name'] = all_horses[5]['name']
-    
-    # 4代・5代も同様に展開（省略、実装時は完全なツリー構造解析を推奨）
-    
-    logging.info(f"血統パース完了: {horse_id} ({len(all_horses)}頭)")
-    
-    return pedigree
+        if link:
+            href = link.get('href')
+            match = re.search(r'/horse/([^/]+)', href)
+            
+            if match:
+                raw_id = match.group(1)
+                
+                # IDと名前を正規化
+                ancestor_id = normalize_ancestor_id(raw_id)
+                ancestor_name = normalize_ancestor_name(td, link)
 
+                # バリデーション: 有効なIDと名前のみ追加
+                if ancestor_id and ancestor_name:
+                    # 重複チェック
+                    if ancestor_id not in collected_ids:
+                        rows.append({
+                            'horse_id': horse_id,
+                            'ancestor_id': ancestor_id,
+                            'ancestor_name': ancestor_name,
+                            'generation': generation, # 世代カラムを追加
+                        })
+                        collected_ids.add(ancestor_id)
 
-def extract_horse_id_from_filename(file_path: str) -> str:
-    """ファイル名から馬IDを抽出"""
-    filename = Path(file_path).stem
-    match = re.search(r'(\d{10})', filename)
-    return match.group(1) if match else None
+df = pd.DataFrame(rows)
+logging.info(f"血統情報パース完了: {file_path} ({len(df)}行)")
 
+return df
+```
+
+def normalize\_ancestor\_id(ancestor\_id: str) -\> Optional[str]:
+"""
+祖先馬IDを正規化（英字対応・フィルタリング強化版）
+
+```
+Args:
+    ancestor_id: 生のID文字列
+
+Returns:
+    正規化されたID、または無効な場合はNone
+"""
+if not ancestor_id or ancestor_id.strip() == '':
+    return None
+
+# 英数字のみを抽出（記号やスペースは削除）
+cleaned = re.sub(r'[^a-zA-Z0-9]', '', ancestor_id).strip()
+
+if not cleaned:
+    return None
+
+# 外国馬（netkeiba ID = "000"）を除外
+if cleaned == '000':
+    return None
+
+# 全ゼロパターンを除外（英字が含まれる場合は除外しない）
+if cleaned.isdigit() and cleaned == '0' * len(cleaned):
+    return None
+
+# JRA馬IDおよび英数字混在IDの桁数チェック（4-10桁）
+if len(cleaned) < 4 or len(cleaned) > 10:
+    logging.debug(f"無効な桁数のIDをスキップ: {cleaned} (元: {ancestor_id})")
+    return None
+
+return cleaned
+```
+
+def normalize\_ancestor\_name(td\_tag: element.Tag, link\_tag: element.Tag) -\> Optional[str]:
+"""
+祖先馬名を正規化（構造的解析版）
+
+```
+Args:
+    td_tag (element.Tag): 解析対象の <td>
+    link_tag (element.Tag): <td> 内の <a>
+
+Returns:
+    正規化された馬名、またはNone
+"""
+
+# <a> タグ直下のテキスト (<span> タグを含む場合も考慮)
+name = link_tag.get_text(strip=True)
+
+if not name:
+    # フォールバック
+    td_texts = td_tag.find_all(string=True, recursive=False)
+    if td_texts:
+        name = td_texts[0].strip()
+    else:
+        name = td_tag.get_text(strip=True)
+
+if not name:
+    return None
+
+name = name.strip()
+
+if not name:
+    return None
+
+# <a> タグの .contents を見て、最初のテキストノードを取得
+primary_name = None
+if link_tag.contents:
+    for content in link_tag.contents:
+        if isinstance(content, element.NavigableString):
+            primary_name = content.strip()
+            if primary_name:
+                break
+        # <span> タグ (例: <span class="red">Mr. Prospector</span>) の中も見る
+        elif isinstance(content, element.Tag) and content.name == 'span':
+            primary_name = content.get_text(strip=True)
+            if primary_name:
+                break
+
+if primary_name:
+    name = primary_name
+
+if not name:
+    return None
+
+# 改行や <br> が含まれる場合、最初の行のみ取得
+name = name.split('\n')[0].split('<br>')[0].strip()
+
+if not name:
+    return None
+
+return name
+```
+
+def extract\_horse\_id\_from\_filename(file\_path: str) -\> str:
+"""
+ファイル名から馬IDを抽出 (ped\_XXXXXXXXXX.html または ped\_YYYYYYYYYY\_...)
+"""
+filename = Path(file\_path).stem
+
+```
+# ped_2001103890...
+match = re.search(r'ped_(\d{10})', filename)
+if match:
+    return match.group(1)
+
+# ped_000a00033a...
+match = re.search(r'ped_([a-zA-Z0-9]{10})', filename)
+if match:
+    return match.group(1)
+    
+# 2001103890_... (ped_ プレフィックスなし)
+match = re.search(r'^(\d{10})', filename)
+if match:
+    return match.group(1)
+
+logging.warning(f"ファイル名 {filename} から horse_id (10桁) を抽出できませんでした。")
+return None
+```
 
 ### 5.6 データクレンジングとバリデーション
 
