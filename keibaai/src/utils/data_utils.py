@@ -24,10 +24,15 @@ def save_fetch_metadata(
     """
     データ取得のメタデータをSQLiteに保存
     """
-    sha256 = hashlib.sha256(data).hexdigest()
+    if data:
+        sha256 = hashlib.sha256(data).hexdigest()
+        file_size = len(data)
+    else:
+        sha256 = None
+        file_size = 0
+
     jst = timezone(timedelta(hours=9))
     fetched_ts = datetime.now(jst).isoformat()
-    file_size = len(data)
 
     cursor = db_conn.cursor()
     cursor.execute('''
@@ -44,7 +49,7 @@ file_size, fetch_method, http_status, error_message
 
 def generate_data_version(data: bytes) -> str:
     """
-    データバージョン文字列を生成
+    データバージョン文字列を生成（互換性のため残す）
     """
     timestamp = datetime.now(timezone.utc).astimezone(
         timezone(timedelta(hours=9))
@@ -60,10 +65,59 @@ def construct_filename(
     extension: str = 'bin'
 ) -> str:
     """
-    バージョン付きファイル名を構築
+    ファイル名を構築（.bin形式用に簡略化）
+    
+    新しい形式:
+    - race: {race_id}.bin
+    - shutuba: {race_id}.bin
+    - horse: {horse_id}_profile.bin, {horse_id}_perf.bin
+    - ped: {horse_id}.bin
+    
+    互換性のため、既存のコードからの呼び出しに対応
     """
-    data_version = generate_data_version(data)
-    return f"{base_name}_{identifier}_{data_version}.{extension}"
+    # base_nameに応じてシンプルなファイル名を返す
+    if base_name == 'race':
+        return f"{identifier}.{extension}"
+    elif base_name == 'shutuba':
+        return f"{identifier}.{extension}"
+    elif base_name == 'horse':
+        # デフォルトでプロフィール用
+        return f"{identifier}_profile.{extension}"
+    elif base_name == 'horse_perf':
+        return f"{identifier}_perf.{extension}"
+    elif base_name == 'ped':
+        return f"{identifier}.{extension}"
+    else:
+        # フォールバック（旧形式）
+        data_version = generate_data_version(data)
+        return f"{base_name}_{identifier}_{data_version}.{extension}"
+
+
+def construct_bin_filename(
+    data_type: str,
+    identifier: str,
+    subtype: str = None
+) -> str:
+    """
+    .bin形式のファイル名を構築（新規追加）
+    
+    Args:
+        data_type: データ種別（race, shutuba, horse, ped）
+        identifier: ID（race_id または horse_id）
+        subtype: サブタイプ（horseの場合のみ: profile, perf）
+        
+    Returns:
+        ファイル名
+    """
+    if data_type in ['race', 'shutuba', 'ped']:
+        return f"{identifier}.bin"
+    elif data_type == 'horse':
+        if subtype == 'perf':
+            return f"{identifier}_perf.bin"
+        else:
+            return f"{identifier}_profile.bin"
+    else:
+        raise ValueError(f"Unknown data_type: {data_type}")
 
 
 def load_parquet_data_by_date(
