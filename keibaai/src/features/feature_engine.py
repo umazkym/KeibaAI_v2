@@ -10,106 +10,62 @@ from pathlib import Path
 import pandas as pd
 import numpy as np
 import yaml
-
+from .advanced_features import AdvancedFeatureEngine
 class FeatureEngine:
-    """特徴量生成エンジン"""
+    """既存のFeatureEngineを拡張"""
     
     def __init__(self, config: Dict):
-        """
-        Args:
-            config: configs/features.yaml の内容
-        """
         self.config = config
         self.feature_names_ = []
-        logging.info("FeatureEngine (v1.0) が初期化されました")
-
+        self.advanced_engine = AdvancedFeatureEngine()
+        logging.info("FeatureEngine (v2.0) with Advanced Features が初期化されました")
+    
     def generate_features(
         self,
         shutuba_df: pd.DataFrame,
         results_history_df: pd.DataFrame,
         horse_profiles_df: pd.DataFrame,
-        pedigree_df: pd.DataFrame
+        pedigree_df: pd.DataFrame,
+        horse_performance_df: Optional[pd.DataFrame] = None
     ) -> pd.DataFrame:
-        """
-        メインの特徴量生成関数
+        """拡張版：馬過去成績データも活用"""
         
-        Args:
-            shutuba_df (pd.DataFrame): 対象レースの出馬表データ (日付フィルタ済み)
-            results_history_df (pd.DataFrame): 過去の全レース結果
-            horse_profiles_df (pd.DataFrame): 全馬のプロフィール
-            pedigree_df (pd.DataFrame): 全馬の血統データ
-
-        Returns:
-            pd.DataFrame: 特徴量が付加されたDataFrame
-        """
-        logging.info("特徴量生成開始...")
+        # 既存の処理
+        df = super().generate_features(
+            shutuba_df, results_history_df, 
+            horse_profiles_df, pedigree_df
+        )
         
-        # (1) ベースとなる出馬表データを使用
-        df = shutuba_df.copy()
-        
-        # (2) 馬のプロフィール情報をマージ (年齢、性別など)
-        if not horse_profiles_df.empty:
-            df = df.merge(
-                horse_profiles_df,
-                on='horse_id',
-                how='left',
-                suffixes=('', '_profile')
+        # 高度な特徴量の追加
+        if horse_performance_df is not None and not horse_performance_df.empty:
+            # パフォーマンストレンド
+            df = self.advanced_engine.generate_performance_trend_features(
+                df, horse_performance_df
+            )
+            
+            # コース適性
+            df = self.advanced_engine.generate_course_affinity_features(
+                df, horse_performance_df
+            )
+            
+            # 騎手・調教師の相性
+            df = self.advanced_engine.generate_jockey_trainer_synergy(
+                df, results_history_df
             )
         
-        # (3) 過去の戦績から集計特徴量を生成
-        if not results_history_df.empty:
-            df = self._add_horse_history_features(df, results_history_df)
-        # (もし history_df が空でも、_add_horse_history_features がデフォルト値 (0) を設定する)
-        elif 'horse_id' in df.columns:
-             # history がない場合 (新馬など) もカラムを 0 で初期化
-             logging.warning("results_history_df が空です。賞金・キャリア特徴量を 0 で初期化します。")
-             df['prize_total'] = 0.0
-             df['career_starts'] = 0
-             df['career_wins'] = 0
-
-
-        # (4) 基本特徴量の生成 (仕様書 6.2 basic_features)
-        df = self._add_basic_features(df)
-        
-        # (5) 過去走集約 (仕様書 6.2 past_performance_aggregation)
-        if not results_history_df.empty:
-            df = self._add_past_performance_features(df, results_history_df)
-
-        # (6) 血統特徴量 (仕様書 6.2 pedigree_features)
+        # 血統特徴量
         if not pedigree_df.empty:
-            df = self._add_pedigree_features(df, pedigree_df, results_history_df)
-
-        # (7) 騎手・調教師特徴量 (仕様書 6.2 jockey_trainer_features)
-        if not results_history_df.empty:
-             df = self._add_jockey_trainer_features(df, results_history_df)
-
-        # (8) レース内正規化 (仕様書 6.2 within_race_normalization)
-        df = self._add_relative_features(df)
+            df = self.advanced_engine.generate_bloodline_features(
+                df, pedigree_df, horse_performance_df
+            )
         
-        # (9) 欠損値処理 (仕様書 6.2 missing_value_strategy)
-        df = self._handle_missing_values(df)
-
-        # (10) 特徴量リストの確定
-        self.feature_names_ = self._select_features(df)
+        # レース条件特徴量
+        df = self.advanced_engine.generate_race_condition_features(df)
         
-        logging.info(f"特徴量生成完了: {len(self.feature_names_)}個の特徴量を生成")
+        # 相対的指標
+        df = self.advanced_engine.calculate_relative_metrics(df)
         
-        # 必要なカラム + 特徴量のみを返す
-        key_cols = ['race_id', 'horse_id', 'horse_number', 'race_date']
-        # (学習に必要な目的変数も残す)
-        target_cols = ['finish_position', 'finish_time_seconds', 'win_odds', 'popularity']
-        
-        final_cols = key_cols + [col for col in target_cols if col in df.columns] + self.feature_names_
-        # 重複を除外
-        final_cols = list(dict.fromkeys(final_cols))
-        
-        # 最終カラムリストに存在しないカラムがdfにあれば警告 (デバッグ用)
-        missing_in_final = [col for col in df.columns if col not in final_cols and col not in self.feature_names_]
-        if missing_in_final and logging.getLogger().isEnabledFor(logging.DEBUG):
-            logging.debug(f"最終返却DFに含まれないカラム: {missing_in_final}")
-
-        # 最終カラムリストに含まれるカラムのみを厳選して返す
-        return df[[col for col in final_cols if col in df.columns]]
+        return df
 
     def _add_horse_history_features(self, df: pd.DataFrame, history_df: pd.DataFrame) -> pd.DataFrame:
         """

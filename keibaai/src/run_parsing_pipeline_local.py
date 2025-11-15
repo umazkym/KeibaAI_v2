@@ -186,6 +186,53 @@ def main():
         else:
             log.warning("処理できる血統データがありませんでした。")
 
+        # --- 5. 馬過去成績のパース（新規追加） ---
+        log.info("馬過去成績HTMLのパース処理を開始します。")
+        parsed_perf_parquet_dir = Path(cfg["default"]["parsed_data_path"]) / "parquet" / "horses_performance"
+        parsed_perf_parquet_dir.mkdir(parents=True, exist_ok=True)
+
+        horse_perf_files = []
+        for root, _, files in os.walk(raw_horse_html_dir):
+            for file in files:
+                if file.endswith(("_perf.html", "_perf.bin")):
+                    horse_perf_files.append(os.path.join(root, file))
+
+        log.info(f"{len(horse_perf_files)}件の馬過去成績ファイルが見つかりました。")
+
+        all_perf_df = []
+        for html_file in horse_perf_files:
+            # horse_idをファイル名から抽出
+            horse_id = Path(html_file).stem.replace('_perf', '')
+            
+            # parse_horse_performanceを使用
+            df = pipeline_core.parse_with_error_handling(
+                str(html_file), 
+                "horse_performance_parser",
+                lambda fp: horse_info_parser.parse_horse_performance(
+                    BeautifulSoup(open(fp, 'rb').read().decode('euc_jp', errors='replace'), 'html.parser'),
+                    horse_id
+                ),
+                conn
+            )
+            
+            if df is not None and not df.empty:
+                all_perf_df.append(df)
+
+        if all_perf_df:
+            final_perf_df = pd.concat(all_perf_df, ignore_index=True)
+            
+            # 開催情報の分割（venue -> round_of_year, place, day_of_meeting）
+            if 'venue' in final_perf_df.columns:
+                venue_pattern = r'(\d+)(.+?)(\d+)'
+                venue_extracted = final_perf_df['venue'].str.extract(venue_pattern)
+                final_perf_df['round_of_year'] = venue_extracted[0].astype('Int64')
+                final_perf_df['place'] = venue_extracted[1]
+                final_perf_df['day_of_meeting'] = venue_extracted[2].astype('Int64')
+            
+            output_path = parsed_perf_parquet_dir / "horses_performance.parquet"
+            final_perf_df.to_parquet(output_path, index=False)
+            log.info(f"馬過去成績のパース結果を保存しました: {output_path} ({len(final_perf_df)}レコード)")
+
     except Exception as e:
         log.error(f"パイプラインの実行中にエラーが発生しました: {e}", exc_info=True)
     finally:

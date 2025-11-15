@@ -1,117 +1,55 @@
-"""
-レース結果HTMLパーサ (修正版 v1.G.5)
-netkeiba.com のレース結果ページから情報を抽出
-
-v1.G.5 での修正点:
-1. tbody検索のロバスト化: 
-   - <table> 直下に <tbody> が存在しないケースに対応。
-   - <tbody> が見つからない場合は、<table> 自体から <tr> を検索するよう修正。
-v1.0.4 での修正点:
-1. テーブル検索: class_='RaceTable01' から class_='race_table_01' に変更
-v1.0.3 での修正点:
-1. 日付抽出: shutuba_parser.py (v1.0.1) の extract_race_date_from_html を移植
-2. 依存関係: common_utils から parse_time_to_seconds, parse_margin_to_seconds 等をインポート
-"""
+# src/modules/parsers/results_parser.py の修正版
 
 import re
 import logging
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 from pathlib import Path
-
 import pandas as pd
 from bs4 import BeautifulSoup
 
-# common_utils のインポートパスを修正 (プロジェクトルートからの相対パスを想定)
-try:
-    from .common_utils import (
-        parse_int_or_none,
-        parse_float_or_none,
-        parse_sex_age,
-        parse_horse_weight,
-        parse_time_to_seconds,
-        parse_margin_to_seconds,
-        parse_prize_money,
-        normalize_owner_name,
-    )
-except ImportError:
-    # スクリプトとして直接実行された場合などのフォールバック
-    logging.warning("common_utils の相対インポートに失敗。絶対インポートを試みます。")
-    try:
-        from modules.parsers.common_utils import (
-            parse_int_or_none,
-            parse_float_or_none,
-            parse_sex_age,
-            parse_horse_weight,
-            parse_time_to_seconds,
-            parse_margin_to_seconds,
-            parse_prize_money,
-            normalize_owner_name,
-        )
-    except ImportError:
-        logging.error("common_utils が見つかりません。")
-        # 簡易的なフォールバック（実際には環境設定が必要）
-        parse_int_or_none = lambda x: int(x) if x and x.isdigit() else None
-        parse_float_or_none = lambda x: float(x) if x and x.replace('.', '', 1).isdigit() else None
-        parse_sex_age = lambda x: (x[0], int(x[1:])) if x and len(x) > 1 else (None, None)
-        parse_horse_weight = lambda x: (None, None)
-        parse_time_to_seconds = lambda x: None
-        parse_margin_to_seconds = lambda x: None # 引数修正
-        parse_prize_money = lambda x: None
-        normalize_owner_name = lambda x: x
-
+from .common_utils import (
+    parse_int_or_none,
+    parse_float_or_none,
+    parse_sex_age,
+    parse_horse_weight,
+    parse_time_to_seconds,
+    parse_margin_to_seconds,
+    parse_prize_money,
+    normalize_owner_name,
+)
 
 def parse_results_html(file_path: str, race_id: str = None) -> pd.DataFrame:
-    """
-    レース結果HTMLをパースしてDataFrameを返す (v1.G.5)
-    """
+    """レース結果HTMLをパースしてDataFrameを返す (拡張版)"""
     logging.info(f"レース結果パース開始: {file_path}")
     
-    # レースID抽出
     if race_id is None:
         race_id = extract_race_id_from_filename(file_path)
     
-    # ファイル読み込み
     with open(file_path, 'rb') as f:
         html_bytes = f.read()
     
-    # EUC-JPでデコード
     try:
         html_text = html_bytes.decode('euc_jp', errors='replace')
     except:
         html_text = html_bytes.decode('utf-8', errors='replace')
     
     soup = BeautifulSoup(html_text, 'html.parser')
-
-    # --- (v1.0.3) 日付抽出 ---
+    
+    # レースメタデータを抽出
+    race_metadata = extract_race_metadata_enhanced(soup)
     race_date = extract_race_date_from_html(soup, race_id)
     
-    # --- (v1.0.4) テーブル検索 ---
     result_table = soup.find('table', class_='race_table_01')
-    
     if not result_table:
-        logging.error(f"レース結果テーブル (class='race_table_01') が見つかりません: {file_path}")
+        logging.error(f"レース結果テーブルが見つかりません: {file_path}")
         return pd.DataFrame()
     
     rows = []
+    tbody = result_table.find('tbody') if result_table.find('tbody') else result_table
     
-    # --- ▼▼▼ 修正箇所 (v1.G.5) ▼▼▼ ---
-    # tbody内のtrを走査 (tbody がなくても <table> から直接 tr を探す)
-    
-    tbody = result_table.find('tbody')
-    
-    # tbody が見つかれば tbody を、見つからなければ table 全体を検索対象にする
-    search_area = tbody if tbody else result_table
-    
-    rows_found = search_area.find_all('tr')
-    
-    if not rows_found:
-        logging.error(f"テーブル (class='race_table_01') 内に行 (tr) が見つかりません: {file_path}")
-        return pd.DataFrame()
-        
-    for tr in rows_found:
-    # --- ▲▲▲ 修正箇所 ▲▲▲ ---
+    for tr in tbody.find_all('tr'):
         try:
-            row_data = parse_result_row(tr, race_id, race_date)
+            row_data = parse_result_row_enhanced(tr, race_id, race_date, race_metadata)
             if row_data:
                 rows.append(row_data)
         except Exception as e:
@@ -120,274 +58,300 @@ def parse_results_html(file_path: str, race_id: str = None) -> pd.DataFrame:
     
     df = pd.DataFrame(rows)
     
+    # 派生特徴量の生成
+    if not df.empty:
+        df = add_derived_features(df)
+    
     logging.info(f"レース結果パース完了: {file_path} ({len(df)}行)")
     
     return df
 
+def extract_race_metadata_enhanced(soup: BeautifulSoup) -> Dict:
+    """拡張されたレースメタデータ抽出"""
+    metadata = {
+        'distance_m': None, 'track_surface': None, 'weather': None,
+        'track_condition': None, 'post_time': None, 'race_name': None,
+        'prize_1st': None, 'prize_2nd': None, 'prize_3rd': None, 
+        'prize_4th': None, 'prize_5th': None,
+        'venue': None, 'day_of_meeting': None, 'round_of_year': None,
+        'race_class': None, 'age_restriction': None
+    }
+    
+    # レース基本情報の抽出を強化
+    race_data_intro = soup.find('div', class_='data_intro')
+    if race_data_intro:
+        span_text = race_data_intro.find('diary_snap_cut')
+        if span_text:
+            span_content = span_text.find('span')
+            if span_content:
+                text = span_content.get_text()
+                
+                # 距離と馬場（改善版）
+                distance_match = re.search(r'(芝|ダ|障)\s*(?:右|左|直|外|内)?\s*(\d+)m', text)
+                if distance_match:
+                    surface_map = {'芝': '芝', 'ダ': 'ダート', '障': '障害'}
+                    metadata['track_surface'] = surface_map.get(distance_match.group(1))
+                    metadata['distance_m'] = int(distance_match.group(2))
+                
+                # 天候
+                weather_match = re.search(r'天候\s*:\s*(\S+)', text)
+                if weather_match:
+                    metadata['weather'] = weather_match.group(1)
+                
+                # 馬場状態（改善版）
+                condition_match = re.search(r'(?:芝|ダート)\s*:\s*(\S+)', text)
+                if condition_match:
+                    metadata['track_condition'] = condition_match.group(1)
+                
+                # 発走時刻
+                time_match = re.search(r'発走\s*:\s*(\d{1,2}:\d{2})', text)
+                if time_match:
+                    metadata['post_time'] = time_match.group(1)
+    
+    # レース名とクラス
+    race_name_tag = soup.find('dl', class_='racedata')
+    if race_name_tag:
+        h1_tag = race_name_tag.find('h1')
+        if h1_tag:
+            race_name = h1_tag.get_text(strip=True)
+            metadata['race_name'] = race_name
+            
+            # レースクラスの推定
+            if 'G1' in race_name or 'GI' in race_name:
+                metadata['race_class'] = 'G1'
+            elif 'G2' in race_name or 'GII' in race_name:
+                metadata['race_class'] = 'G2'
+            elif 'G3' in race_name or 'GIII' in race_name:
+                metadata['race_class'] = 'G3'
+            elif 'オープン' in race_name or 'OP' in race_name:
+                metadata['race_class'] = 'OP'
+            elif '1600万' in race_name:
+                metadata['race_class'] = '1600'
+            elif '1000万' in race_name:
+                metadata['race_class'] = '1000'
+            elif '500万' in race_name:
+                metadata['race_class'] = '500'
+            elif '未勝利' in race_name:
+                metadata['race_class'] = '未勝利'
+            elif '新馬' in race_name:
+                metadata['race_class'] = '新馬'
+            
+            # 年齢制限
+            if '2歳' in race_name:
+                metadata['age_restriction'] = '2歳'
+            elif '3歳' in race_name:
+                metadata['age_restriction'] = '3歳'
+            elif '3歳以上' in race_name:
+                metadata['age_restriction'] = '3歳以上'
+            elif '4歳以上' in race_name:
+                metadata['age_restriction'] = '4歳以上'
+    
+    # 賞金情報
+    prize_info = soup.find('div', class_='RaceData02')
+    if prize_info:
+        prize_text = prize_info.get_text()
+        prize_match = re.search(r'本賞金:([\d,]+)万円', prize_text)
+        if prize_match:
+            prizes = [int(p.replace(',', '')) for p in prize_match.group(1).split(',')]
+            if len(prizes) >= 1: metadata['prize_1st'] = prizes[0]
+            if len(prizes) >= 2: metadata['prize_2nd'] = prizes[1]
+            if len(prizes) >= 3: metadata['prize_3rd'] = prizes[2]
+            if len(prizes) >= 4: metadata['prize_4th'] = prizes[3]
+            if len(prizes) >= 5: metadata['prize_5th'] = prizes[4]
+    
+    # 開催情報
+    smalltxt = soup.find('p', class_='smalltxt')
+    if smalltxt:
+        text = smalltxt.get_text()
+        match = re.search(r'(\d+)回(\S+?)(\d+)日目', text)
+        if match:
+            metadata['round_of_year'] = int(match.group(1))
+            metadata['venue'] = match.group(2)
+            metadata['day_of_meeting'] = int(match.group(3))
+    
+    return metadata
 
-def parse_result_row(tr, race_id: str, race_date: Optional[str]) -> Optional[Dict]:
-    """
-    レース結果テーブルの1行をパース (修正版)
-    """
+def parse_result_row_enhanced(tr, race_id: str, race_date: str, race_metadata: Dict) -> Optional[Dict]:
+    """拡張されたレース結果行のパース"""
     cells = tr.find_all('td')
     
     if len(cells) < 15:
         return None
     
     row_data = {'race_id': race_id, 'race_date': race_date}
+    row_data.update(race_metadata)
     
-    # ▼▼▼ 修正箇所: failed_to_finishフラグの実装 ▼▼▼
+    # 既存のパース処理（改善版）
+    row_data['finish_position'] = parse_int_or_none(cells[0].get_text())
+    row_data['bracket_number'] = parse_int_or_none(cells[1].get_text())
+    row_data['horse_number'] = parse_int_or_none(cells[2].get_text())
     
-    # 着順テキストの取得
-    finish_text = cells[0].get_text(strip=True)
-    
-    # 競走中止・失格等のキーワード定義
-    DNF_KEYWORDS = ['中止', '除外', '失格', '取消', '競走中止']
-    
-    # キーワードマッチング（大文字小文字を区別しない）
-    finish_text_lower = finish_text.lower()
-    is_dnf = any(keyword.lower() in finish_text_lower for keyword in DNF_KEYWORDS)
-    
-    if is_dnf:
-        # 完走しなかった場合
-        row_data['failed_to_finish'] = True
-        row_data['finish_position'] = None
-        row_data['scratched'] = False  # 出走取消ではない
-        
-        # 競走中止の理由を記録（オプション）
-        row_data['dnf_reason'] = finish_text
-        
-        logging.debug(f"競走中止を検出: {finish_text} (race_id: {race_id})")
-    else:
-        # 通常の着順
-        row_data['failed_to_finish'] = False
-        row_data['finish_position'] = parse_int_or_none(finish_text)
-        
-        # 着順がNullの場合は出走取消と判定
-        if row_data['finish_position'] is None:
-            row_data['scratched'] = True
-        else:
-            row_data['scratched'] = False
-    
-    # ▲▲▲ 修正箇所 ▲▲▲
-    
-    # 枠番
-    bracket_text = cells[1].get_text(strip=True)
-    row_data['bracket_number'] = parse_int_or_none(bracket_text)
-    
-    # 馬番
-    horse_num_text = cells[2].get_text(strip=True)
-    row_data['horse_number'] = parse_int_or_none(horse_num_text)
-    
-    # 馬名・馬ID
-    horse_link = cells[3].find('a', href=re.compile(r'/horse/\d+'))
+    # 馬情報
+    horse_link = cells[3].find('a')
     if horse_link:
+        row_data['horse_id'] = get_id_from_href(horse_link.get('href'), 'horse')
         row_data['horse_name'] = horse_link.get_text(strip=True)
-        horse_id_match = re.search(r'/horse/(\d+)', horse_link['href'])
-        row_data['horse_id'] = horse_id_match.group(1) if horse_id_match else None
-    else:
-        row_data['horse_name'] = cells[3].get_text(strip=True)
-        row_data['horse_id'] = None
     
-    # 性齢（例: "牡3"）
     sex_age_text = cells[4].get_text(strip=True)
     row_data['sex_age'] = sex_age_text
     sex, age = parse_sex_age(sex_age_text)
     row_data['sex'] = sex
     row_data['age'] = age
     
-    # 斤量
-    weight_text = cells[5].get_text(strip=True)
-    row_data['basis_weight'] = parse_float_or_none(weight_text)
+    row_data['basis_weight'] = parse_float_or_none(cells[5].get_text())
     
-    # 騎手名・騎手ID
-    jockey_link = cells[6].find('a', href=re.compile(r'/jockey/'))
+    # 騎手情報（改善版）
+    jockey_link = cells[6].find('a')
     if jockey_link:
+        row_data['jockey_id'] = get_id_from_href(jockey_link.get('href'), 'jockey')
         row_data['jockey_name'] = jockey_link.get_text(strip=True)
-        href = jockey_link['href']
-        jockey_id_match = re.search(r'/jockey/result/recent/(\d+)', href)
-        if not jockey_id_match:
-            jockey_id_match = re.search(r'/jockey/(\d+)', href)
-        row_data['jockey_id'] = jockey_id_match.group(1) if jockey_id_match else None
-    else:
-        row_data['jockey_name'] = cells[6].get_text(strip=True)
-        row_data['jockey_id'] = None
     
-    # タイム
-    time_text = cells[7].get_text(strip=True)
-    row_data['finish_time_str'] = time_text
-    row_data['finish_time_seconds'] = parse_time_to_seconds(time_text)
+    # タイム情報（拡張版）
+    time_str = cells[7].get_text(strip=True)
+    row_data['finish_time_str'] = time_str
+    time_seconds = parse_time_to_seconds(time_str)
+    row_data['finish_time_seconds'] = time_seconds
     
-    # 着差
-    margin_text = cells[8].get_text(strip=True)
-    row_data['margin_str'] = margin_text
-    # 1着の着差は '---' や '' になるため、0.0 に正規化
-    if row_data['finish_position'] == 1 and margin_text in ['---', '']:
-        row_data['margin_seconds'] = 0.0
-    else:
-        row_data['margin_seconds'] = parse_margin_to_seconds(margin_text)
-
-    # 通過順
-    passing_text = cells[10].get_text(strip=True)
-    row_data['passing_order'] = passing_text
+    # 着差（拡張版）
+    margin_str = cells[8].get_text(strip=True)
+    row_data['margin_str'] = margin_str
+    row_data['margin_seconds'] = parse_margin_to_seconds(margin_str)
+    
+    # 通過順位（分割版）
+    passing_str = cells[10].get_text(strip=True) if len(cells) > 10 else None
+    if passing_str:
+        corners = passing_str.split('-')
+        for i in range(4):
+            col_name = f'passing_order_{i+1}'
+            if i < len(corners):
+                row_data[col_name] = parse_int_or_none(corners[i])
+            else:
+                row_data[col_name] = None
     
     # 上がり3F
-    last_3f_text = cells[11].get_text(strip=True)
-    row_data['last_3f_time'] = parse_float_or_none(last_3f_text)
+    last_3f = parse_float_or_none(cells[11].get_text()) if len(cells) > 11 else None
+    row_data['last_3f_time'] = last_3f
     
-    # 単勝オッズ
-    odds_text = cells[12].get_text(strip=True)
-    row_data['win_odds'] = parse_float_or_none(odds_text)
+    # 上がり3Fを除いたタイム
+    if time_seconds and last_3f:
+        row_data['time_except_last3f'] = round(time_seconds - last_3f, 1)
     
-    # 人気
-    popularity_text = cells[13].get_text(strip=True)
-    row_data['popularity'] = parse_int_or_none(popularity_text)
+    row_data['win_odds'] = parse_float_or_none(cells[12].get_text()) if len(cells) > 12 else None
+    row_data['popularity'] = parse_int_or_none(cells[13].get_text()) if len(cells) > 13 else None
     
     # 馬体重
-    weight_change_text = cells[14].get_text(strip=True)
-    horse_weight, weight_change = parse_horse_weight(weight_change_text)
-    row_data['horse_weight'] = horse_weight
-    row_data['horse_weight_change'] = weight_change
+    if len(cells) > 14:
+        weight_str = cells[14].get_text(strip=True)
+        row_data['horse_weight'], row_data['horse_weight_change'] = parse_horse_weight(weight_str)
     
-    # 調教師 (cells[15] or [18])
-    row_data['trainer_name'] = None
+    # 調教師・馬主（安定化版）
     row_data['trainer_id'] = None
-    for cell_idx in [15, 18]: 
-        if len(cells) > cell_idx:
-            cell = cells[cell_idx]
-            trainer_link = cell.find('a', href=re.compile(r'/trainer/'))
-            if trainer_link:
-                row_data['trainer_name'] = trainer_link.get_text(strip=True)
-                href = trainer_link['href']
-                
-                # パターン1: /trainer/result/recent/{id}
-                # パターン2: /trainer/{id}
-                # {id} は英数字の組み合わせ（例: "05622", "a0043"）
-                
-                trainer_id_match = re.search(r'/trainer/result/recent/([a-zA-Z0-9]+)', href)
-                if not trainer_id_match:
-                    trainer_id_match = re.search(r'/trainer/([a-zA-Z0-9]+)', href)
-                
-                row_data['trainer_id'] = trainer_id_match.group(1) if trainer_id_match else None
-                break
-
-    # 馬主 (cells[16] or [19])
+    row_data['trainer_name'] = None
     row_data['owner_name'] = None
-    for cell_idx in [16, 19]:
-        if len(cells) > cell_idx:
-            cell = cells[cell_idx]
-            owner_text = cell.get_text(strip=True)
-            normalized_owner = normalize_owner_name(owner_text)
-            if normalized_owner:
-                row_data['owner_name'] = normalized_owner
-                break
-
-    # 賞金 (cells[17] or [20])
     row_data['prize_money'] = None
-    for cell_idx in [17, 20]:
-        if len(cells) > cell_idx:
-            cell = cells[cell_idx]
-            prize_text = cell.get_text(strip=True)
-            prize_money = parse_prize_money(prize_text)
-            if prize_money is not None:
-                row_data['prize_money'] = prize_money
-                break
-
+    
+    # 列数に応じた柔軟な処理
+    if len(cells) >= 18:
+        # 通常のフォーマット（調教師、馬主、賞金の順）
+        trainer_idx = 15
+        owner_idx = 16
+        prize_idx = 17
+        
+        # 賞金があるかチェック（1着の場合）
+        if row_data['finish_position'] == 1 and len(cells) > prize_idx:
+            prize_text = cells[prize_idx].get_text(strip=True)
+            if prize_text and prize_text.replace(',', '').replace('.', '').isdigit():
+                row_data['prize_money'] = parse_prize_money(prize_text)
+            else:
+                # 賞金がない場合、インデックスをシフト
+                trainer_idx = 15
+                owner_idx = 16
+        
+        # 調教師
+        if len(cells) > trainer_idx:
+            trainer_cell = cells[trainer_idx]
+            trainer_link = trainer_cell.find('a')
+            if trainer_link:
+                row_data['trainer_id'] = get_id_from_href(trainer_link.get('href'), 'trainer')
+                row_data['trainer_name'] = trainer_link.get_text(strip=True)
+        
+        # 馬主
+        if len(cells) > owner_idx:
+            owner_cell = cells[owner_idx]
+            owner_text = owner_cell.get_text(strip=True)
+            if owner_text and owner_text not in ['---', '']:
+                row_data['owner_name'] = normalize_owner_name(owner_text)
+    
     return row_data
 
-
-# ========================================
-# ユーティリティ関数
-# ========================================
-
-def extract_race_id_from_filename(file_path: str) -> str:
-    """
-    ファイル名からレースIDを抽出
-    """
-    filename = Path(file_path).stem
-    match = re.search(r'(\d{12})', filename)
-    return match.group(1) if match else None
-
-# --- (v1.0.3) 日付抽出関数 ---
-def extract_race_date_from_html(soup: BeautifulSoup, race_id: str) -> Optional[str]:
-    """
-    HTMLからレース日付を抽出 (shutuba_parser.py v1.0.1 と同一ロジック)
-    """
-    try:
-        # パターン1: <p class="smalltxt"> (レース結果ページ)
-        smalltxt = soup.find('p', class_='smalltxt')
-        if smalltxt:
-            date_text = smalltxt.get_text(strip=True)
-            # "2023年05月14日 2回東京8日目..."
-            match = re.search(r'(\d{4})年(\d{1,2})月(\d{1,2})日', date_text)
-            if match:
-                year = match.group(1)
-                month = match.group(2).zfill(2)
-                day = match.group(3).zfill(2)
-                logging.info(f"日付抽出成功 (smalltxt): {year}-{month}-{day}")
-                return f"{year}-{month}-{day}"
-
-        # パターン2: p.RaceData01 (出馬表ページ)
-        race_data = soup.find('p', class_='RaceData01')
-        if race_data:
-            date_text = race_data.get_text(strip=True)
-            match = re.search(r'(\d{4})年(\d{1,2})月(\d{1,2})日', date_text)
-            if match:
-                year = match.group(1)
-                month = match.group(2).zfill(2)
-                day = match.group(3).zfill(2)
-                logging.info(f"日付抽出成功 (RaceData01): {year}-{month}-{day}")
-                return f"{year}-{month}-{day}"
+def add_derived_features(df: pd.DataFrame) -> pd.DataFrame:
+    """モデル精度向上のための派生特徴量を追加"""
+    
+    # 1. ペース関連の特徴量
+    if 'time_except_last3f' in df.columns and 'last_3f_time' in df.columns:
+        # ペースインデックス（前半/後半の比率）
+        df['pace_index'] = df['time_except_last3f'] / (df['last_3f_time'] + 0.1)  # ゼロ除算防止
         
-        # パターン3: dd.Active (カレンダーページなど)
-        active_dd = soup.find('dd', class_='Active')
-        if active_dd:
-            date_text = active_dd.get_text(strip=True)
-            # "2023年5月28日" or "5月28日"
-            match_full = re.search(r'(\d{4})年(\d{1,2})月(\d{1,2})日', date_text)
-            if match_full:
-                year = match_full.group(1)
-                month = match_full.group(2).zfill(2)
-                day = match_full.group(3).zfill(2)
-                logging.info(f"日付抽出成功 (Active Full): {year}-{month}-{day}")
-                return f"{year}-{month}-{day}"
-            
-            # 年が欠落している場合 ("5月14日(日)")
-            match_partial = re.search(r'(\d{1,2})月(\d{1,2})日', date_text)
-            if match_partial and '年' not in date_text:
-                logging.warning(f"日付抽出 (Active Partial): 年が欠落しています '{date_text}'。年を別途探索します。")
-                year_str = None
-                
-                # <li class="Active"> の親の前の <li> タグ
-                active_li = active_dd.find_parent('li')
-                if active_li:
-                    prev_li = active_li.find_previous_sibling('li', class_='Active')
-                    if prev_li:
-                        year_match = re.search(r'(\d{4})', prev_li.get_text(strip=True))
-                        if year_match:
-                            year_str = year_match.group(1)
-
-                # title タグからも試行
-                if not year_str:
-                    title_tag = soup.find('title')
-                    if title_tag:
-                         year_match = re.search(r'(\d{4})', title_tag.get_text(strip=True))
-                         if year_match:
-                            year_str = year_match.group(1)
-
-                if year_str:
-                    month = match_partial.group(1).zfill(2)
-                    day = match_partial.group(2).zfill(2)
-                    logging.info(f"日付抽出成功 (Active Partial + Year): {year_str}-{month}-{day}")
-                    return f"{year_str}-{month}-{day}"
-                else:
-                    logging.warning(f"年（YYYY）の特定に失敗しました。")
-
+        # レース内での上がり3F順位
+        df['last3f_rank'] = df.groupby('race_id')['last_3f_time'].rank(method='min')
+    
+    # 2. 順位変動の特徴量
+    for i in range(1, 4):
+        curr_col = f'passing_order_{i}'
+        next_col = f'passing_order_{i+1}'
+        if curr_col in df.columns and next_col in df.columns:
+            df[f'position_change_{i}_{i+1}'] = df[next_col] - df[curr_col]
+    
+    # 最終コーナーから着順への変化
+    if 'passing_order_4' in df.columns:
+        df['final_corner_to_finish'] = df['finish_position'] - df['passing_order_4']
+    elif 'passing_order_3' in df.columns:
+        df['final_corner_to_finish'] = df['finish_position'] - df['passing_order_3']
+    
+    # 3. 相対的な指標
+    # レース内での馬体重の偏差値
+    df['horse_weight_deviation'] = df.groupby('race_id')['horse_weight'].transform(
+        lambda x: 50 + 10 * (x - x.mean()) / (x.std() + 0.1)
+    )
+    
+    # 人気と着順の乖離
+    if 'popularity' in df.columns:
+        df['popularity_finish_diff'] = df['finish_position'] - df['popularity']
+    
+    # 4. オッズ関連
+    if 'win_odds' in df.columns:
+        # 確率への変換
+        df['win_probability'] = 1 / (df['win_odds'] + 1)
         
-        # HTMLから日付を見つけられなかった場合
-        logging.warning(f"HTMLから日付を抽出できませんでした (race_id: {race_id})。Noneを返します。")
+        # レース内での相対的なオッズ
+        df['relative_odds'] = df.groupby('race_id')['win_odds'].transform(
+            lambda x: x / x.mean()
+        )
+    
+    # 5. 馬場・距離適性の準備（実際の計算は過去成績と結合後）
+    df['distance_category'] = pd.cut(
+        df['distance_m'],
+        bins=[0, 1400, 1800, 2200, 3000, 4000],
+        labels=['sprint', 'mile', 'intermediate', 'long', 'extreme_long']
+    )
+    
+    return df
+
+def get_id_from_href(href: Optional[str], pattern: str) -> Optional[str]:
+    """改善版: 複雑なURLパターンに対応"""
+    if not href:
         return None
-        
-    except Exception as e:
-        logging.error(f"レース日付の抽出に失敗: {e}")
-        return None
+    
+    # パターンごとの正規表現
+    patterns = {
+        'horse': r'/horse/(\w+)',
+        'jockey': r'/jockey/(?:result/recent/)?(\w+)',
+        'trainer': r'/trainer/(?:result/recent/)?(\w+)',
+        'race': r'/race/(\w+)'
+    }
+    
+    if pattern in patterns:
+        match = re.search(patterns[pattern], href)
+        return match.group(1) if match else None
+    
+    return None
