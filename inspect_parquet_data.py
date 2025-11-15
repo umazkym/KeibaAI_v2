@@ -41,8 +41,8 @@ def inspect_parquet_file(file_path, output_writer):
 
         output_writer.write("\n\n")
 
-        output_writer.write("### 先頭100行のデータ ###\n")
-        output_writer.write(df.head(100).to_string())
+        output_writer.write("### 先頭500行のデータ ###\n")
+        output_writer.write(df.head(500).to_string())
         output_writer.write("\n\n")
 
     except Exception as e:
