@@ -67,6 +67,10 @@ class FeatureEngine:
         if self.recipes.get('entity_stats', {}).get('enabled', False):
             df = self._add_entity_stats(df, results_history_df)
 
+        # --- 交互作用特徴量 ---
+        if self.recipes.get('interaction_features', {}).get('enabled', False):
+            df = self._add_interaction_features(df, results_history_df)
+
         # --- レース内相対特徴量 ---
         # career_stats など、他の特徴量が出揃った後で計算
         # まずは生成された特徴量をマージ
@@ -230,6 +234,114 @@ class FeatureEngine:
             if id_col in df.columns and not stats.empty:
                 df = df.merge(stats, on=id_col, how='left')
         
+        return df
+
+    def _add_interaction_features(self, df: pd.DataFrame, history_df: pd.DataFrame) -> pd.DataFrame:
+        """
+        交互作用特徴量を追加（騎手×競馬場、種牡馬×馬場など）
+
+        Args:
+            df: 予測対象データ
+            history_df: 過去のレース履歴データ
+
+        Returns:
+            交互作用特徴量が追加されたDataFrame
+        """
+        logging.debug("レシピに基づいて交互作用特徴量を追加中...")
+        interaction_config = self.recipes.get('interaction_features', {})
+
+        # YAML構造: interaction_features.interactions がリスト
+        if isinstance(interaction_config, dict):
+            interaction_recipes = interaction_config.get('interactions', [])
+        else:
+            interaction_recipes = []
+
+        if not interaction_recipes:
+            logging.debug("交互作用特徴量のレシピが定義されていません。")
+            return df
+
+        # distance_categoryが存在しない場合は作成
+        if 'distance_m' in df.columns and 'distance_category' not in df.columns:
+            df = self._add_distance_category(df)
+        if 'distance_m' in history_df.columns and 'distance_category' not in history_df.columns:
+            history_df = self._add_distance_category(history_df)
+
+        # is_winカラムの確保
+        history_df = history_df.copy()
+        if 'finish_position' in history_df.columns and 'is_win' not in history_df.columns:
+            history_df['is_win'] = (history_df['finish_position'] == 1).astype(int)
+
+        for interaction_recipe in interaction_recipes:
+            if not isinstance(interaction_recipe, dict):
+                continue
+
+            interaction_name = interaction_recipe.get('name')
+            id_col = interaction_recipe.get('id_column')
+            context_col = interaction_recipe.get('context_column')
+            target_col = interaction_recipe.get('target')
+            agg_func = interaction_recipe.get('agg')
+            feature_template = interaction_recipe.get('feature_template')
+
+            # 必須カラムのチェック
+            if id_col not in history_df.columns:
+                logging.warning(f"交互作用 ({interaction_name}): IDカラム '{id_col}' が履歴にありません。")
+                continue
+            if context_col not in history_df.columns:
+                logging.warning(f"交互作用 ({interaction_name}): コンテキストカラム '{context_col}' が履歴にありません。")
+                continue
+            if target_col not in history_df.columns:
+                logging.warning(f"交互作用 ({interaction_name}): ターゲットカラム '{target_col}' が履歴にありません。")
+                continue
+
+            # 欠損を除外して集計
+            valid_history = history_df.dropna(subset=[id_col, context_col, target_col])
+
+            if valid_history.empty:
+                logging.warning(f"交互作用 ({interaction_name}): 有効な履歴データがありません。")
+                continue
+
+            # 交互作用ごとに集計
+            grouped = valid_history.groupby([id_col, context_col])[target_col].agg(agg_func).reset_index()
+
+            # コンテキスト値ごとに個別のカラムを作成（ピボット）
+            for context_value in grouped[context_col].unique():
+                # コンテキスト値のクリーニング（ファイル名に使える形式に）
+                context_value_clean = str(context_value).replace(' ', '_').replace('/', '_')
+                feature_name = feature_template.format(context=context_value_clean)
+
+                # この特定のコンテキスト値でフィルタリング
+                context_stats = grouped[grouped[context_col] == context_value][[id_col, target_col]].copy()
+                context_stats = context_stats.rename(columns={target_col: feature_name})
+
+                # マージ
+                if id_col in df.columns and not context_stats.empty:
+                    df = df.merge(context_stats, on=id_col, how='left')
+                    logging.debug(f"交互作用特徴量 '{feature_name}' を追加しました。")
+
+        return df
+
+    def _add_distance_category(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        距離カテゴリを追加（sprint, mile, intermediate, long, marathon）
+        """
+        if 'distance_m' not in df.columns:
+            return df
+
+        def categorize_distance(distance):
+            if pd.isna(distance):
+                return 'unknown'
+            if distance < 1400:
+                return 'sprint'
+            elif distance < 1800:
+                return 'mile'
+            elif distance < 2200:
+                return 'intermediate'
+            elif distance < 2800:
+                return 'long'
+            else:
+                return 'marathon'
+
+        df['distance_category'] = df['distance_m'].apply(categorize_distance)
         return df
 
     def _add_relative_features(self, df: pd.DataFrame) -> pd.DataFrame:
