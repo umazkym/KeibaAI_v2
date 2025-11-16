@@ -106,22 +106,36 @@ class CompletePipeline:
         print(f"{'='*60}")
 
     def _find_existing_race_ids(self) -> List[str]:
-        """既存のbinファイルから対象日付のrace_idを取得"""
+        """既存のbinファイルから対象日付のrace_idを取得
+
+        注意: race_idは暦日を含まないため、メタデータファイルから読み込む。
+        メタデータファイルが存在しない場合は、全てのbinファイルをパースする。
+        """
         print(f"\n【フェーズ】既存binファイルの検索")
 
-        date_formatted = self.target_date.replace('-', '')
-        pattern = f"{date_formatted}*.bin"
+        # メタデータファイルを探す
+        metadata_file = self.output_dir / 'race_ids_metadata.txt'
 
-        race_files = list(self.race_bin_dir.glob(pattern))
+        if metadata_file.exists():
+            print(f"  メタデータファイルから読み込み: {metadata_file}")
+            with open(metadata_file, 'r') as f:
+                race_ids = [line.strip() for line in f if line.strip()]
+            print(f"  [✓] {len(race_ids)} 件のレースを検出（メタデータより）")
+            return race_ids
+
+        # メタデータがない場合は、全てのbinファイルをパース
+        print(f"  メタデータなし。全binファイルを検索...")
+        race_files = list(self.race_bin_dir.glob('*.bin'))
         race_ids = []
 
         for f in race_files:
             race_id = f.stem
-            if len(race_id) == 12:  # 正しいrace_idの長さ
+            # 正しいrace_id形式: 12桁の数字（_profile, _perfなどを除外）
+            if len(race_id) == 12 and race_id.isdigit():
                 race_ids.append(race_id)
 
         race_ids.sort()
-        print(f"  [✓] {len(race_ids)} 件のレースを検出")
+        print(f"  [✓] {len(race_ids)} 件のレースを検出（全binファイルより）")
 
         return race_ids
 
@@ -172,9 +186,19 @@ class CompletePipeline:
 
             time.sleep(2)
 
+        # race_idsをメタデータファイルに保存（--parse-only モード用）
+        metadata_file = self.output_dir / 'race_ids_metadata.txt'
+        with open(metadata_file, 'w') as f:
+            for race_id in race_ids:
+                f.write(f"{race_id}\n")
+        print(f"  [✓] race_idsをメタデータに保存: {metadata_file}")
+
         # フェーズ2: 馬IDの抽出
         print(f"\n【フェーズ2】馬IDの抽出")
-        horse_ids = self._extract_horse_ids_from_bins(list(self.race_bin_dir.glob(f"{self.target_date.replace('-', '')}*.bin")))
+        # 修正: 日付パターンではなく、実際にスクレイピングしたrace_idsからbinファイルを特定
+        bin_files = [self.race_bin_dir / f"{race_id}.bin" for race_id in race_ids]
+        bin_files = [f for f in bin_files if f.exists()]
+        horse_ids = self._extract_horse_ids_from_bins(bin_files)
         print(f"  [✓] {len(horse_ids)} 頭のユニークな馬IDを抽出")
 
         # フェーズ3: 馬データのスクレイピング（サンプル版：最初の10頭のみ）
@@ -283,6 +307,16 @@ class CompletePipeline:
 
             surface_missing = race_df['track_surface'].isna().sum()
             print(f"      track_surface 欠損: {surface_missing}行 ({surface_missing/len(race_df)*100:.2f}%)")
+
+            # 診断: 欠損が発生しているレースを特定
+            if distance_missing > 0:
+                print(f"\n      【診断】distance_m 欠損レース:")
+                missing_races = race_df[race_df['distance_m'].isna()]['race_id'].unique()
+                for race_id in sorted(missing_races):
+                    race_data = race_df[race_df['race_id'] == race_id]
+                    race_name = race_data.iloc[0]['race_name'] if not race_data.empty else 'N/A'
+                    metadata_source = race_data.iloc[0].get('metadata_source', 'Unknown')
+                    print(f"        {race_id}: {race_name} ({len(race_data)}頭, source={metadata_source})")
 
         # 2. 出馬表のパース（簡易版）
         print(f"\n  --- 出馬表のパース ---")

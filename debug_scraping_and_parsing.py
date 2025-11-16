@@ -212,27 +212,36 @@ def extract_race_metadata_enhanced(soup: BeautifulSoup) -> Dict:
         'prize_1st': None, 'prize_2nd': None, 'prize_3rd': None,
         'prize_4th': None, 'prize_5th': None,
         'venue': None, 'day_of_meeting': None, 'round_of_year': None,
-        'race_class': None, 'head_count': None
+        'race_class': None, 'head_count': None,
+        'metadata_source': None  # 診断用: どのフォールバックレベルが使われたか
     }
 
 
     # レース基本情報の抽出（複数フォールバック対応）
     # 方法1: data_intro を探す（通常のレース）
     race_data_intro = soup.find('div', class_='data_intro')
+    if race_data_intro:
+        metadata['metadata_source'] = 'data_intro'
 
     # 方法2: diary_snap_cut を探す
     if not race_data_intro:
         race_data_intro = soup.find('div', class_='diary_snap_cut')
+        if race_data_intro:
+            metadata['metadata_source'] = 'diary_snap_cut'
 
     # 方法3: racedata > dd を探す（障害レースや古いページ）
     if not race_data_intro:
         race_data_dl = soup.find('dl', class_='racedata')
         if race_data_dl:
             race_data_intro = race_data_dl.find('dd')
+            if race_data_intro:
+                metadata['metadata_source'] = 'racedata_dl_dd'
 
     # 方法4: RaceData01 を探す（出馬表や古いレース結果ページ）
     if not race_data_intro:
         race_data_intro = soup.find('div', class_='RaceData01')
+        if race_data_intro:
+            metadata['metadata_source'] = 'RaceData01'
 
     if race_data_intro:
         # テキスト全体を取得
