@@ -83,6 +83,62 @@ def get_id_from_href(href: Optional[str], pattern: str) -> Optional[str]:
         return match.group(1) if match else None
     return None
 
+def parse_margin_to_seconds(margin_str: Optional[str]) -> Optional[float]:
+    """着差文字列を秒数に変換（推定値）
+ 
+    1馬身 = 0.2秒として換算
+ 
+    Args:
+        margin_str: 着差文字列（例: "1.1/2", "3/4", "クビ", "大差"）
+ 
+    Returns:
+        着差秒数
+    """
+    if not margin_str or margin_str.strip() in ['---', '']:
+        # 1着の場合は着差がないのでNoneを返す
+        return None
+ 
+    # 特殊な着差のマッピング
+    special_margins = {
+        '同着': 0.0,
+        'ハナ': 0.02,
+        'アタマ': 0.04,
+        'クビ': 0.05,
+        '大差': 5.0,
+        '大': 5.0,
+    }
+ 
+    if margin_str in special_margins:
+        return special_margins[margin_str]
+ 
+    # 分数表記の処理
+    # 1馬身 = 0.2秒として換算
+    SECONDS_PER_LENGTH = 0.2
+    total_length = 0.0
+ 
+    try:
+        # "1.1/2" のような形式（1と1/2馬身）
+        if '.' in margin_str and '/' in margin_str:
+            integer_part_str, fraction_str = margin_str.split('.')
+            total_length += float(integer_part_str)
+ 
+            numerator, denominator = fraction_str.split('/')
+            total_length += float(numerator) / float(denominator)
+ 
+        # "3/4" のような形式（3/4馬身）
+        elif '/' in margin_str:
+            numerator, denominator = margin_str.split('/')
+            total_length += float(numerator) / float(denominator)
+ 
+        # "5" のような整数形式（5馬身）
+        else:
+            total_length = float(margin_str)
+ 
+        return round(total_length * SECONDS_PER_LENGTH, 3)
+ 
+    except (ValueError, ZeroDivisionError):
+        return None
+
 # --- 高機能パーサー (keibaai.src.modules.parsers.results_parser より移植・改造) ---
 
 def parse_html_content(html_bytes: bytes, race_id: str) -> pd.DataFrame:
@@ -125,59 +181,102 @@ def parse_html_content(html_bytes: bytes, race_id: str) -> pd.DataFrame:
     return df
 
 def extract_race_metadata_enhanced(soup: BeautifulSoup) -> Dict:
-    """拡張されたレースメタデータ抽出"""
-    metadata = {}
-    
-    # レース名とクラス
-    race_name_div = soup.find('div', class_='RaceName')
-    if race_name_div:
-        race_name = safe_strip(race_name_div.get_text())
-        metadata['race_name'] = race_name
-        # クラス推定ロジック... (指示.mdより)
-        if 'G1' in race_name or 'GI' in race_name: metadata['race_class'] = 'G1'
-        elif 'G2' in race_name or 'GII' in race_name: metadata['race_class'] = 'G2'
-        elif 'G3' in race_name or 'GIII' in race_name: metadata['race_class'] = 'G3'
-        elif 'オープン' in race_name or 'OP' in race_name: metadata['race_class'] = 'OP'
-        elif '1600万' in race_name: metadata['race_class'] = '1600'
-        elif '1000万' in race_name: metadata['race_class'] = '1000'
-        elif '500万' in race_name: metadata['race_class'] = '500'
-        elif '未勝利' in race_name: metadata['race_class'] = '未勝利'
-        elif '新馬' in race_name: metadata['race_class'] = '新馬'
-
-    # レース基本情報
-    race_data01 = soup.find('div', class_='RaceData01')
-    if race_data01:
-        text = race_data01.get_text(strip=True)
-        distance_match = re.search(r'(芝|ダ|障)(?:右|左|直|外|内)?\s*(\d+)m', text)
+    """拡張されたレースメタデータ抽出 (修正版)"""
+    metadata = {
+        'distance_m': None, 'track_surface': None, 'weather': None,
+        'track_condition': None, 'post_time': None, 'race_name': None,
+        'prize_1st': None, 'prize_2nd': None, 'prize_3rd': None,
+        'prize_4th': None, 'prize_5th': None,
+        'venue': None, 'day_of_meeting': None, 'round_of_year': None,
+        'race_class': None, 'head_count': None
+    }
+ 
+    # レース基本情報の抽出（修正: セレクタを変更）
+    race_data_intro = soup.find('div', class_='data_intro')
+    if race_data_intro:
+        # テキスト全体を取得
+        text = race_data_intro.get_text(strip=True)
+        # 距離と馬場
+        distance_match = re.search(r'(芝|ダ|障)\s*(?:右|左|直|外|内)?\s*(\d+)m', text)
         if distance_match:
             surface_map = {'芝': '芝', 'ダ': 'ダート', '障': '障害'}
             metadata['track_surface'] = surface_map.get(distance_match.group(1))
             metadata['distance_m'] = int(distance_match.group(2))
-        
-        weather_match = re.search(r'天候:(\S+)', text)
-        if weather_match: metadata['weather'] = weather_match.group(1)
-        
-        condition_match = re.search(r'(?:芝|ダート):(\S+)', text)
-        if condition_match: metadata['track_condition'] = condition_match.group(1)
-        
-        time_match = re.search(r'発走:(\d{1,2}:\d{2})', text)
-        if time_match: metadata['post_time'] = time_match.group(1)
+ 
+        # 天候
+        weather_match = re.search(r'天候\s*:\s*(\S+)', text)
+        if weather_match:
+            metadata['weather'] = weather_match.group(1)
+ 
+        # 馬場状態
+        condition_match = re.search(r'(?:芝|ダート)\s*:\s*(\S+)', text)
+        if condition_match:
+            metadata['track_condition'] = condition_match.group(1)
+ 
+        # 発走時刻
+        time_match = re.search(r'発走\s*:\s*(\d{1,2}:\d{2})', text)
+        if time_match:
+            metadata['post_time'] = time_match.group(1)
+ 
+    # レース名とクラス（修正: セレクタを変更）
+    race_name_tag = soup.find('dl', class_='racedata')
+    if race_name_tag:
+        h1_tag = race_name_tag.find('h1')
+        if h1_tag:
+            race_name = h1_tag.get_text(strip=True)
+            metadata['race_name'] = race_name
+ 
+            # レースクラスの推定
+            if 'G1' in race_name or 'GI' in race_name:
+                metadata['race_class'] = 'G1'
+            elif 'G2' in race_name or 'GII' in race_name:
+                metadata['race_class'] = 'G2'
+            elif 'G3' in race_name or 'GIII' in race_name:
+                metadata['race_class'] = 'G3'
+            elif 'オープン' in race_name or 'OP' in race_name:
+                metadata['race_class'] = 'OP'
+            elif '1600万' in race_name:
+                metadata['race_class'] = '1600'
+            elif '1000万' in race_name:
+                metadata['race_class'] = '1000'
+            elif '500万' in race_name:
+                metadata['race_class'] = '500'
+            elif '未勝利' in race_name:
+                metadata['race_class'] = '未勝利'
+            elif '新馬' in race_name:
+                metadata['race_class'] = '新馬'
 
-    # 開催情報と賞金
-    race_data02 = soup.find('div', class_='RaceData02')
-    if race_data02:
-        text = race_data02.get_text(strip=True)
-        venue_match = re.search(r'(\d+)回(\S+?)(\d+)日目', text)
-        if venue_match:
-            metadata['round_of_year'] = int(venue_match.group(1))
-            metadata['venue'] = venue_match.group(2)
-            metadata['day_of_meeting'] = int(venue_match.group(3))
-        
-        prize_match = re.search(r'本賞金:([\d,]+)万円', text)
+    # 賞金情報
+    prize_info = soup.find('div', class_='RaceData02')
+    if prize_info:
+        prize_text = prize_info.get_text()
+        prize_match = re.search(r'本賞金:([\d,]+)万円', prize_text)
         if prize_match:
             prizes = [int(p.replace(',', '')) for p in prize_match.group(1).split(',')]
             if len(prizes) >= 1: metadata['prize_1st'] = prizes[0]
-            # ... (以下同様に2-5着も設定可能)
+            if len(prizes) >= 2: metadata['prize_2nd'] = prizes[1]
+            if len(prizes) >= 3: metadata['prize_3rd'] = prizes[2]
+            if len(prizes) >= 4: metadata['prize_4th'] = prizes[3]
+            if len(prizes) >= 5: metadata['prize_5th'] = prizes[4]
+
+    # 開催情報
+    smalltxt = soup.find('p', class_='smalltxt')
+    if smalltxt:
+        text = smalltxt.get_text()
+        match = re.search(r'(\d+)回(\S+?)(\d+)日目', text)
+
+        if match:
+            metadata['round_of_year'] = int(match.group(1))
+            metadata['venue'] = match.group(2)
+            metadata['day_of_meeting'] = int(match.group(3))
+
+    # 出走頭数の取得
+    result_table = soup.find('table', class_='race_table_01')
+    if result_table:
+        tbody = result_table.find('tbody') if result_table.find('tbody') else result_table
+        rows = tbody.find_all('tr')
+        data_rows = [row for row in rows if row.find('td')]
+        metadata['head_count'] = len(data_rows)
     
     return metadata
 
@@ -210,7 +309,9 @@ def parse_result_row_enhanced(tr: BeautifulSoup, race_id: str, race_metadata: Di
     row_data['finish_time_str'] = time_str
     row_data['finish_time_sec'] = parse_time_to_seconds(time_str)
     
-    row_data['margin_str'] = safe_strip(cells[8].get_text())
+    margin_str = safe_strip(cells[8].get_text())
+    row_data['margin_str'] = margin_str
+    row_data['margin_seconds'] = parse_margin_to_seconds(margin_str)
     
     passing_str = safe_strip(cells[10].get_text())
     corners = passing_str.split('-') if passing_str else []
