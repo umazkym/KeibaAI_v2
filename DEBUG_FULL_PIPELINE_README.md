@@ -47,11 +47,24 @@ python debug_full_pipeline_by_date.py --date 2023-10-09 --parse-only
 
 ```
 output_20231009/
+├── race_ids_metadata.txt     # スクレイピングで取得したrace_idリスト（--parse-only用）
 ├── race_results.csv          # レース結果（全レース統合）
 ├── shutuba_metadata.csv      # 出馬表メタデータ
 ├── horse_profiles.csv        # 馬プロフィール（未実装）
 └── horses_performance.csv    # 馬過去成績（未実装）
 ```
+
+### race_ids_metadata.txt の内容
+
+```
+202305040301
+202305040302
+202305040303
+...
+202308020312
+```
+
+このファイルは、`--parse-only`モードで使用されます。
 
 ### race_results.csv の内容
 
@@ -63,7 +76,15 @@ output_20231009/
 | finish_position | 着順 | ✅ |
 | horse_name | 馬名 | ✅ |
 | jockey_name | 騎手名（記号除去済み） | ✅ |
-| ... | 全54カラム | ✅ |
+| **metadata_source** | **メタデータ取得元（診断用）** | ✅ **新規追加** |
+| ... | 全55カラム | ✅ |
+
+**metadata_source の値**:
+- `data_intro`: 通常のレース（最も一般的）
+- `diary_snap_cut`: 一部のレース
+- `racedata_dl_dd`: 障害レースや古いページ
+- `RaceData01`: 出馬表や古いレース結果ページ
+- `None`: 4段階全て失敗（要調査）
 
 ### 簡易統計の自動表示
 
@@ -74,6 +95,21 @@ output_20231009/
     distance_m 欠損: 0行 (0.00%)  ← RaceData01対応により改善
     track_surface 欠損: 0行 (0.00%)
 ```
+
+欠損がある場合は診断情報も表示されます:
+
+```
+[✓] race_results.csv: 311行
+    distance_m 欠損: 45行 (14.47%)
+    track_surface 欠損: 45行 (14.47%)
+
+    【診断】distance_m 欠損レース:
+      202305040307: 東京7R (13頭, source=None)
+      202308020305: 京都5R (12頭, source=None)
+      ...
+```
+
+`source=None`の場合、4段階フォールバックが全て失敗しています。該当binファイルのHTML構造を手動確認してください。
 
 ## 🎯 使用例
 
@@ -272,6 +308,30 @@ time.sleep(5)  # 5秒に変更
 ```
 
 ## ⚠️ 注意事項
+
+### 0. **重要**: race_idフォーマットについて
+
+**race_idは暦日を含みません！**
+
+```
+race_id形式: YYYYPPNNDDRR
+  YYYY = 年 (4桁)
+  PP   = 競馬場コード (2桁) 例: 05=東京, 06=中山
+  NN   = 回次 (2桁) 例: 04=4回
+  DD   = 日 (2桁) 例: 03=3日目
+  RR   = レース番号 (2桁) 例: 01=1R
+
+例: 202305040301 = 2023年 東京 4回 3日目 1R
+```
+
+**重要なポイント**:
+- `--date 2023-10-09` で実行した場合、取得されるrace_idは `202305040301` のような形式
+- race_idに`20231009`は**含まれない**（これは暦日ではなく、開催回次・日を表す）
+- 2023-10-09に開催されたレースでも、race_idは `2023PPNNDD01` の形式
+
+このため、本ツールは以下の仕組みを採用：
+1. スクレイピング時: race_idsを `race_ids_metadata.txt` に保存
+2. --parse-only時: メタデータファイルから読み込み
 
 ### 1. スクレイピング実行時の注意
 
