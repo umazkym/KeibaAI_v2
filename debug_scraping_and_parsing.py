@@ -98,19 +98,19 @@ def get_id_from_href(href: Optional[str], pattern: str) -> Optional[str]:
 
 def parse_margin_to_seconds(margin_str: Optional[str]) -> Optional[float]:
     """着差文字列を秒数に変換（推定値）
- 
+
     1馬身 = 0.2秒として換算
- 
+
     Args:
         margin_str: 着差文字列（例: "1.1/2", "3/4", "クビ", "大差"）
- 
+
     Returns:
         着差秒数
     """
     if not margin_str or margin_str.strip() in ['---', '']:
         # 1着の場合は着差がないのでNoneを返す
         return None
- 
+
     # 特殊な着差のマッピング
     special_margins = {
         '同着': 0.0,
@@ -120,35 +120,37 @@ def parse_margin_to_seconds(margin_str: Optional[str]) -> Optional[float]:
         '大差': 5.0,
         '大': 5.0,
     }
- 
+
     if margin_str in special_margins:
         return special_margins[margin_str]
- 
+
+
     # 分数表記の処理
     # 1馬身 = 0.2秒として換算
     SECONDS_PER_LENGTH = 0.2
     total_length = 0.0
- 
+
     try:
         # "1.1/2" のような形式（1と1/2馬身）
         if '.' in margin_str and '/' in margin_str:
             integer_part_str, fraction_str = margin_str.split('.')
             total_length += float(integer_part_str)
- 
+
             numerator, denominator = fraction_str.split('/')
             total_length += float(numerator) / float(denominator)
- 
+
+
         # "3/4" のような形式（3/4馬身）
         elif '/' in margin_str:
             numerator, denominator = margin_str.split('/')
             total_length += float(numerator) / float(denominator)
- 
+
         # "5" のような整数形式（5馬身）
         else:
             total_length = float(margin_str)
- 
+
         return round(total_length * SECONDS_PER_LENGTH, 3)
- 
+
     except (ValueError, ZeroDivisionError):
         return None
 
@@ -194,7 +196,9 @@ def parse_html_content(html_bytes: bytes, race_id: str) -> pd.DataFrame:
     return df
 
 def extract_race_metadata_enhanced(soup: BeautifulSoup) -> Dict:
+
     """拡張されたレースメタデータ抽出 (改善版 - 複数フォールバック対応)"""
+
     metadata = {
         'distance_m': None, 'track_surface': None, 'weather': None,
         'track_condition': None, 'post_time': None, 'race_name': None,
@@ -203,6 +207,7 @@ def extract_race_metadata_enhanced(soup: BeautifulSoup) -> Dict:
         'venue': None, 'day_of_meeting': None, 'round_of_year': None,
         'race_class': None, 'head_count': None
     }
+
 
     # レース基本情報の抽出（複数フォールバック対応）
     # 方法1: data_intro を探す（通常のレース）
@@ -222,8 +227,10 @@ def extract_race_metadata_enhanced(soup: BeautifulSoup) -> Dict:
         # テキスト全体を取得
         text = race_data_intro.get_text(strip=True)
 
+
         # 距離と馬場（改善版 - より柔軟な正規表現）
         distance_match = re.search(r'(芝|ダ|障)\s*(?:右|左|直|外|内)?\s*(\d+)\s*m?', text, re.IGNORECASE)
+
         if distance_match:
             surface_map = {'芝': '芝', 'ダ': 'ダート', '障': '障害'}
             metadata['track_surface'] = surface_map.get(distance_match.group(1))
@@ -248,6 +255,7 @@ def extract_race_metadata_enhanced(soup: BeautifulSoup) -> Dict:
 
         # 馬場状態（障害レースにも対応）
         condition_match = re.search(r'(?:芝|ダート|馬場)\s*:\s*(\S+)', text)
+
         if condition_match:
             metadata['track_condition'] = condition_match.group(1)
 
@@ -255,7 +263,7 @@ def extract_race_metadata_enhanced(soup: BeautifulSoup) -> Dict:
         time_match = re.search(r'発走\s*:\s*(\d{1,2}:\d{2})', text)
         if time_match:
             metadata['post_time'] = time_match.group(1)
- 
+
     # レース名とクラス（修正: セレクタを変更）
     race_name_tag = soup.find('dl', class_='racedata')
     if race_name_tag:
@@ -283,6 +291,7 @@ def extract_race_metadata_enhanced(soup: BeautifulSoup) -> Dict:
                 metadata['race_class'] = '未勝利'
             elif '新馬' in race_name:
                 metadata['race_class'] = '新馬'
+
             else:
                 # 障害レースなど
                 metadata['race_class'] = 'その他'
@@ -318,7 +327,7 @@ def extract_race_metadata_enhanced(soup: BeautifulSoup) -> Dict:
         rows = tbody.find_all('tr')
         data_rows = [row for row in rows if row.find('td')]
         metadata['head_count'] = len(data_rows)
-    
+
     return metadata
 
 def parse_result_row_enhanced(tr: BeautifulSoup, race_id: str, race_metadata: Dict) -> Optional[Dict]:
@@ -367,7 +376,7 @@ def parse_result_row_enhanced(tr: BeautifulSoup, race_id: str, race_metadata: Di
     margin_str = safe_strip(cells[8].get_text())
     row_data['margin_str'] = margin_str
     row_data['margin_seconds'] = parse_margin_to_seconds(margin_str)
-    
+
     passing_str = safe_strip(cells[10].get_text())
     corners = passing_str.split('-') if passing_str else []
     for i in range(4):
