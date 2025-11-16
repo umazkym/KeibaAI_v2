@@ -55,8 +55,8 @@ except ImportError:
 from keibaai.src.modules.parsers.results_parser import parse_race_results_html
 from keibaai.src.modules.parsers.shutuba_parser import parse_shutuba_html
 from keibaai.src.modules.parsers.horse_info_parser import (
-    parse_horse_profile_html,
-    parse_horse_performance_html
+    parse_horse_profile,
+    parse_horse_performance
 )
 from keibaai.src.modules.parsers.pedigree_parser import parse_pedigree_html
 
@@ -412,9 +412,11 @@ class ComprehensivePipeline:
             horse_id = profile_file.stem.replace('_profile', '')
 
             try:
-                df = parse_horse_profile_html(str(profile_file), horse_id)
+                # parse_horse_profile は Dict を返すので DataFrame に変換
+                profile_dict = parse_horse_profile(str(profile_file), horse_id)
 
-                if not df.empty:
+                if profile_dict and not profile_dict.get('_is_empty', False):
+                    df = pd.DataFrame([profile_dict])
                     horse_profiles.append(df)
                     print(f"  [{i+1}/{len(profile_files)}] {horse_id} (profile) - ✓")
                     self.stats['horses']['success'] += 1
@@ -482,7 +484,7 @@ class ComprehensivePipeline:
             horse_id = perf_file.stem.replace('_perf', '')
 
             try:
-                df = parse_horse_performance_html(str(perf_file), horse_id)
+                df = parse_horse_performance(str(perf_file), horse_id)
 
                 if not df.empty:
                     performance_results.append(df)
