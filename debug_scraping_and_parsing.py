@@ -251,21 +251,42 @@ def extract_race_metadata_enhanced(soup: BeautifulSoup) -> Dict:
         # 距離と馬場（改善版 - より柔軟な正規表現）
         # 通常: "芝1800m", "ダ1200m"
         # 障害: "障3000m", "障3110m"
-        distance_match = re.search(r'(芝|ダ|障)\s*(?:右|左|直|外|内)?\s*(\d+)\s*m?', text, re.IGNORECASE)
+        # 複雑: "芝右 外1800m", "障芝 ダート3000m"
 
-        if distance_match:
-            surface_map = {'芝': '芝', 'ダ': 'ダート', '障': '障害'}
-            metadata['track_surface'] = surface_map.get(distance_match.group(1))
-            metadata['distance_m'] = int(distance_match.group(2))
+        # パターン1: 障害レース（「障」があれば障害レース扱い）
+        # 「障」の後、任意の文字（芝、ダート、スペースなど）を経て数字にマッチ
+        if '障' in text:
+            distance_match = re.search(r'障(?:[^0-9])*(\d+)\s*m?', text)
+            if distance_match:
+                metadata['track_surface'] = '障害'
+                metadata['distance_m'] = int(distance_match.group(1))
+
+        # パターン2: 通常レース（方向情報を複数許容: "芝右 外1800m"）
+        if metadata['distance_m'] is None:
+            distance_match = re.search(r'(芝|ダート?)\s*(?:右|左|直|外|内|\s)*(\d+)\s*m?', text, re.IGNORECASE)
+            if distance_match:
+                surface_map = {'芝': '芝', 'ダ': 'ダート', 'ダート': 'ダート'}
+                metadata['track_surface'] = surface_map.get(distance_match.group(1))
+                metadata['distance_m'] = int(distance_match.group(2))
 
         # 距離が見つからない場合、spanタグ内を個別に探す
         if metadata['distance_m'] is None:
             spans = race_data_intro.find_all('span')
             for span in spans:
                 span_text = span.get_text(strip=True)
-                distance_match = re.search(r'(芝|ダ|障)\s*(?:右|左|直|外|内)?\s*(\d+)', span_text)
+
+                # パターン1: 障害レース（「障」があれば障害レース扱い）
+                if '障' in span_text:
+                    distance_match = re.search(r'障(?:[^0-9])*(\d+)', span_text)
+                    if distance_match:
+                        metadata['track_surface'] = '障害'
+                        metadata['distance_m'] = int(distance_match.group(1))
+                        break
+
+                # パターン2: 通常レース
+                distance_match = re.search(r'(芝|ダート?)\s*(?:右|左|直|外|内|\s)*(\d+)', span_text)
                 if distance_match:
-                    surface_map = {'芝': '芝', 'ダ': 'ダート', '障': '障害'}
+                    surface_map = {'芝': '芝', 'ダ': 'ダート', 'ダート': 'ダート'}
                     metadata['track_surface'] = surface_map.get(distance_match.group(1))
                     metadata['distance_m'] = int(distance_match.group(2))
                     break
