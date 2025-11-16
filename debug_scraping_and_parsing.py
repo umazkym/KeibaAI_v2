@@ -255,15 +255,17 @@ def extract_race_metadata_enhanced(soup: BeautifulSoup) -> Dict:
 
         # パターン1: 障害レース（「障」があれば障害レース扱い）
         # 「障」の後、任意の文字（芝、ダート、スペースなど）を経て数字にマッチ
+        # 非貪欲マッチ *? で最初の数字を優先的にマッチ
         if '障' in text:
-            distance_match = re.search(r'障(?:[^0-9])*(\d+)\s*m?', text)
+            distance_match = re.search(r'障[^0-9]*?(\d+)\s*m?', text)
             if distance_match:
                 metadata['track_surface'] = '障害'
                 metadata['distance_m'] = int(distance_match.group(1))
 
-        # パターン2: 通常レース（方向情報を複数許容: "芝右 外1800m"）
+        # パターン2: 通常レース
+        # 「芝」「ダート」の後、数字以外の文字（方向、記号、スペースなど）を非貪欲でマッチ
         if metadata['distance_m'] is None:
-            distance_match = re.search(r'(芝|ダート?)\s*(?:右|左|直|外|内|\s)*(\d+)\s*m?', text, re.IGNORECASE)
+            distance_match = re.search(r'(芝|ダート?)[^0-9]*?(\d+)\s*m?', text, re.IGNORECASE)
             if distance_match:
                 surface_map = {'芝': '芝', 'ダ': 'ダート', 'ダート': 'ダート'}
                 metadata['track_surface'] = surface_map.get(distance_match.group(1))
@@ -277,14 +279,14 @@ def extract_race_metadata_enhanced(soup: BeautifulSoup) -> Dict:
 
                 # パターン1: 障害レース（「障」があれば障害レース扱い）
                 if '障' in span_text:
-                    distance_match = re.search(r'障(?:[^0-9])*(\d+)', span_text)
+                    distance_match = re.search(r'障[^0-9]*?(\d+)', span_text)
                     if distance_match:
                         metadata['track_surface'] = '障害'
                         metadata['distance_m'] = int(distance_match.group(1))
                         break
 
                 # パターン2: 通常レース
-                distance_match = re.search(r'(芝|ダート?)\s*(?:右|左|直|外|内|\s)*(\d+)', span_text)
+                distance_match = re.search(r'(芝|ダート?)[^0-9]*?(\d+)', span_text)
                 if distance_match:
                     surface_map = {'芝': '芝', 'ダ': 'ダート', 'ダート': 'ダート'}
                     metadata['track_surface'] = surface_map.get(distance_match.group(1))
