@@ -298,6 +298,66 @@ keibaai/
 
 ## 3. データ戦略
 
+### 3.0 データ識別子の形式
+
+#### 3.0.1 レースID形式
+
+**フォーマット**: `YYYYPPNNDDRR`
+
+各フィールドの意味:
+- `YYYY`: 開催年度 (4桁) - 例: 2023
+- `PP`: 競馬場コード (2桁)
+  - 05 = 東京
+  - 06 = 中山
+  - 08 = 京都
+  - 09 = 阪神
+  - 01 = 札幌
+  - 02 = 函館
+  - 03 = 福島
+  - 04 = 新潟
+  - 07 = 小倉
+- `NN`: 開催回数 (2桁) - 例: 04 = 第4回開催
+- `DD`: 開催日目 (2桁) - 例: 03 = 3日目
+- `RR`: レース番号 (2桁) - 例: 01 = 1R, 12 = 12R
+
+**具体例**:
+```
+レースID: 202305040301
+分解:
+  2023: 2023年
+    05: 東京競馬場
+    04: 第4回開催
+    03: 3日目
+    01: 1レース目
+
+対応URL: https://db.netkeiba.com/race/202305040301
+```
+
+**注意事項**:
+- レースIDは12桁固定
+- 日付ではなく「開催回数・日目」で構成される
+- 同じ年でも複数回開催があるため、日付からの逆算は不可能
+- `venue`, `round_of_year`, `day_of_meeting` とレースIDの整合性を常に確認すること
+
+#### 3.0.2 馬ID形式
+
+**フォーマット**: `YYYYNNNNNN`
+
+- `YYYY`: 生年 (4桁) - 例: 2021
+- `NNNNNN`: 登録番号 (6桁) - 例: 102797
+
+**具体例**:
+```
+馬ID: 2021102797
+分解:
+  2021: 2021年生まれ
+  102797: 登録番号
+
+対応URL: https://db.netkeiba.com/horse/2021102797/
+```
+
+---
+
 ### 3.1 基本方針
 
 #### 3.1.1 不変性（Immutability）
@@ -8151,9 +8211,149 @@ where:
 
 ---
 
-## 19. 付記：次に行うべき実行タスク
+## 19. 付録：データテーブル仕様
 
-### 19.1 即座に実行すべきタスク（優先度：高）
+### 19.1 races.parquet（レース結果データ）
+
+**主キー**: `race_id` + `horse_id`
+
+**カラム定義**:
+
+| カラム名 | データ型 | Nullable | 説明 | 実装状況 |
+|---------|---------|----------|------|----------|
+| race_id | string | No | レースID (YYYYPPNNDDRR形式) | ✅ 実装済み |
+| race_date | date | No | レース開催日 (YYYY-MM-DD) | ✅ 実装済み |
+| distance_m | Int64 | Yes | 距離(メートル) | ✅ 実装済み |
+| track_surface | string | Yes | 馬場種別（芝/ダート） | ✅ 実装済み |
+| weather | string | Yes | 天候（晴/曇/雨/雪） | ✅ 実装済み |
+| track_condition | string | Yes | 馬場状態（良/稍重/重/不良） | ✅ 実装済み |
+| post_time | string | Yes | 発走時刻 (HH:MM) | ✅ 実装済み |
+| race_name | string | Yes | レース名 | ✅ 実装済み |
+| venue | string | Yes | 競馬場名（東京/中山など） | ✅ 実装済み |
+| day_of_meeting | Int64 | Yes | 開催日目 | ✅ 実装済み |
+| round_of_year | Int64 | Yes | 開催回数 | ✅ 実装済み |
+| race_class | string | Yes | レースクラス（G1/G2/G3/OP/1600/1000/500/未勝利/新馬） | ✅ 実装済み |
+| head_count | Int64 | Yes | 出走頭数 | ✅ 実装済み |
+| horse_id | string | No | 馬ID (YYYYNNNNNN形式) | ✅ 実装済み |
+| horse_name | string | Yes | 馬名 | ✅ 実装済み |
+| finish_position | Int64 | Yes | 着順 | ✅ 実装済み |
+| bracket_number | Int64 | Yes | 枠番 | ✅ 実装済み |
+| horse_number | Int64 | Yes | 馬番 | ✅ 実装済み |
+| sex_age | string | Yes | 性齢（牡3など） | ✅ 実装済み |
+| sex | string | Yes | 性別（牡/牝/セ） | ✅ 実装済み |
+| age | Int64 | Yes | 年齢 | ✅ 実装済み |
+| basis_weight | float64 | Yes | 斤量(kg) | ✅ 実装済み |
+| jockey_id | string | Yes | 騎手ID | ✅ 実装済み |
+| jockey_name | string | Yes | 騎手名 | ✅ 実装済み |
+| finish_time_str | string | Yes | タイム（文字列） | ✅ 実装済み |
+| finish_time_sec | float64 | Yes | タイム（秒数） | ✅ 実装済み |
+| margin_str | string | Yes | 着差（文字列） | ✅ 実装済み |
+| margin_seconds | float64 | Yes | 着差（秒数換算） | ✅ 実装済み |
+| passing_order_1 | Int64 | Yes | 1コーナー通過順位 | ✅ 実装済み |
+| passing_order_2 | Int64 | Yes | 2コーナー通過順位 | ✅ 実装済み |
+| passing_order_3 | Int64 | Yes | 3コーナー通過順位 | ✅ 実装済み |
+| passing_order_4 | Int64 | Yes | 4コーナー通過順位 | ✅ 実装済み |
+| last_3f_time | float64 | Yes | 上がり3ハロン(秒) | ✅ 実装済み |
+| win_odds | float64 | Yes | 単勝オッズ | ✅ 実装済み |
+| popularity | Int64 | Yes | 人気 | ✅ 実装済み |
+| horse_weight | Int64 | Yes | 馬体重(kg) | ✅ 実装済み |
+| horse_weight_change | Int64 | Yes | 馬体重増減(kg) | ✅ 実装済み |
+| trainer_id | string | Yes | 調教師ID | ✅ 実装済み |
+| trainer_name | string | Yes | 調教師名 | ✅ 実装済み |
+| owner_name | string | Yes | 馬主名 | ✅ 実装済み |
+| prize_money | Int64 | Yes | 獲得賞金（1着のみ、万円） | ✅ 実装済み |
+| prize_1st | Int64 | Yes | 1着賞金（万円） | ❌ 未実装 |
+| prize_2nd | Int64 | Yes | 2着賞金（万円） | ❌ 未実装 |
+| prize_3rd | Int64 | Yes | 3着賞金（万円） | ❌ 未実装 |
+| prize_4th | Int64 | Yes | 4着賞金（万円） | ❌ 未実装 |
+| prize_5th | Int64 | Yes | 5着賞金（万円） | ❌ 未実装 |
+| time_before_last_3f | float64 | Yes | 上がり3F前のタイム（派生） | ✅ 実装済み |
+| popularity_finish_diff | Int64 | Yes | 人気-着順（派生） | ✅ 実装済み |
+| odds_rank | Int64 | Yes | オッズ順位（派生） | ✅ 実装済み |
+| cumulative_margin | float64 | Yes | 累積着差（派生） | ✅ 実装済み |
+| race_avg_time | float64 | Yes | レース平均タイム（派生） | ✅ 実装済み |
+| time_deviation | float64 | Yes | タイム偏差（派生） | ✅ 実装済み |
+| position_change | Int64 | Yes | 位置取り変化（派生） | ✅ 実装済み |
+
+**データ量**: 約278,000レコード（2023年10月時点）
+
+**パーティション**: なし（単一ファイル）
+
+### 19.2 shutuba.parquet（出馬表データ）
+
+**主キー**: `race_id` + `horse_id`
+
+**カラム定義**: races.parquetのサブセット + 以下の追加カラム
+
+| カラム名 | データ型 | Nullable | 説明 | 実装状況 |
+|---------|---------|----------|------|----------|
+| morning_odds | float64 | Yes | 前日/当日朝オッズ | ❌ 未実装 |
+| morning_popularity | Int64 | Yes | 前日/当日朝人気 | ❌ 未実装 |
+| blinkers | boolean | Yes | ブリンカー装着フラグ | ❌ 未実装 |
+| prediction_mark | string | Yes | 予想印（◎○▲△など） | ❌ 未実装 |
+
+**データ量**: 約278,000レコード
+
+### 19.3 horses.parquet（馬プロフィールデータ）
+
+**主キー**: `horse_id`
+
+**カラム定義**:
+
+| カラム名 | データ型 | Nullable | 説明 | 実装状況 |
+|---------|---------|----------|------|----------|
+| horse_id | string | No | 馬ID | ✅ 実装済み |
+| horse_name | string | Yes | 馬名 | ✅ 実装済み |
+| birth_date | date | Yes | 生年月日 | ✅ 実装済み |
+| sex | string | Yes | 性別 | ✅ 実装済み |
+| coat_color | string | Yes | 毛色 | ✅ 実装済み |
+| trainer_id | string | Yes | 調教師ID | ✅ 実装済み |
+| trainer_name | string | Yes | 調教師名 | ✅ 実装済み |
+| owner_name | string | Yes | 馬主名 | ✅ 実装済み |
+| breeder_name | string | Yes | 生産者名 | ✅ 実装済み |
+| producing_area | string | Yes | 産地 | ✅ 実装済み |
+| sire_id | string | Yes | 父馬ID | ✅ 実装済み |
+| sire_name | string | Yes | 父馬名 | ✅ 実装済み |
+| dam_id | string | Yes | 母馬ID | ✅ 実装済み |
+| dam_name | string | Yes | 母馬名 | ✅ 実装済み |
+| damsire_id | string | Yes | 母父ID | ✅ 実装済み |
+| damsire_name | string | Yes | 母父名 | ✅ 実装済み |
+
+### 19.4 pedigrees.parquet（血統データ）
+
+**主キー**: `horse_id` + `generation` + `ancestor_id`
+
+**カラム定義**:
+
+| カラム名 | データ型 | Nullable | 説明 | 実装状況 |
+|---------|---------|----------|------|----------|
+| horse_id | string | No | 馬ID | ✅ 実装済み |
+| ancestor_id | string | No | 祖先馬ID | ✅ 実装済み |
+| ancestor_name | string | Yes | 祖先馬名 | ✅ 実装済み |
+| generation | Int64 | No | 世代（1=父母, 2=祖父母, ... 5=5代前） | ✅ 実装済み |
+
+**データ量**: 約1,377,000レコード（5世代分）
+
+### 19.5 features.parquet（特徴量データ）
+
+**主キー**: `race_id` + `horse_id`
+
+**パーティション**: `year=YYYY/month=MM/`
+
+**カラム定義**: races.parquet + 以下の集約特徴量
+
+| カテゴリ | カラム例 | 実装状況 |
+|---------|---------|----------|
+| 過去成績集約 | avg_finish_last3, avg_finish_last5, win_rate_last10 | ❌ 未実装 |
+| コース適性 | venue_avg_finish, distance_cat_avg_finish | ❌ 未実装 |
+| 騎手・調教師 | jockey_win_rate, trainer_win_rate, combo_win_rate | ❌ 未実装 |
+| 血統特徴量 | sire_avg_finish, sire_distance_affinity | ❌ 未実装 |
+
+---
+
+## 20. 付記：次に行うべき実行タスク
+
+### 20.1 即座に実行すべきタスク（優先度：高）
 
 1. **環境セットアップ**
    bash
@@ -8203,7 +8403,7 @@ where:
    - `configs/models.yaml`
    - `configs/optimization.yaml`
 
-### 19.2 短期タスク（1-2週間）
+### 20.2 短期タスク（1-2週間）
 
 1.  **スクレイピング基盤実装**
     ```bash
@@ -8236,7 +8436,7 @@ where:
       --end_date 2023-01-31
     ```
 
-### 19.3 中期タスク（2-4週間）
+### 20.3 中期タスク（2-4週間）
 
 1.  **特徴量エンジン実装 [修正]**
     ```bash
@@ -8280,7 +8480,7 @@ where:
       --W_0 100000
     ```
 
-### 19.4 長期タスク（1-2ヶ月）
+### 20.4 長期タスク（1-2ヶ月）
 
 1. **シミュレーションと最適化**
    ```python
@@ -8322,7 +8522,7 @@ where:
    # 0 3 * * * cd /path/to/keibaai && bash scripts/daily_operation.sh
    ```
 
-### 19.5 重要な注意事項
+### 20.5 重要な注意事項
 
 #### 19.5.1 法務・規約確認（最優先）
 
@@ -8396,7 +8596,7 @@ find /mnt/external_hdd/ -name "keibaai_backup_*" -mtime +60 -exec rm -rf {} \;
 echo "バックアップ完了: ${BACKUP_DIR}"
 ```
 
-### 19.6 トラブルシューティングガイド
+### 20.6 トラブルシューティングガイド
 
 #### 問題1: スクレイピングがBAN される
 
@@ -8458,7 +8658,7 @@ echo "バックアップ完了: ${BACKUP_DIR}"
 4. 不要なシミュレーション結果を削除
 ```
 
-### 19.7 推奨開発フロー
+### 20.7 推奨開発フロー
 
 ```mermaid
 graph TD

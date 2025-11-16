@@ -241,7 +241,7 @@ KeibaAI_v2/
 1. **`results_parser.py`** (14KB)
    - Parses race results HTML
    - Extracts: finish data, race metadata, jockey/trainer/owner info
-   - **Recent improvements**: 11 new columns (distance_m, track_surface, weather, etc.)
+   - **Recent improvements**: Enhanced metadata extraction (distance_m, track_surface, weather, venue, race_class, etc.)
    - **Robustness**: 4-level fallback for distance/surface extraction
    - Handles obstacle races, regional races, multiple HTML formats
 
@@ -767,14 +767,26 @@ df['finish_position'] = np.nan
 
 ### 6. Race ID Format
 
-**Format**: `YYYYMMDDRRVV`
+**Format**: `YYYYPPNNDDRR`
 - `YYYY`: Year (4 digits)
-- `MM`: Month (2 digits)
-- `DD`: Day (2 digits)
-- `RR`: Race venue code (2 digits)
-- `VV`: Race number (2 digits)
+- `PP`: Venue code (2 digits)
+  - 05 = Tokyo (東京)
+  - 06 = Nakayama (中山)
+  - 08 = Kyoto (京都)
+  - 09 = Hanshin (阪神)
+  - Others: See venue master data
+- `NN`: Round number (2 digits) - e.g., 04 = 4th round
+- `DD`: Day of meeting (2 digits) - e.g., 03 = 3rd day
+- `RR`: Race number (2 digits) - e.g., 01 = Race 1, 12 = Race 12
 
-**Example**: `202301010101` = 2023-01-01, venue 01, race 01
+**Example**: `202305040301` =
+- 2023年 (Year 2023)
+- 東京競馬場 (Tokyo, code 05)
+- 第4回開催 (4th round)
+- 3日目 (3rd day)
+- 1R (Race 1)
+
+**URL Example**: `https://db.netkeiba.com/race/202305040301`
 
 ### 7. Horse ID Format
 
