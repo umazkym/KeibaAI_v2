@@ -197,8 +197,14 @@ def parse_html_content(html_bytes: bytes, race_id: str) -> pd.DataFrame:
     return df
 
 def extract_race_metadata_enhanced(soup: BeautifulSoup) -> Dict:
+    """拡張されたレースメタデータ抽出 (改善版 - 4段階フォールバック対応)
 
-    """拡張されたレースメタデータ抽出 (改善版 - 複数フォールバック対応)"""
+    HTMLの複数フォーマットに対応:
+    1. data_intro (通常のレース)
+    2. diary_snap_cut (一部のレース)
+    3. racedata dl > dd (障害レースや古いページ)
+    4. RaceData01 (出馬表や古いレース結果ページ)
+    """
 
     metadata = {
         'distance_m': None, 'track_surface': None, 'weather': None,
@@ -223,6 +229,10 @@ def extract_race_metadata_enhanced(soup: BeautifulSoup) -> Dict:
         race_data_dl = soup.find('dl', class_='racedata')
         if race_data_dl:
             race_data_intro = race_data_dl.find('dd')
+
+    # 方法4: RaceData01 を探す（出馬表や古いレース結果ページ）
+    if not race_data_intro:
+        race_data_intro = soup.find('div', class_='RaceData01')
 
     if race_data_intro:
         # テキスト全体を取得
@@ -267,18 +277,15 @@ def extract_race_metadata_enhanced(soup: BeautifulSoup) -> Dict:
         if time_match:
             metadata['post_time'] = time_match.group(1)
 
-    # 障害レースで距離が取得できない場合、race_nameから推測して補完
-    # 注: 馬の過去成績HTML（db_h_race_results）には障害レースの距離が記載されているが、
-    #     レース結果HTML（race_table_01）には記載がない可能性が高い
-    #     test/test_output/horses_performance.csvでは障2860m, 障3110mなどが取得できている
+    # 障害レースで距離が取得できない場合の補完ロジック
+    # 注: 4段階のフォールバック（data_intro, diary_snap_cut, racedata dl > dd, RaceData01）で
+    #     ほとんどの障害レース距離は取得できるはず
+    #     それでも取得できない場合は、HTMLに距離情報がないと判断し、track_surfaceのみ設定
     if metadata['distance_m'] is None and metadata['race_name']:
         race_name = metadata['race_name']
         if '障害' in race_name:
-            # 障害レースの典型的な距離を推測（HTMLに記載がない場合の補完）
-            # 一般的な障害レース距離: 2860m, 3000m, 3110m, 3140m, 3170m, 3200m, 3350m, 3390m, 3900m
-            # しかし、正確な距離がわからない場合は補完しない方が安全
-            # HTMLに記載がない以上、補完は行わず、track_surfaceのみ設定
-            metadata['track_surface'] = '障害'  # 少なくとも馬場種別は設定
+            # HTMLに距離情報がない場合、track_surfaceのみ設定（距離は補完しない）
+            metadata['track_surface'] = '障害'
 
     # レース名とクラス（修正: セレクタを変更）
     race_name_tag = soup.find('dl', class_='racedata')
