@@ -166,26 +166,33 @@ def parse_horse_profile(file_path: str, horse_id: str = None) -> Dict:
     # 血統情報（父・母・母父）
     blood_table = soup.find('table', class_='blood_table')
     if blood_table:
-        # 父馬
-        sire_link = blood_table.find('a', href=re.compile(r'/horse/\d+'), text=re.compile(r'.+'))
-        if sire_link:
-            profile['sire_name'] = sire_link.get_text(strip=True)
-            sire_id_match = re.search(r'/horse/(\d+)', sire_link['href'])
-            profile['sire_id'] = sire_id_match.group(1) if sire_id_match else None
-        
-        # 母馬・母父（簡易版、詳細は血統ページで取得）
-        all_horse_links = blood_table.find_all('a', href=re.compile(r'/horse/\d+'))
-        if len(all_horse_links) >= 2:
-            dam_link = all_horse_links[1]
-            profile['dam_name'] = dam_link.get_text(strip=True)
-            dam_id_match = re.search(r'/horse/(\d+)', dam_link['href'])
-            profile['dam_id'] = dam_id_match.group(1) if dam_id_match else None
-        
-        if len(all_horse_links) >= 3:
-            damsire_link = all_horse_links[2]
-            profile['damsire_name'] = damsire_link.get_text(strip=True)
-            damsire_id_match = re.search(r'/horse/(\d+)', damsire_link['href'])
-            profile['damsire_id'] = damsire_id_match.group(1) if damsire_id_match else None
+        rows = blood_table.find_all('tr')
+        if len(rows) >= 2:
+            # --- 父馬 ---
+            sire_cell = rows[0].find('td')
+            if sire_cell:
+                sire_link = sire_cell.find('a', href=re.compile(r'/horse/\d+'))
+                if sire_link:
+                    profile['sire_name'] = sire_link.get_text(strip=True)
+                    sire_id_match = re.search(r'/horse/(\d+)', sire_link['href'])
+                    profile['sire_id'] = sire_id_match.group(1) if sire_id_match else None
+
+            # --- 母馬・母父 ---
+            dam_cell = rows[1].find('td')
+            if dam_cell:
+                dam_links = dam_cell.find_all('a', href=re.compile(r'/horse/\d+'))
+                if len(dam_links) >= 1:
+                    # 母馬
+                    dam_link = dam_links[0]
+                    profile['dam_name'] = dam_link.get_text(strip=True)
+                    dam_id_match = re.search(r'/horse/(\d+)', dam_link['href'])
+                    profile['dam_id'] = dam_id_match.group(1) if dam_id_match else None
+                if len(dam_links) >= 2:
+                    # 母父
+                    damsire_link = dam_links[1]
+                    profile['damsire_name'] = damsire_link.get_text(strip=True)
+                    damsire_id_match = re.search(r'/horse/(\d+)', damsire_link['href'])
+                    profile['damsire_id'] = damsire_id_match.group(1) if damsire_id_match else None
     
     logging.info(f"馬プロフィールパース完了: {horse_id}")
     

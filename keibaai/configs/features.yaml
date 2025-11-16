@@ -2,36 +2,98 @@
 
 # 特徴量生成全般の設定
 feature_engine:
-  # 生成する特徴量のバージョン
-  version: "v1.0"
+  version: "v2.0" # 生成する特徴量のバージョン管理
 
-  # 欠損値の処理方法
-  imputation_strategy:
-    numeric: "mean" # or "median", "zero"
-    categorical: "most_frequent" # or "constant"
+# --- レシピベースの特徴量生成 ---
+feature_recipes:
 
-# レースベースの特徴量
-race_features:
-  enabled: true
+  # 1. 基本特徴量 (Basic Features)
+  basic_features:
+    enabled: true
+    # カテゴリ変数のOne-Hotエンコーディング
+    one_hot_encoding:
+      - { column: sex, prefix: sex }
+      - { column: track_surface, prefix: track }
+    # 枠番のカテゴリ化
+    bracket_categorization:
+      enabled: true
+      inner: [1, 2, 3]
+      middle: [4, 5, 6]
+      outer: [7, 8]
 
-# 馬ベースの特徴量
-horse_features:
-  enabled: true
+  # 2. 馬の通算成績 (Horse Career Stats)
+  career_stats:
+    enabled: true
+    # is_win, prize_money などの計算に使う
+    target_columns:
+      - finish_position
+      - prize_money
+    # 生成する特徴量
+    stats:
+      - career_starts # cumcount()
+      - career_wins   # cumsum(is_win)
+      - prize_total   # cumsum(prize_money)
 
-# 騎手ベースの特徴量
-jockey_features:
-  enabled: true
+  # 3. 過去走の集計 (Past Performance Aggregation)
+  past_performance:
+    enabled: true
+    # 集計対象のカラム
+    columns:
+      - finish_position
+      - margin_seconds
+      - last_3f_time
+      - passing_order_1 # コーナー通過順位も追加
+      - passing_order_4
+    # 集計期間 (過去N走)
+    windows: [1, 3, 5, 10]
+    # 集計方法
+    aggregations: [mean, median, std, max] # mean以外も指定可能に
 
-# 調教師ベースの特徴量
-trainer_features:
-  enabled: true
+  # 4. 乗り替わりフラグ (Change Flags)
+  change_flags:
+    enabled: true
+    columns:
+      - jockey_id
+      - trainer_id
 
-# 血統ベースの特徴量
-pedigree_features:
-  enabled: true
+  # 5. 騎手・調教師の集計 (Jockey/Trainer Stats)
+  entity_stats:
+    enabled: true
+    entities:
+      - { name: jockey, id_column: jockey_id, target: is_win, agg: mean, feature_name: jockey_win_rate }
+      - { name: trainer, id_column: trainer_id, target: is_win, agg: mean, feature_name: trainer_win_rate }
+      - { name: sire, id_column: sire_id, target: prize_money, agg: mean, feature_name: sire_avg_prize }
+      - { name: damsire, id_column: damsire_id, target: prize_money, agg: mean, feature_name: damsire_avg_prize }
 
-# 出力設定
-output:
-  partition_by:
-    - year
-    - month
+  # 6. レース内相対特徴量 (Within-Race Relative Features)
+  relative_features:
+    enabled: true
+    # Z-score正規化
+    z_score:
+      columns:
+        - horse_weight
+        - basis_weight
+        - age # 年齢も追加
+        - prize_total # 通算賞金もレース内で比較
+        - career_win_rate # キャリア勝率もレース内で比較
+
+# 欠損値処理
+imputation:
+  numeric_strategy: median # mean, median, zero
+  default_numeric_value: 0.0
+
+# 特徴量選択
+feature_selection:
+  # 除外するカラムのリスト (正規表現も可)
+  exclude_patterns:
+    - '.*_name$'
+    - '.*_id$'
+    - '^race_id$'
+    - '^horse_number$'
+    - '^sex$'
+    - '^track_surface$'
+    - '^bracket_number$'
+    - 'is_target_race'
+    - 'is_win'
+    - 'prev_jockey_id'
+    - 'prev_trainer_id'

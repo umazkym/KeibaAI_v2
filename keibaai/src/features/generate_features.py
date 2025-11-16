@@ -128,7 +128,9 @@ def main():
         
         # ロギング設定
         logging_config = default_config.get('logging', {})
-        setup_logging(args.log_level.upper(), logging_config)
+        log_file = project_root / logging_config.get('log_file', 'logs/features.log')
+        log_format = logging_config.get('log_format', '%(asctime)s [%(levelname)s] %(name)s: %(message)s')
+        setup_logging(args.log_level.upper(), str(log_file), log_format)
             
     except Exception as e:
         # フォールバック: 簡易ロギング設定
@@ -189,16 +191,29 @@ def main():
         logging.warning("ロード対象のデータがありませんでした。処理を終了します。")
         sys.exit(0)
 
-    # --- 3. 特徴量エンジン初期化 ---
-    engine = FeatureEngine(config=features_config)
+    # --- 3. 特徴量エンジン初期化とデータ前処理 ---
+    logging.info("特徴量生成エンジンの初期化とデータの前処理を開始します...")
+    
+    # history_df に血統情報をマージ (エンティティ集計で sire_id などを使うため)
+    if "horse_profiles_df" in data and not data["horse_profiles_df"].empty:
+        ped_cols = ['horse_id', 'sire_id', 'damsire_id']
+        # 必要なカラムが存在するか確認
+        cols_to_merge = [col for col in ped_cols if col in data["horse_profiles_df"].columns]
+        if 'horse_id' in cols_to_merge and len(cols_to_merge) > 1:
+            logging.info(f"results_history_df に血統情報 {cols_to_merge} をマージします。")
+            ped_info = data["horse_profiles_df"][cols_to_merge]
+            data["results_history_df"] = data["results_history_df"].merge(ped_info, on='horse_id', how='left')
+        else:
+            logging.warning("horse_profiles_df に十分な血統情報（sire_idなど）が見つかりませんでした。")
+
+    engine = FeatureEngine(config_path=str(features_config_path))
 
     # --- 4. 特徴量生成 ---
     try:
         features_df = engine.generate_features(
             shutuba_df=data["shutuba_df"],
             results_history_df=data["results_history_df"],
-            horse_profiles_df=data["horse_profiles_df"],
-            pedigree_df=data["pedigree_df"]
+            horse_profiles_df=data["horse_profiles_df"]
         )
     except Exception as e:
         logging.error(f"特徴量生成中にエラーが発生しました: {e}", exc_info=True)

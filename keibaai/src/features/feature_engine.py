@@ -1,481 +1,314 @@
 #!/usr/bin/env python3
 # src/features/feature_engine.py
 """
-特徴量生成エンジン
-仕様書 6.3章 に基づく実装
+特徴量生成エンジン (レシピベース)
 """
 import logging
+import re
 from typing import Dict, List, Optional
-from pathlib import Path
 import pandas as pd
 import numpy as np
 import yaml
-from .advanced_features import AdvancedFeatureEngine
+from pathlib import Path
+
 class FeatureEngine:
-    """既存のFeatureEngineを拡張"""
+    """
+    YAML設定ファイルに基づいて動的に特徴量を生成するエンジン。
+    """
     
-    def __init__(self, config: Dict):
-        self.config = config
+    def __init__(self, config_path: str):
+        """
+        Args:
+            config_path (str): features.yamlへのパス
+        """
+        with open(config_path, 'r', encoding='utf-8') as f:
+            self.config = yaml.safe_load(f)
+        self.recipes = self.config.get('feature_recipes', {})
         self.feature_names_ = []
-        self.advanced_engine = AdvancedFeatureEngine()
-        logging.info("FeatureEngine (v2.0) with Advanced Features が初期化されました")
-    
+        logging.info(f"FeatureEngine (v{self.config.get('feature_engine', {}).get('version', 'N/A')}) が初期化されました")
+
     def generate_features(
         self,
         shutuba_df: pd.DataFrame,
         results_history_df: pd.DataFrame,
         horse_profiles_df: pd.DataFrame,
-        pedigree_df: pd.DataFrame,
-        horse_performance_df: Optional[pd.DataFrame] = None
     ) -> pd.DataFrame:
-        """拡張版：馬過去成績データも活用"""
-        
-        # 既存の処理
+        """
+        shutuba_df と各種履歴データから特徴量を生成する
+        """
+        logging.info("レシピベースの特徴量生成パイプラインを開始します...")
         df = shutuba_df.copy()
+
+        # --- 前処理: 必要なIDをマージ ---
+        if not horse_profiles_df.empty:
+            ped_cols = ['horse_id', 'sire_id', 'damsire_id']
+            ped_cols_to_merge = [col for col in ped_cols if col in horse_profiles_df.columns]
+            if 'horse_id' in ped_cols_to_merge:
+                df = df.merge(horse_profiles_df[ped_cols_to_merge], on='horse_id', how='left')
+
+        # --- レシピに基づいて特徴量生成メソッドをディスパッチ ---
+        if self.recipes.get('basic_features', {}).get('enabled', False):
+            df = self._add_basic_features(df)
         
-        # 高度な特徴量の追加
-        if horse_performance_df is not None and not horse_performance_df.empty:
-            # パフォーマンストレンド
-            df = self.advanced_engine.generate_performance_trend_features(
-                df, horse_performance_df
-            )
+        # 共通の時系列データフレームを作成
+        combined_df = self._create_combined_timeseries_df(df, results_history_df)
+
+        if self.recipes.get('career_stats', {}).get('enabled', False):
+            combined_df = self._add_career_stats(combined_df)
+
+        if self.recipes.get('past_performance', {}).get('enabled', False):
+            combined_df = self._add_past_performance_features(combined_df)
+
+        if self.recipes.get('change_flags', {}).get('enabled', False):
+            combined_df = self._add_change_flags(combined_df)
+        
+        # --- 集計ベースの特徴量をマージ ---
+        # 騎手・調教師・血統などの集計特徴量
+        if self.recipes.get('entity_stats', {}).get('enabled', False):
+            df = self._add_entity_stats(df, results_history_df)
+
+        # --- レース内相対特徴量 ---
+        # career_stats など、他の特徴量が出揃った後で計算
+        # まずは生成された特徴量をマージ
+        if 'is_target_race' in combined_df.columns:
+            generated_features = combined_df[combined_df['is_target_race'] == 1]
+            # is_target_race と is_win はマージ対象から除外
+            cols_to_merge = [c for c in generated_features.columns if c not in df.columns or c in ['race_id', 'horse_id']]
+            df = df.merge(generated_features[cols_to_merge], on=['race_id', 'horse_id'], how='left')
+
+        if self.recipes.get('relative_features', {}).get('enabled', False):
+            df = self._add_relative_features(df)
+
+        # --- 後処理 ---
+        df = self._handle_missing_values(df)
+        self.feature_names_ = self._select_features(df)
+        
+        final_cols = ['race_id', 'horse_id'] + self.feature_names_
+        final_cols_exist = [col for col in final_cols if col in df.columns]
+        
+        logging.info(f"特徴量生成完了。{len(self.feature_names_)}個の特徴量を生成しました。")
+        return df[final_cols_exist]
+
+    def _add_basic_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        logging.debug("レシピに基づいて基本特徴量を追加中...")
+        recipe = self.recipes.get('basic_features', {})
+        
+        # One-Hot Encoding
+        for ohe_recipe in recipe.get('one_hot_encoding', []):
+            col = ohe_recipe.get('column')
+            prefix = ohe_recipe.get('prefix')
+            if col in df.columns:
+                dummies = pd.get_dummies(df[col], prefix=prefix, dtype=int)
+                df = pd.concat([df, dummies], axis=1)
+        
+        # Bracket Categorization
+        bracket_recipe = recipe.get('bracket_categorization', {})
+        if bracket_recipe.get('enabled') and 'bracket_number' in df.columns:
+            df['bracket_is_inner'] = df['bracket_number'].isin(bracket_recipe.get('inner', [])).astype(int)
+            df['bracket_is_middle'] = df['bracket_number'].isin(bracket_recipe.get('middle', [])).astype(int)
+            df['bracket_is_outer'] = df['bracket_number'].isin(bracket_recipe.get('outer', [])).astype(int)
             
-            # コース適性
-            df = self.advanced_engine.generate_course_affinity_features(
-                df, horse_performance_df
-            )
-            
-            # 騎手・調教師の相性
-            df = self.advanced_engine.generate_jockey_trainer_synergy(
-                df, results_history_df
-            )
-        
-        # 血統特徴量
-        if not pedigree_df.empty:
-            df = self.advanced_engine.generate_bloodline_features(
-                df, pedigree_df, horse_performance_df
-            )
-        
-        # レース条件特徴量
-        df = self.advanced_engine.generate_race_condition_features(df)
-        
-        # 相対的指標
-        df = self.advanced_engine.calculate_relative_metrics(df)
-        
         return df
 
-    def _add_horse_history_features(self, df: pd.DataFrame, history_df: pd.DataFrame) -> pd.DataFrame:
-        """
-        馬の過去の全成績から集計特徴量を生成する (リーク対策版・欠損対応版)
-        (prize_total, career_starts, career_wins など)
-        """
-        logging.debug("馬の過去成績集約特徴量を追加中...")
-        
-        # ===== ここから修正 (Phase 2-1) =====
-        # prize_money が全て欠損しているか、history_df が空の場合はスキップ
-        if history_df.empty or 'prize_money' not in history_df.columns:
-            logging.warning("history_df に prize_money がないか空のため、賞金ベースの特徴量生成をスキップします")
-            df['prize_total'] = 0.0  # デフォルト値
-            df['career_starts'] = 0
-            df['career_wins'] = 0
-            return df
-
-        # prize_money の有効率をチェック
-        try:
-            valid_prize_rate = history_df['prize_money'].notna().sum() / len(history_df)
-            if valid_prize_rate < 0.1:  # 10%未満の場合
-                logging.warning(f"prize_money の有効率が低すぎます ({valid_prize_rate:.1%})。賞金ベースの特徴量は信頼性が低いです。")
-        except ZeroDivisionError:
-             logging.warning("history_df は空（ZeroDivisionError）です。賞金ベースの特徴量生成をスキップします。")
-             df['prize_total'] = 0.0
-             df['career_starts'] = 0
-             df['career_wins'] = 0
-             return df
-        # ===== ここまで修正 (Phase 2-1) =====
-        
-        # is_target_race フラグを準備
-        # history_df にはないカラムを追加することで、マージ後の識別を容易にする
+    def _create_combined_timeseries_df(self, df: pd.DataFrame, history_df: pd.DataFrame) -> pd.DataFrame:
+        logging.debug("時系列分析用の統合データフレームを作成中...")
         history_df = history_df.copy()
         history_df['is_target_race'] = 0
         df = df.copy()
         df['is_target_race'] = 1
         
-        # 結合して時系列に並べる
-        # (df には prize_money がない場合があるため、先に history_df でチェックする)
-        if 'prize_money' not in history_df.columns:
-             history_df['prize_money'] = 0
-        if 'prize_money' not in df.columns:
-             df['prize_money'] = 0
-             
-        combined = pd.concat([history_df, df], ignore_index=True)
-        # df と history_df に重複するレースがある場合、df側を優先
-        combined = combined.drop_duplicates(subset=['race_id', 'horse_id'], keep='last')
-        
-        # 日付でソートするためにdatetime型に変換
-        combined['race_date'] = pd.to_datetime(combined['race_date']).dt.tz_localize(None)
-        combined = combined.sort_values(by=['horse_id', 'race_date'], ascending=[True, True])
-        
-        # is_win と prize_money を準備
-        combined['is_win'] = (combined['finish_position'] == 1).astype(int)
-        
-        # (fillna(0) は既に追加済み)
-        combined['prize_money'] = combined['prize_money'].fillna(0)
-
-        grouped = combined.groupby('horse_id', sort=False)
-        
-        # expanding/cumsum と shift を使って、各レース時点での過去の累計を計算
-        combined['career_starts'] = grouped.cumcount() # 0から始まるので、これが過去の出走回数になる
-        combined['career_wins'] = grouped['is_win'].cumsum().shift(1).fillna(0).astype(int)
-        combined['prize_total'] = grouped['prize_money'].cumsum().shift(1).fillna(0)
-        
-        # 予測対象のレースデータに、計算した特徴量をマージ
-        feature_cols = ['race_id', 'horse_id', 'career_starts', 'career_wins', 'prize_total']
-        
-        # 存在しないカラムを除外 (is_target_race == 1 のデータに prize_money がない場合など)
-        cols_to_merge = [col for col in feature_cols if col in combined.columns]
-        
-        target_races_with_features = combined[combined['is_target_race'] == 1][cols_to_merge]
-        
-        # 元のdfからis_target_raceを削除
-        if 'is_target_race' in df.columns:
-            df = df.drop(columns=['is_target_race'])
-        if 'prize_money' in df.columns and 'prize_money' not in shutuba_df.columns:
-             # df に一時的に追加した prize_money を削除
-             df = df.drop(columns=['prize_money'])
-        
-        # マージ
-        df = df.merge(target_races_with_features, on=['race_id', 'horse_id'], how='left')
-        
-        return df
-
-    def _add_basic_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        仕様書 6.2 basic_features に基づく基本特徴量の生成
-        (例: カテゴリ変数のOne-Hotエンコーディング)
-        """
-        logging.debug("基本特徴量を追加中...")
-        
-        # (1) 性別 (One-Hot)
-        if 'sex' in df.columns:
-            sex_dummies = pd.get_dummies(df['sex'], prefix='sex', dtype=int)
-            df = pd.concat([df, sex_dummies], axis=1)
-
-        # (2) 斤量
-        # (basis_weight は shutuba_parser.py ですでに数値化されている)
-        
-        # (3) レース基本情報 (distance_m, track_surface, head_count, bracket_number, horse_number)
-        if 'track_surface' in df.columns:
-             track_dummies = pd.get_dummies(df['track_surface'], prefix='track', dtype=int)
-             df = pd.concat([df, track_dummies], axis=1)
-
-        # (4) 枠番 (内枠・中枠・外枠)
-        if 'bracket_number' in df.columns:
-            df['bracket_is_inner'] = df['bracket_number'].isin([1, 2, 3]).astype(int)
-            df['bracket_is_middle'] = df['bracket_number'].isin([4, 5, 6]).astype(int)
-            df['bracket_is_outer'] = df['bracket_number'].isin([7, 8]).astype(int)
-
-        return df
-
-    def _add_past_performance_features(self, df: pd.DataFrame, history_df: pd.DataFrame) -> pd.DataFrame:
-        """
-        仕様書 6.2 past_performance_aggregation に基づく過去走集約 (バグ修正版)
-        """
-        logging.debug("過去走集約特徴量を追加中...")
-
-        if 'horse_id' not in history_df.columns or 'race_date' not in history_df.columns:
-            logging.warning("history_df に 'horse_id' または 'race_date' がないため、過去走集約をスキップします。")
-            return df
-
-        # --- 特徴量計算 ---
-        # 1. 履歴データと予測対象データを結合して、時系列でソート
-        #    これにより、shift() を使って安全に過去のデータを参照できる
-        history_df = history_df.copy() # 念のためコピー
-        history_df['is_target_race'] = 0
-        df = df.copy() # 念のためコピー
-        df['is_target_race'] = 1
-        
-        combined = pd.concat([history_df, df], ignore_index=True)
-        
-        # race_id と horse_id で重複を削除 (df と history_df の重複分)
+        combined = pd.concat([history_df, df], ignore_index=True, sort=False)
         combined = combined.drop_duplicates(subset=['race_id', 'horse_id'], keep='last')
         
         combined['race_date'] = pd.to_datetime(combined['race_date']).dt.tz_localize(None)
-        
-        # 過去から未来へソート
         combined = combined.sort_values(by=['horse_id', 'race_date'], ascending=[True, True])
+        
+        # is_win を事前に計算
+        if 'finish_position' in combined.columns:
+            combined['is_win'] = (combined['finish_position'] == 1).astype(int)
+        else:
+            combined['is_win'] = 0
+            
+        return combined
 
-        # 2. horse_id でグループ化し、rolling/expanding で特徴量を計算
-        grouped = combined.groupby('horse_id', sort=False) # sort=False でソート順を維持
+    def _add_career_stats(self, df: pd.DataFrame) -> pd.DataFrame:
+        logging.debug("レシピに基づいて通算成績特徴量を追加中...")
+        recipe = self.recipes.get('career_stats', {})
+        stats_to_calc = recipe.get('stats', [])
+        
+        grouped = df.groupby('horse_id', sort=False)
+        
+        if 'career_starts' in stats_to_calc:
+            df['career_starts'] = grouped.cumcount()
+        
+        if 'career_wins' in stats_to_calc:
+            df['career_wins'] = grouped['is_win'].cumsum().shift(1).fillna(0).astype(int)
+            
+        if 'prize_total' in stats_to_calc:
+            if 'prize_money' not in df.columns:
+                df['prize_money'] = 0
+            df['prize_money'] = df['prize_money'].fillna(0)
+            df['prize_total'] = grouped['prize_money'].cumsum().shift(1).fillna(0)
+            
+        return df
 
-        # 集約対象カラム
-        agg_cols = self.config.get('past_performance_aggregation', {}).get('columns', [
-            'finish_position', 'finish_time_seconds', 'margin_seconds', 'last_3f_time'
-        ])
-        windows = self.config.get('past_performance_aggregation', {}).get('windows', [1, 3, 5])
-
+    def _add_past_performance_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        logging.debug("レシピに基づいて過去走集約特徴量を追加中...")
+        recipe = self.recipes.get('past_performance', {})
+        agg_cols = recipe.get('columns', [])
+        windows = recipe.get('windows', [])
+        aggregations = recipe.get('aggregations', [])
+        
+        grouped = df.groupby('horse_id', sort=False)
+        
         for col in agg_cols:
-            if col not in combined.columns:
-                logging.warning(f"過去走集約: カラム '{col}' が combined に存在しません。スキップします。")
+            if col not in df.columns:
+                logging.warning(f"過去走集約: カラム '{col}' が存在しません。スキップします。")
                 continue
             
-            # shift(1) を使い、今走を含めない過去の成績を参照する
             shifted = grouped[col].shift(1)
             
             for w in windows:
-                feat_name = f'past_{w}_{col}_mean'
-                # rolling の結果を元のインデックスに戻す (grouped.rolling はマルチインデックスを返すため)
-                rolled_mean = shifted.rolling(window=w, min_periods=1).mean()
-                # horse_id のインデックスを削除して、元の combined のインデックスに合わせる
-                combined[feat_name] = rolled_mean.reset_index(level=0, drop=True)
-
-        # 勝率
-        if 'finish_position' in combined.columns:
-            combined['is_win'] = (combined['finish_position'] == 1).astype(int)
-            # expanding().mean() でキャリア勝率を計算し、shift()で今走を含めない
-            career_win_rate = grouped['is_win'].expanding().mean().shift(1)
-            career_win_rate = career_win_rate.reset_index(level=0, drop=True)
-            combined['career_win_rate'] = career_win_rate
-
+                rolled = shifted.rolling(window=w, min_periods=1)
+                for agg in aggregations:
+                    feat_name = f'past_{w}_{col}_{agg}'
+                    try:
+                        agg_result = getattr(rolled, agg)()
+                        df[feat_name] = agg_result.reset_index(level=0, drop=True)
+                    except AttributeError:
+                        logging.error(f"集計関数 '{agg}' はサポートされていません。")
+        
         # 前走からの日数
-        combined['days_since_last_race'] = grouped['race_date'].diff().dt.days
-
-        # 3. 計算した特徴量を元のdfに戻す
-        #    is_target_race == 1 の行が、もともと予測対象だった行
-        feature_cols_to_merge = [
-            f'past_{w}_{c}_mean' for w in windows for c in agg_cols
-        ] + ['career_win_rate', 'days_since_last_race']
+        df['days_since_last_race'] = grouped['race_date'].diff().dt.days
         
-        key_cols = ['race_id', 'horse_id']
-        
-        # 生成された特徴量カラムのみを抽出
-        final_feature_cols = [col for col in feature_cols_to_merge if col in combined.columns]
-        
-        # 予測対象のレースデータに、計算した特徴量をマージ
-        target_races_with_features = combined[combined['is_target_race'] == 1][key_cols + final_feature_cols]
-        
-        # 元のdfからis_target_raceを削除
-        if 'is_target_race' in df.columns:
-            df = df.drop(columns=['is_target_race'])
-        
-        # マージ
-        df = df.merge(target_races_with_features, on=key_cols, how='left')
-
         return df
 
-    def _add_pedigree_features(self, df: pd.DataFrame, pedigree_df: pd.DataFrame, history_df: pd.DataFrame) -> pd.DataFrame:
-        """
-        仕様書 6.2 pedigree_features に基づく血統特徴量
-        (簡易版: Target Encoding)
-        """
-        logging.debug("血統特徴量を追加中...")
+    def _add_change_flags(self, df: pd.DataFrame) -> pd.DataFrame:
+        logging.debug("レシピに基づいて乗り替わりフラグを追加中...")
+        recipe = self.recipes.get('change_flags', {})
+        columns = recipe.get('columns', [])
         
-        if not self.config.get('pedigree_features', {}).get('enabled', False):
-            return df
-
-        # (1) history_df に pedigree_df をマージ
-        if 'horse_id' not in history_df.columns or 'horse_id' not in pedigree_df.columns:
-            logging.warning("血統特徴量の生成に必要な horse_id がありません。")
-            return df
-            
-        # 目的変数 (例: 賞金)
-        if 'prize_money' not in history_df.columns:
-             logging.warning("血統特徴量の生成に必要な 'prize_money' がないためスキップします。")
-             return df
-             
-        history_with_ped = history_df.merge(pedigree_df, on='horse_id', how='left')
-
-        # (2) sire_id (父) ごとに集約
-        if 'sire_id' in history_with_ped.columns:
-            # 欠損賞金を除外して平均を計算
-            sire_encoding = history_with_ped.dropna(subset=['prize_money']).groupby('sire_id')['prize_money'].mean().reset_index()
-            sire_encoding = sire_encoding.rename(columns={'prize_money': 'sire_target_encoding'})
-            
-            # (3) 元の df (shutuba_df) にマージ
-            #    (shutuba_df にも pedigree_df をマージしておく必要がある)
-            if 'sire_id' not in df.columns and 'horse_id' in df.columns:
-                 # 必要なカラムのみマージ
-                 ped_cols_to_merge = [col for col in ['horse_id', 'sire_id', 'damsire_id'] if col in pedigree_df.columns]
-                 if 'horse_id' in ped_cols_to_merge:
-                    df = df.merge(pedigree_df[ped_cols_to_merge], on='horse_id', how='left')
-                 
-            if 'sire_id' in df.columns and not sire_encoding.empty:
-                 df = df.merge(sire_encoding, on='sire_id', how='left')
-
+        grouped = df.groupby('horse_id', sort=False)
+        
+        for col in columns:
+            if col in df.columns:
+                prev_col_name = f'prev_{col}'
+                flag_col_name = f'is_{col}_changed'
+                df[prev_col_name] = grouped[col].shift(1)
+                is_changed = (df[col] != df[prev_col_name]) & (df[prev_col_name].notna())
+                df[flag_col_name] = is_changed.astype(int)
+        
         return df
 
-    def _add_jockey_trainer_features(self, df: pd.DataFrame, history_df: pd.DataFrame) -> pd.DataFrame:
-        """
-        仕様書 6.2 jockey_trainer_features に基づく騎手・調教師特徴量
-        (簡易版: 過去の勝率)
-        """
-        logging.debug("騎手・調教師特徴量を追加中...")
+    def _add_entity_stats(self, df: pd.DataFrame, history_df: pd.DataFrame) -> pd.DataFrame:
+        logging.debug("レシピに基づいてエンティティ集計特徴量を追加中...")
+        recipe = self.recipes.get('entity_stats', {})
+        entities = recipe.get('entities', [])
         
-        if not self.config.get('jockey_trainer_features', {}).get('enabled', False):
-            return df
-            
-        if 'jockey_id' not in history_df.columns or 'trainer_id' not in history_df.columns:
-            logging.warning("騎手・調教師特徴量の生成に必要なIDがありません。")
-            return df
-            
-        if 'finish_position' not in history_df.columns:
-            logging.warning("騎手・調教師特徴量の生成に必要な 'finish_position' がありません。")
-            return df
-
-        history_df = history_df.copy() #
-        history_df['is_win'] = (history_df['finish_position'] == 1).astype(int)
-
-        # (1) 騎手勝率 (欠損を除外)
-        jockey_win_rate = history_df.dropna(subset=['jockey_id', 'is_win']).groupby('jockey_id')['is_win'].mean().reset_index()
-        jockey_win_rate = jockey_win_rate.rename(columns={'is_win': 'jockey_win_rate'})
+        history_df = history_df.copy()
+        if 'finish_position' in history_df.columns:
+            history_df['is_win'] = (history_df['finish_position'] == 1).astype(int)
         
-        # (2) 調教師勝率 (欠損を除外)
-        trainer_win_rate = history_df.dropna(subset=['trainer_id', 'is_win']).groupby('trainer_id')['is_win'].mean().reset_index()
-        trainer_win_rate = trainer_win_rate.rename(columns={'is_win': 'trainer_win_rate'})
+        for entity_recipe in entities:
+            entity_name = entity_recipe.get('name')
+            id_col = entity_recipe.get('id_column')
+            target_col = entity_recipe.get('target')
+            agg_func = entity_recipe.get('agg')
+            feature_name = entity_recipe.get('feature_name')
 
-        # (3) df (shutuba_df) にマージ
-        if 'jockey_id' in df.columns and not jockey_win_rate.empty:
-            df = df.merge(jockey_win_rate, on='jockey_id', how='left')
-        if 'trainer_id' in df.columns and not trainer_win_rate.empty:
-            df = df.merge(trainer_win_rate, on='trainer_id', how='left')
-
+            if id_col not in history_df.columns:
+                logging.warning(f"エンティティ集計 ({entity_name}): IDカラム '{id_col}' が履歴にありません。")
+                continue
+            if target_col not in history_df.columns:
+                logging.warning(f"エンティティ集計 ({entity_name}): ターゲットカラム '{target_col}' が履歴にありません。")
+                continue
+            
+            # 欠損を除外して集計
+            stats = history_df.dropna(subset=[id_col, target_col]).groupby(id_col)[target_col].agg(agg_func).reset_index()
+            stats = stats.rename(columns={target_col: feature_name})
+            
+            if id_col in df.columns and not stats.empty:
+                df = df.merge(stats, on=id_col, how='left')
+        
         return df
 
     def _add_relative_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        仕様書 6.2 within_race_normalization に基づくレース内正規化
-        (例: Z-score)
-        """
-        logging.debug("レース内正規化特徴量を追加中...")
+        logging.debug("レシピに基づいてレース内相対特徴量を追加中...")
+        recipe = self.recipes.get('relative_features', {})
+        zscore_cols = recipe.get('z_score', {}).get('columns', [])
         
         if 'race_id' not in df.columns:
-             return df
+            return df
              
         grouped = df.groupby('race_id')
-        
-        zscore_cols = self.config.get('within_race_normalization', {}).get('zscore_columns', [
-             'horse_weight', 'basis_weight', 'prize_total', 'career_starts', 'career_wins'
-        ])
         
         for col in zscore_cols:
             if col in df.columns:
                 feat_name = f'{col}_zscore'
-                # transform を使ってレース内のZ-scoreを計算
-                # (stdが0の場合に備えて 1e-6 を追加)
                 try:
                     df[feat_name] = grouped[col].transform(
                         lambda x: (x - x.mean()) / (x.std() + 1e-6)
                     )
                 except Exception as e:
                      logging.warning(f"Z-score ({col}) の計算に失敗: {e}")
-                     df[feat_name] = 0.0 # 失敗した場合は 0 で埋める
+                     df[feat_name] = 0.0
         
         return df
 
     def _handle_missing_values(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        仕様書 6.2 missing_value_strategy に基づく欠損値処理
-        """
         logging.debug("欠損値を処理中...")
+        recipe = self.config.get('imputation', {})
+        strategy = recipe.get('numeric_strategy', 'median')
+        default_value = recipe.get('default_value', 0.0)
         
-        strategy = self.config.get('missing_value_strategy', {})
-        num_strategy = strategy.get('numerical', {}).get('method', 'median')
-        
-        # 数値カラムのみを対象
         num_cols = df.select_dtypes(include=np.number).columns
         
-        # キーカラムとターゲットカラムは除外
-        key_target_cols = [
-            'race_id', 'horse_id', 'horse_number', 
-            'finish_position', 'finish_time_seconds', 'win_odds', 'popularity'
-        ]
+        # 特徴量として選択される可能性のある数値カラムのみを対象
+        # この時点ではまだ self.feature_names_ が確定していないので、除外パターンで判定
+        temp_feature_names = self._select_features(df.copy())
+        cols_to_fill = [col for col in num_cols if col in temp_feature_names]
         
-        num_cols_to_fill = [col for col in num_cols if col not in key_target_cols]
-        
-        for col in num_cols_to_fill:
-            # (col がそもそも df に存在しない場合もあるためチェック)
-            if col not in df.columns:
-                continue
-
+        for col in cols_to_fill:
             if df[col].isnull().any():
-                if num_strategy == 'median':
-                    median_val = df[col].median()
-                    if pd.isna(median_val): # median が nan (全欠損など)
-                        median_val = 0
-                    df[col] = df[col].fillna(median_val)
-                elif num_strategy == 'mean':
-                    mean_val = df[col].mean()
-                    if pd.isna(mean_val):
-                        mean_val = 0
-                    df[col] = df[col].fillna(mean_val)
-                elif num_strategy == 'zero':
-                     df[col] = df[col].fillna(0)
+                if strategy == 'median':
+                    fill_value = df[col].median()
+                elif strategy == 'mean':
+                    fill_value = df[col].mean()
+                else: # zero
+                    fill_value = 0
                 
-                # (デバッグ用) どのカラムがどの戦略で埋められたか
-                # logging.debug(f"欠損値処理: '{col}' を '{num_strategy}' (値: {median_val or mean_val or 0}) で補完")
+                if pd.isna(fill_value):
+                    fill_value = default_value
+                    
+                df[col] = df[col].fillna(fill_value)
         
         return df
 
     def _select_features(self, df: pd.DataFrame) -> List[str]:
-        """
-        最終的に使用する特徴量のリストを確定する
-        """
-        all_cols = df.columns
+        logging.debug("使用する特徴量を選択中...")
+        recipe = self.config.get('feature_selection', {})
+        exclude_patterns = recipe.get('exclude_patterns', [])
         
-        # 元データ由来のカラム (キー、ターゲット、ID、文字列など)
-        # (仕様書 6.2.11)
-        exclude_cols_base = [
-            'race_id', 'horse_id', 'horse_number', 'horse_name', 'jockey_id', 'jockey_name',
-            'trainer_id', 'trainer_name', 'owner_name', 'sire_id', 'sire_name',
-            'dam_id', 'dam_name', 'damsire_id', 'damsire_name',
-            'finish_position', 'finish_time_str', 'margin_str', 'passing_order',
-            'race_date', 'race_date_str', 'year', 'month', 'day',
-            'sex', 'track_surface', 'track_condition', 'weather', 'sex_age', 'birth_date',
-            'coat_color', 'breeder_name', 'producing_area'
-        ]
-        
-        # (仕様書 6.2.1) 基本特徴量で One-Hot/Label Encoding された元のカテゴリ変数
-        exclude_cols_categorical_source = [
-            'sex', 'track_surface', # (base に含まれているが明記)
-            'bracket_number' # bracket_is_inner などに変換されたため
-        ]
-        
-        # ターゲット変数 (特徴量ではない)
-        exclude_cols_targets = [
-             'finish_position', 'finish_time_seconds', 'win_odds', 'popularity',
-             'margin_seconds', 'last_3f_time', # これらは過去走集約の *元* データ
-             'is_win' # 中間生成カラム
-        ]
-        
-        # マージ時に生成された重複カラム
-        exclude_cols_suffix = ['_profile', '_pedigree', '_history']
-
-        exclude_cols = set(exclude_cols_base + exclude_cols_categorical_source + exclude_cols_targets)
-
         feature_cols = []
+        all_cols = df.columns.tolist()
+
         for col in all_cols:
-            if col in exclude_cols:
-                continue
+            is_excluded = False
+            for pattern in exclude_patterns:
+                try:
+                    if re.match(pattern, col):
+                        is_excluded = True
+                        break
+                except re.error as e:
+                    logging.warning(f"特徴量選択の除外パターンで正規表現エラー: '{pattern}' - {e}")
+                    continue
             
-            is_excluded_suffix = False
-            for suffix in exclude_cols_suffix:
-                if col.endswith(suffix):
-                    is_excluded_suffix = True
-                    break
-            
-            if is_excluded_suffix:
-                continue
-            
-            # (数値型のみを特徴量とする場合)
-            # if pd.api.types.is_numeric_dtype(df[col]):
-            #     feature_cols.append(col)
-            
-            # (今回は型に関わらず、除外リストになければ特徴量とみなす)
-            feature_cols.append(col)
-            
-        # 重複を除外
-        feature_cols = sorted(list(dict.fromkeys(feature_cols)))
-        
-        return feature_cols
+            if not is_excluded:
+                # さらに数値型であることも確認
+                if pd.api.types.is_numeric_dtype(df[col]):
+                    feature_cols.append(col)
+
+        return sorted(list(dict.fromkeys(feature_cols)))
 
     def save_features(
         self,
@@ -490,8 +323,6 @@ class FeatureEngine:
         output_path.mkdir(parents=True, exist_ok=True)
         
         try:
-            # (仕様書 17.2 の実装に合わせてパーティション保存)
-            # DataFrame に partition_cols が存在するか再確認
             valid_partition_cols = [col for col in partition_cols if col in features_df.columns]
             
             if valid_partition_cols:
@@ -504,7 +335,6 @@ class FeatureEngine:
                     existing_data_behavior='overwrite_or_ignore'
                 )
             else:
-                # パーティションキーがない場合は単一ファイルで保存
                  logging.warning(f"パーティションカラム {partition_cols} がDFにないため、単一ファイルで保存します")
                  features_df.to_parquet(
                     output_path / "features.parquet",
