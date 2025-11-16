@@ -265,7 +265,7 @@ def extract_race_metadata_enhanced(soup: BeautifulSoup) -> Dict:
         # パターン2: 通常レース
         # 「芝」「ダート」の後、数字以外の文字（方向、記号、スペースなど）を非貪欲でマッチ
         if metadata['distance_m'] is None:
-            distance_match = re.search(r'(芝|ダート?)[^0-9]*?(\d+)\s*m?', text, re.IGNORECASE)
+            distance_match = re.search(r'(芝|ダー?ト?)[^0-9]*?(\d+)\s*m?', text, re.IGNORECASE)
             if distance_match:
                 surface_map = {'芝': '芝', 'ダ': 'ダート', 'ダート': 'ダート'}
                 metadata['track_surface'] = surface_map.get(distance_match.group(1))
@@ -286,7 +286,7 @@ def extract_race_metadata_enhanced(soup: BeautifulSoup) -> Dict:
                         break
 
                 # パターン2: 通常レース
-                distance_match = re.search(r'(芝|ダート?)[^0-9]*?(\d+)', span_text)
+                distance_match = re.search(r'(芝|ダー?ト?)[^0-9]*?(\d+)', span_text)
                 if distance_match:
                     surface_map = {'芝': '芝', 'ダ': 'ダート', 'ダート': 'ダート'}
                     metadata['track_surface'] = surface_map.get(distance_match.group(1))
