@@ -605,6 +605,154 @@ Brier Score: 5-10%の改善
 ECE（Expected Calibration Error）: < 0.05 の達成
 NDCG: 順位予測精度の向上
 ROI: 期待値フィルタリング精度の向上
+---
+
+## 📋 実装進捗記録
+
+### 実装セッション: 2025-11-16
+
+#### ✅ 完了した改善項目
+
+##### 1. 馬過去成績テーブルの保存処理修正 ⭐️⭐️⭐️
+**実装日**: 2025-11-16
+**実装ファイル**: `keibaai/src/run_parsing_pipeline_local.py`
+
+**実装内容**:
+- `parse_horse_performance()` を正しく呼び出すように修正（205-229行目）
+- lambda関数のバグを修正（ファイルパスを直接渡す方式に変更）
+- データ型の最適化（Int64型）を追加
+- 成績データを `horses_performance.parquet` として保存可能に
+
+**期待される効果**:
+- 馬の詳細な過去成績データ（距離別・馬場別）が活用可能
+- より精緻な過去走データによる特徴量の質向上
+- Brier Score 3-5%の改善見込み
+
+**抽出されるカラム**:
+```
+horse_id, race_date, venue, weather, race_number, race_name, race_grade,
+head_count, bracket_number, horse_number, finish_position, jockey_name,
+basis_weight, distance_m, track_surface, track_condition, finish_time_seconds,
+margin_seconds, passing_order, last_3f_time, win_odds, popularity,
+horse_weight, horse_weight_change, race_id
+```
+
+**次回実行時の動作**: パースパイプライン実行時に自動的に過去成績を保存
+
+---
+
+##### 2. 交互作用特徴量の体系的導入 ⭐️⭐️⭐️
+**実装日**: 2025-11-16
+**実装ファイル**:
+- `keibaai/configs/features.yaml`
+- `keibaai/src/features/feature_engine.py`
+
+**実装内容**:
+
+1. **features.yaml への設定追加** (68-83行目):
+```yaml
+interaction_features:
+  enabled: true
+  interactions:
+    # 騎手 × 競馬場
+    - { name: jockey_venue, id_column: jockey_id, context_column: venue, ... }
+    # 騎手 × 距離カテゴリ
+    - { name: jockey_distance, id_column: jockey_id, context_column: distance_category, ... }
+    # 騎手 × 馬場種別
+    - { name: jockey_surface, id_column: jockey_id, context_column: track_surface, ... }
+    # 種牡馬 × 馬場種別
+    - { name: sire_surface, id_column: sire_id, context_column: track_surface, ... }
+    # 種牡馬 × 距離カテゴリ
+    - { name: sire_distance, id_column: sire_id, context_column: distance_category, ... }
+    # 調教師 × 競馬場
+    - { name: trainer_venue, id_column: trainer_id, context_column: venue, ... }
+```
+
+2. **feature_engine.py への実装** (239-343行目):
+- `_add_interaction_features()` メソッド追加
+- 交互作用の自動生成ロジック（groupby + pivot）
+- `_add_distance_category()` メソッド追加（距離のカテゴリ化）
+
+3. **距離カテゴリの定義**:
+```python
+sprint:        < 1400m    # スプリント
+mile:          1400-1799m # マイル
+intermediate:  1800-2199m # 中距離
+long:          2200-2799m # 長距離
+marathon:      >= 2800m   # 超長距離
+```
+
+**生成される特徴量例**:
+```
+jockey_東京_win_rate        # 武豊騎手の東京競馬場勝率
+jockey_sprint_win_rate      # 武豊騎手の短距離勝率
+jockey_芝_win_rate          # 武豊騎手の芝勝率
+sire_芝_avg_finish          # ディープインパクト産駒の芝平均着順
+sire_mile_avg_finish        # ディープインパクト産駒のマイル平均着順
+trainer_中山_win_rate       # 藤沢調教師の中山競馬場勝率
+```
+
+**期待される効果**:
+- 特定条件下での優位性を捉える（騎手×競馬場など）
+- LightGBMの決定木が複雑な相互作用を学習しやすくなる
+- Brier Score 3-7%の改善見込み
+
+**次回特徴量生成時の動作**: `features.yaml` の設定に基づき自動的に生成
+
+---
+
+#### ⏳ 未実装（次回優先）
+
+##### 3. Optunaによるハイパーパラメータ最適化 ⭐️⭐️⭐️
+**優先度**: 最高
+**実装難易度**: 中
+**期待効果**: 高（Brier Score 3-5%改善見込み）
+
+**実装予定内容**:
+1. Optunaライブラリの導入
+2. 最適化スクリプト `optimize_hyperparameters.py` の作成
+3. LightGBMの探索空間定義:
+   - `num_leaves`: 20-100
+   - `learning_rate`: 0.001-0.1
+   - `n_estimators`: 500-3000
+   - `min_child_samples`: 5-100
+   - `max_depth`: 3-12
+4. ベイズ最適化の実行（100 trials推奨）
+5. 最適パラメータの保存（models.yaml）
+
+**実装タイミング**: 次回セッション
+
+---
+
+### 📊 全体進捗サマリー
+
+| フェーズ | 改善項目 | ステータス | 期待効果 |
+|---------|---------|----------|---------|
+| フェーズ1 | 馬過去成績保存 | ✅ 完了 | Brier Score 3-5%改善 |
+| フェーズ1 | 交互作用特徴量 | ✅ 完了 | Brier Score 3-7%改善 |
+| フェーズ1 | Optuna最適化 | ⏳ 未実装 | Brier Score 3-5%改善 |
+| フェーズ1 | MLflow導入 | ⏳ 未実装 | 実験管理の効率化 |
+| フェーズ2 | 脚質特徴量 | ⏳ 未実装 | Brier Score 2-4%改善 |
+| フェーズ2 | 血統詳細情報 | ⏳ 未実装 | Brier Score 1-2%改善 |
+| フェーズ3 | Embedding活用 | ⏳ 未実装 | Brier Score 3-5%改善 |
+| フェーズ3 | Focal Loss | ⏳ 未実装 | 大穴予測精度向上 |
+
+**累計期待改善**: Brier Score 6-12%改善（フェーズ1完了分）
+
+---
+
+### 🔗 関連コミット
+
+- **コミットハッシュ**: `9abf04c`
+- **ブランチ**: `claude/improve-data-pipeline-014oreGm5qa6p4ABU8J8yK4h`
+- **コミット日時**: 2025-11-16
+- **変更ファイル**:
+  - `keibaai/src/run_parsing_pipeline_local.py`
+  - `keibaai/configs/features.yaml`
+  - `keibaai/src/features/feature_engine.py`
+
+---
+
 Update Todos
 Read complete system specification document (完全仕様書)
 Read review_report.md for existing analysis
@@ -623,30 +771,34 @@ Generate comprehensive improvement recommendations
 ✅ 278,098 レース、1,377,361 血統レコードを処理
 ✅ HTML パーサー改善により欠損率 0.8%→ ほぼ 0%達成
 ✅ 27+カラムの詳細なレース情報抽出
-⚠️ 馬過去成績データが未保存（パーサーは存在するが保存処理なし）
+✅ 馬過去成績データの保存処理を修正（2025-11-16実装完了）
 特徴量生成:
 
 ✅ レシピベースの柔軟なシステム実装済み
 ✅ 時系列リーク対策（shift()使用）が完璧
-⚠️ 交互作用特徴量、脚質、Embedding が未実装
+✅ 交互作用特徴量を体系的に導入（2025-11-16実装完了）
+⚠️ 脚質、Embedding が未実装
 モデル:
 
 ✅ μ（Regressor+Ranker）の洗練された設計
-⚠️ ハイパーパラメータが固定値（最適化未実施）
+⚠️ ハイパーパラメータが固定値（最適化未実施）← 次回優先
 ⚠️ カスタム損失関数未導入
-🎯 最優先で取り組むべき 3 つの改善
+🎯 次回優先で取り組むべき改善
 Optuna によるハイパーパラメータ最適化
 
 実装難易度: 中 / 期待効果: 高
 即座にモデル性能向上が見込める
-馬過去成績テーブルの保存
+フェーズ1の最後の重要改善
+MLflow の導入
 
-実装難易度: 中 / 期待効果: 高
-parse_horse_performance()は既に存在、保存処理の追加のみ
-交互作用特徴量の体系的導入
+実装難易度: 低 / 期待効果: 中
+実験管理の効率化
+モデルバージョン管理の自動化
+脚質特徴量の定義と実装
 
-実装難易度: 中 / 期待効果: 高
-features.yaml の拡張で実装可能
+実装難易度: 中 / 期待効果: 中
+過去の通過順位から脚質を分類
+枠番との相性を捉える
 📝 提供した分析内容
 ✅ データパイプライン全体の詳細フロー
 ✅ 各パーサーで抽出される全カラムのリスト
@@ -654,4 +806,5 @@ features.yaml の拡張で実装可能
 ✅ モデルアーキテクチャの詳細分析
 ✅ 優先度付き改善ロードマップ（フェーズ 1-3）
 ✅ 具体的な実装例とコードスニペット
-この分析レポートを基に、モデル精度向上に向けた段階的な改善を進めることができます。特にフェーズ 1 の 3 つの改善を実施することで、Brier Score で 5-10%の改善が期待できます。
+✅ フェーズ1の2つの改善を実装完了（2025-11-16）
+この分析レポートを基に、モデル精度向上に向けた段階的な改善を進めています。フェーズ 1 の実装により、Brier Score で 6-12%の改善が期待できます。
