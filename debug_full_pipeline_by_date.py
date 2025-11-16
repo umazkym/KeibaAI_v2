@@ -318,50 +318,145 @@ class CompletePipeline:
                     metadata_source = race_data.iloc[0].get('metadata_source', 'Unknown')
                     print(f"        {race_id}: {race_name} ({len(race_data)}頭, source={metadata_source})")
 
-        # 2. 出馬表のパース（簡易版）
+        # 2. 出馬表のパース（正しいパーサーを使用）
         print(f"\n  --- 出馬表のパース ---")
-        shutuba_data = []
 
-        for race_id in race_ids:
+        # 正しいパーサーをインポート
+        try:
+            from keibaai.src.modules.parsers.shutuba_parser import parse_shutuba_html
+            SHUTUBA_PARSER_AVAILABLE = True
+        except ImportError:
+            print("  [!] shutuba_parser.py が見つかりません。簡易版パースを使用します。")
+            SHUTUBA_PARSER_AVAILABLE = False
+
+        shutuba_results = []
+
+        for i, race_id in enumerate(race_ids):
             shutuba_file = self.shutuba_bin_dir / f"{race_id}.bin"
 
             if not shutuba_file.exists():
                 continue
 
             try:
-                with open(shutuba_file, 'rb') as f:
-                    html_bytes = f.read()
+                if SHUTUBA_PARSER_AVAILABLE:
+                    # 正しいパーサーを使用
+                    df = parse_shutuba_html(str(shutuba_file), race_id)
 
-                html_text = html_bytes.decode('euc_jp', errors='replace')
-                soup = BeautifulSoup(html_text, 'html.parser')
-
-                metadata = extract_race_metadata_enhanced(soup)
-                metadata['race_id'] = race_id
-
-                shutuba_data.append(metadata)
+                    if not df.empty:
+                        shutuba_results.append(df)
+                        print(f"    [{i+1}/{len(race_ids)}] {race_id} - ✓ {len(df)}頭")
+                    else:
+                        print(f"    [{i+1}/{len(race_ids)}] {race_id} - データなし")
+                else:
+                    # フォールバック: メタデータのみ抽出
+                    with open(shutuba_file, 'rb') as f:
+                        html_bytes = f.read()
+                    html_text = html_bytes.decode('euc_jp', errors='replace')
+                    soup = BeautifulSoup(html_text, 'html.parser')
+                    metadata = extract_race_metadata_enhanced(soup)
+                    metadata['race_id'] = race_id
+                    shutuba_results.append(pd.DataFrame([metadata]))
 
             except Exception as e:
+                print(f"    [{i+1}/{len(race_ids)}] {race_id} - エラー: {e}")
                 continue
 
-        if shutuba_data:
-            shutuba_df = pd.DataFrame(shutuba_data)
-            output_file = self.output_dir / 'shutuba_metadata.csv'
+        if shutuba_results:
+            shutuba_df = pd.concat(shutuba_results, ignore_index=True)
+            output_file = self.output_dir / 'shutuba.csv'
             shutuba_df.to_csv(output_file, index=False, encoding='utf-8-sig')
-            print(f"  [✓] shutuba_metadata.csv: {len(shutuba_df)}行")
+            print(f"\n  [✓] shutuba.csv: {len(shutuba_df)}行")
 
-        # 3. 馬情報のパース（簡易版）
+            # 簡易統計
+            if 'horse_id' in shutuba_df.columns:
+                horse_id_missing = shutuba_df['horse_id'].isna().sum()
+                print(f"      horse_id 欠損: {horse_id_missing}行 ({horse_id_missing/len(shutuba_df)*100:.2f}%)")
+
+            if 'horse_name' in shutuba_df.columns:
+                horse_name_missing = shutuba_df['horse_name'].isna().sum()
+                print(f"      horse_name 欠損: {horse_name_missing}行 ({horse_name_missing/len(shutuba_df)*100:.2f}%)")
+
+        # 3. 馬情報のパース（正しいパーサーを使用）
         print(f"\n  --- 馬情報のパース ---")
+
+        # 正しいパーサーをインポート
+        try:
+            from keibaai.src.modules.parsers.horse_info_parser import (
+                parse_horse_profile_html,
+                parse_horse_performance_html
+            )
+            from keibaai.src.modules.parsers.pedigree_parser import parse_pedigree_html
+            HORSE_PARSERS_AVAILABLE = True
+        except ImportError:
+            print("  [!] horse_info_parser.py または pedigree_parser.py が見つかりません。")
+            HORSE_PARSERS_AVAILABLE = False
 
         profile_files = list(self.horse_bin_dir.glob('*_profile.bin'))
         perf_files = list(self.horse_bin_dir.glob('*_perf.bin'))
+        ped_files = list(self.ped_bin_dir.glob('*.bin'))
 
         print(f"  馬プロフィール: {len(profile_files)}件")
         print(f"  馬過去成績: {len(perf_files)}件")
+        print(f"  血統: {len(ped_files)}件")
 
-        # （詳細なパース処理は省略 - 必要に応じて実装）
+        if HORSE_PARSERS_AVAILABLE:
+            # プロフィールのパース
+            horse_profiles = []
+            for i, profile_file in enumerate(profile_files):
+                horse_id = profile_file.stem.replace('_profile', '')
+                try:
+                    df = parse_horse_profile_html(str(profile_file), horse_id)
+                    if not df.empty:
+                        horse_profiles.append(df)
+                        print(f"    プロフィール [{i+1}/{len(profile_files)}] {horse_id} - ✓")
+                except Exception as e:
+                    print(f"    プロフィール [{i+1}/{len(profile_files)}] {horse_id} - エラー: {e}")
 
-        print(f"\n  [注] 馬プロフィール・過去成績の詳細パースは未実装")
-        print(f"       binファイルは保存済みです: {self.horse_bin_dir}")
+            # 血統のパース
+            pedigrees = []
+            for i, ped_file in enumerate(ped_files):
+                horse_id = ped_file.stem
+                try:
+                    df = parse_pedigree_html(str(ped_file), horse_id)
+                    if not df.empty:
+                        pedigrees.append(df)
+                        print(f"    血統 [{i+1}/{len(ped_files)}] {horse_id} - ✓")
+                except Exception as e:
+                    print(f"    血統 [{i+1}/{len(ped_files)}] {horse_id} - エラー: {e}")
+
+            # プロフィールと血統をマージして保存
+            if horse_profiles:
+                profile_df = pd.concat(horse_profiles, ignore_index=True)
+                if pedigrees:
+                    ped_df = pd.concat(pedigrees, ignore_index=True)
+                    horses_df = pd.merge(profile_df, ped_df, on='horse_id', how='left')
+                else:
+                    horses_df = profile_df
+
+                output_file = self.output_dir / 'horses.csv'
+                horses_df.to_csv(output_file, index=False, encoding='utf-8-sig')
+                print(f"\n  [✓] horses.csv: {len(horses_df)}行, {len(horses_df.columns)}カラム")
+
+            # 過去成績のパース
+            performance_results = []
+            for i, perf_file in enumerate(perf_files):
+                horse_id = perf_file.stem.replace('_perf', '')
+                try:
+                    df = parse_horse_performance_html(str(perf_file), horse_id)
+                    if not df.empty:
+                        performance_results.append(df)
+                        print(f"    過去成績 [{i+1}/{len(perf_files)}] {horse_id} - ✓ {len(df)}走")
+                except Exception as e:
+                    print(f"    過去成績 [{i+1}/{len(perf_files)}] {horse_id} - エラー: {e}")
+
+            if performance_results:
+                perf_df = pd.concat(performance_results, ignore_index=True)
+                output_file = self.output_dir / 'horses_performance.csv'
+                perf_df.to_csv(output_file, index=False, encoding='utf-8-sig')
+                print(f"\n  [✓] horses_performance.csv: {len(perf_df)}行, {len(perf_df.columns)}カラム")
+        else:
+            print(f"\n  [注] 馬プロフィール・過去成績・血統の詳細パースは未実装")
+            print(f"       binファイルは保存済みです: {self.horse_bin_dir}")
 
 
 def main():
