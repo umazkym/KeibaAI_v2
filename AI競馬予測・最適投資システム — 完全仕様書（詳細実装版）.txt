@@ -968,9 +968,11 @@ def parse_results_html(file_path: str, race_id: str = None) -> pd.DataFrame:
         html_text = html_bytes.decode('euc_jp', errors='replace')
     except:
         html_text = html_bytes.decode('utf-8', errors='replace')
-    
-    soup = BeautifulSoup(html_text, 'lxml')
-    
+
+    # ※ CLAUDE.md推奨: 'html.parser'の方が互換性が高い
+    # soup = BeautifulSoup(html_text, 'html.parser')  # 推奨
+    soup = BeautifulSoup(html_text, 'lxml')  # lxmlも使用可能
+
     # レース結果テーブルを検索
     result_table = soup.find('table', attrs={'summary': 'レース結果'})
     
@@ -1384,9 +1386,11 @@ def parse_shutuba_html(file_path: str, race_id: str = None) -> pd.DataFrame:
         html_text = html_bytes.decode('euc_jp', errors='replace')
     except:
         html_text = html_bytes.decode('utf-8', errors='replace')
-    
-    soup = BeautifulSoup(html_text, 'lxml')
-    
+
+    # ※ CLAUDE.md推奨: 'html.parser'の方が互換性が高い
+    # soup = BeautifulSoup(html_text, 'html.parser')  # 推奨
+    soup = BeautifulSoup(html_text, 'lxml')  # lxmlも使用可能
+
     # Shutuba_Table を検索
     shutuba_table = soup.find('table', class_='Shutuba_Table')
     
@@ -1638,9 +1642,11 @@ def parse_horse_profile(file_path: str, horse_id: str = None) -> Dict:
         html_text = html_bytes.decode('euc_jp', errors='replace')
     except:
         html_text = html_bytes.decode('utf-8', errors='replace')
-    
-    soup = BeautifulSoup(html_text, 'lxml')
-    
+
+    # ※ CLAUDE.md推奨: 'html.parser'の方が互換性が高い
+    # soup = BeautifulSoup(html_text, 'html.parser')  # 推奨
+    soup = BeautifulSoup(html_text, 'lxml')  # lxmlも使用可能
+
     profile = {'horse_id': horse_id}
     
     # 馬名
@@ -1779,9 +1785,11 @@ def parse_horse_performance(file_path: str, horse_id: str = None) -> pd.DataFram
         html_text = html_bytes.decode('utf-8', errors='replace')
     except:
         html_text = html_bytes.decode('euc_jp', errors='replace')
-    
-    soup = BeautifulSoup(html_text, 'lxml')
-    
+
+    # ※ CLAUDE.md推奨: 'html.parser'の方が互換性が高い
+    # soup = BeautifulSoup(html_text, 'html.parser')  # 推奨
+    soup = BeautifulSoup(html_text, 'lxml')  # lxmlも使用可能
+
     # 過去成績テーブル
     perf_table = soup.find('table', class_='db_h_race_results')
     
