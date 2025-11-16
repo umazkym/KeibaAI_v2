@@ -296,7 +296,7 @@ def extract_race_date_from_html(soup: BeautifulSoup, race_id: str) -> Optional[s
             # この場合、他のタグから年（YYYY）を探す
             match_partial = re.search(r'(\d{1,2})月(\d{1,2})日', date_text)
             if match_partial and '年' not in date_text:
-                logging.warning(f"日付抽出 (Active Partial): 年が欠落しています '{date_text}'。年を別途探索します。")
+                logging.debug(f"日付抽出 (Active Partial): 年が欠落しています '{date_text}'。年を別途探索します。")
                 # 年の探索: <li class="Active">YYYY</li> または <title>YYYY</title>
                 year_str = None
                 

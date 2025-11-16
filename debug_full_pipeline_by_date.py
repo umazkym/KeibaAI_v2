@@ -387,8 +387,11 @@ class CompletePipeline:
             )
             from keibaai.src.modules.parsers.pedigree_parser import parse_pedigree_html
             HORSE_PARSERS_AVAILABLE = True
-        except ImportError:
-            print("  [!] horse_info_parser.py または pedigree_parser.py が見つかりません。")
+        except ImportError as e:
+            print(f"  [!] 馬情報パーサーのインポートに失敗しました: {e}")
+            print(f"      Pythonパス: {sys.path[:3]}...")
+            print(f"      カレントディレクトリ: {os.getcwd()}")
+            print("  [注] パーサーが見つからない場合、binファイルのみ保存されます。")
             HORSE_PARSERS_AVAILABLE = False
 
         profile_files = list(self.horse_bin_dir.glob('*_profile.bin'))
