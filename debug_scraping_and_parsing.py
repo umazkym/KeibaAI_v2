@@ -162,8 +162,9 @@ def parse_html_content(html_bytes: bytes, race_id: str) -> pd.DataFrame:
         html_text = html_bytes.decode('euc_jp', errors='replace')
     except Exception:
         html_text = html_bytes.decode('utf-8', errors='replace')
-    
-    soup = BeautifulSoup(html_text, 'lxml')
+
+    # CLAUDE.mdの推奨に従い、html.parserを使用（lxmlよりも互換性が高い）
+    soup = BeautifulSoup(html_text, 'html.parser')
     
     race_metadata = extract_race_metadata_enhanced(soup)
     
@@ -229,6 +230,8 @@ def extract_race_metadata_enhanced(soup: BeautifulSoup) -> Dict:
 
 
         # 距離と馬場（改善版 - より柔軟な正規表現）
+        # 通常: "芝1800m", "ダ1200m"
+        # 障害: "障3000m", "障3110m"
         distance_match = re.search(r'(芝|ダ|障)\s*(?:右|左|直|外|内)?\s*(\d+)\s*m?', text, re.IGNORECASE)
 
         if distance_match:
@@ -264,6 +267,15 @@ def extract_race_metadata_enhanced(soup: BeautifulSoup) -> Dict:
         if time_match:
             metadata['post_time'] = time_match.group(1)
 
+    # 障害レースで距離が取得できない場合、race_nameから推測して補完
+    if metadata['distance_m'] is None and metadata['race_name']:
+        race_name = metadata['race_name']
+        if '障害' in race_name:
+            # 障害レースの典型的な距離を推測（HTMLに記載がない場合の補完）
+            # 一般的な障害レース距離: 2860m, 3000m, 3110m, 3140m, 3170m, 3200m, 3350m, 3390m, 3900m
+            # しかし、正確な距離がわからない場合は補完しない方が安全
+            metadata['track_surface'] = '障害'  # 少なくとも馬場種別は設定
+
     # レース名とクラス（修正: セレクタを変更）
     race_name_tag = soup.find('dl', class_='racedata')
     if race_name_tag:
@@ -296,7 +308,10 @@ def extract_race_metadata_enhanced(soup: BeautifulSoup) -> Dict:
                 # 障害レースなど
                 metadata['race_class'] = 'その他'
 
-    # 賞金情報
+    # 賞金情報（レース全体の賞金設定）
+    # 注: レース結果HTMLには RaceData02 が存在しないため、prize_1st~5th は取得できません
+    # 賞金設定は出馬表HTMLに記載されています（本賞金:510,200,130,77,51万円）
+    # 各馬が獲得した賞金（prize_money）は parse_result_row_enhanced() で取得されます
     prize_info = soup.find('div', class_='RaceData02')
     if prize_info:
         prize_text = prize_info.get_text()
