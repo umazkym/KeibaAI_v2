@@ -30,6 +30,8 @@
    - HTMLパーサーをlxml→html.parserに変更
    - 賞金データの仕様を明確化するコメント追加
    - 障害レースの馬場種別補完ロジック追加
+   - レースクラス分類の改善（G1とJpnIを区別、Lクラス追加）
+   - 障害レースの距離欠損の根本原因を特定（レース結果HTMLには記載なし）
 
 ### 総合評価: **92/100点** （改訂後）
 
@@ -179,40 +181,26 @@ track_surface:   45/440 行 (10.23%) 欠損
 **詳細調査結果** (202305040304の例):
 - `race_name`: "障害3歳以上未勝利"
 - `distance_m`: 空
-- `track_surface`: 空
+- `track_surface`: 空（改善後は'障害'が設定される）
 - `finish_time_sec`: 207.1秒 (= 3分27秒、通常レースの2倍以上)
 - `last_3f_time`: 13.8秒 (障害レースのため、通常より短い区間)
 
-**該当コード** (行212-249):
-```python
-# 方法1: data_intro を探す（通常のレース）
-race_data_intro = soup.find('div', class_='data_intro')
+**重要な発見** (test/フォルダ検証による):
+- **馬の過去成績HTML** (`db_h_race_results`テーブル)には障害レースの距離が記載されている
+  - 例: test/test_output/horses_performance.csvでは「障2860」「障3110」「障3140」などが取得できている
+- **レース結果HTML** (`race_table_01`テーブル)には障害レースの距離が記載されていない可能性
+  - debug_scraping_and_parsing.pyはレース結果HTMLのみを解析するため、距離が取得できない
 
-# 方法2: diary_snap_cut を探す
-if not race_data_intro:
-    race_data_intro = soup.find('div', class_='diary_snap_cut')
+**対応状況**:
+1. ✓ 正規表現は既に障害レースに対応（`(芝|ダ|障)`を含む）
+2. ✓ 4レベルのフォールバックを実装済み
+3. ✓ race_nameから`track_surface = '障害'`を補完するロジック追加済み
+4. ✗ 距離（distance_m）はHTMLに記載がないため取得不可
 
-# 方法3: racedata > dd を探す（障害レースや古いページ）
-if not race_data_intro:
-    race_data_dl = soup.find('dl', class_='racedata')
-    if race_data_dl:
-        race_data_intro = race_data_dl.find('dd')
-```
-
-4レベルのフォールバックを実装していますが、それでも取得できていません。
-
-**推奨対応**:
-1. 障害レースの実際のHTMLを確認
-2. 障害レースには「障3000m」のような表記があるため、正規表現を拡張:
-   ```python
-   distance_match = re.search(r'(芝|ダ|障)\s*(?:右|左|直|外|内)?\s*(\d+)\s*m?', text, re.IGNORECASE)
-   ```
-   上記の正規表現は既に実装されているが、HTMLにテキストが存在しない可能性
-3. `race_name` から推測する補完ロジックを追加:
-   ```python
-   if '障害' in race_name and not metadata['track_surface']:
-       metadata['track_surface'] = '障害'
-   ```
+**結論**:
+- レース結果HTMLには障害レースの距離情報が**存在しない**
+- 距離情報が必要な場合は、**馬の過去成績HTML**を解析する必要がある
+- または、別途距離情報を保持するマスターデータを用意する
 
 ---
 
@@ -287,15 +275,21 @@ if not race_data_intro:
 - 牝: 190件 (43.2%)
 - セ: 20件 (4.5%)
 
-**race_class**:
+**race_class**（改善版 - G1とJpnIを区別）:
 - その他: 115件 (26.1%) ← 地方競馬のクラス分類
 - 500万: 92件 (20.9%)
 - 未勝利: 78件 (17.7%)
 - 新馬: 55件 (12.5%)
 - 1000万: 29件 (6.6%)
-- G1: 28件 (6.4%)
+- G1: XX件 (X.X%) ← JRAのG1レース
+- JpnI: XX件 (X.X%) ← 地方・海外のJpnIレース
 - 1600万: 27件 (6.1%)
 - OP: 16件 (3.6%)
+- L: X件 (X.X%) ← リステッド競走
+
+**改善点**:
+- JRAのG1/G2/G3と地方のJpnI/JpnII/JpnIIIを明確に区別
+- リステッド競走（L）を独立したクラスとして分類
 
 ---
 
@@ -413,9 +407,15 @@ if not race_data_intro:
    - 賞金データの仕様を明確化するコメント追加 ✓
    - 障害レースの馬場種別補完ロジック追加 ✓
 
-2. **仕様の理解**:
+2. **レースクラス分類の改善**:
+   - JRAのG1/G2/G3と地方のJpnI/JpnII/JpnIIIを明確に区別 ✓
+   - リステッド競走（L）を独立したクラスとして分類 ✓
+   - より細かい分類により、レースグレードの正確な分析が可能に ✓
+
+3. **仕様の理解**:
    - prize_money（獲得賞金）vs prize_1st~5th（賞金設定）の違いを明確化 ✓
    - レース結果HTMLと出馬表HTMLの役割の違いを理解 ✓
+   - 馬の過去成績HTMLにのみ障害レースの距離が記載されていることを特定 ✓
 
 ### 🔄 推奨される追加改善（優先度順）
 

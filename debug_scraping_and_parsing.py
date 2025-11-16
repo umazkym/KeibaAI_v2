@@ -268,12 +268,16 @@ def extract_race_metadata_enhanced(soup: BeautifulSoup) -> Dict:
             metadata['post_time'] = time_match.group(1)
 
     # 障害レースで距離が取得できない場合、race_nameから推測して補完
+    # 注: 馬の過去成績HTML（db_h_race_results）には障害レースの距離が記載されているが、
+    #     レース結果HTML（race_table_01）には記載がない可能性が高い
+    #     test/test_output/horses_performance.csvでは障2860m, 障3110mなどが取得できている
     if metadata['distance_m'] is None and metadata['race_name']:
         race_name = metadata['race_name']
         if '障害' in race_name:
             # 障害レースの典型的な距離を推測（HTMLに記載がない場合の補完）
             # 一般的な障害レース距離: 2860m, 3000m, 3110m, 3140m, 3170m, 3200m, 3350m, 3390m, 3900m
             # しかし、正確な距離がわからない場合は補完しない方が安全
+            # HTMLに記載がない以上、補完は行わず、track_surfaceのみ設定
             metadata['track_surface'] = '障害'  # 少なくとも馬場種別は設定
 
     # レース名とクラス（修正: セレクタを変更）
@@ -284,15 +288,36 @@ def extract_race_metadata_enhanced(soup: BeautifulSoup) -> Dict:
             race_name = h1_tag.get_text(strip=True)
             metadata['race_name'] = race_name
  
-            # レースクラスの推定（改善版）
-            if 'G1' in race_name or 'GI' in race_name or 'JpnI' in race_name:
-                metadata['race_class'] = 'G1'
-            elif 'G2' in race_name or 'GII' in race_name or 'JpnII' in race_name:
-                metadata['race_class'] = 'G2'
-            elif 'G3' in race_name or 'GIII' in race_name or 'JpnIII' in race_name:
-                metadata['race_class'] = 'G3'
-            elif 'オープン' in race_name or 'OP' in race_name or 'L' in race_name:
+            # レースクラスの推定（改善版 - JRAとJpnを区別）
+            # JRAのG1/G2/G3
+            if 'GI' in race_name or 'G1' in race_name:
+                # JpnIではない純粋なG1
+                if 'Jpn' not in race_name:
+                    metadata['race_class'] = 'G1'
+                else:
+                    metadata['race_class'] = 'JpnI'
+            elif 'GII' in race_name or 'G2' in race_name:
+                if 'Jpn' not in race_name:
+                    metadata['race_class'] = 'G2'
+                else:
+                    metadata['race_class'] = 'JpnII'
+            elif 'GIII' in race_name or 'G3' in race_name:
+                if 'Jpn' not in race_name:
+                    metadata['race_class'] = 'G3'
+                else:
+                    metadata['race_class'] = 'JpnIII'
+            # 地方のJpnグレード（明示的にJpnIなど）
+            elif 'JpnI' in race_name:
+                metadata['race_class'] = 'JpnI'
+            elif 'JpnII' in race_name:
+                metadata['race_class'] = 'JpnII'
+            elif 'JpnIII' in race_name:
+                metadata['race_class'] = 'JpnIII'
+            # その他のクラス
+            elif 'オープン' in race_name or 'OP' in race_name:
                 metadata['race_class'] = 'OP'
+            elif 'L' in race_name or 'リステッド' in race_name:
+                metadata['race_class'] = 'L'
             elif '1600万' in race_name or '3勝' in race_name:
                 metadata['race_class'] = '1600'
             elif '1000万' in race_name or '2勝' in race_name:
@@ -303,9 +328,8 @@ def extract_race_metadata_enhanced(soup: BeautifulSoup) -> Dict:
                 metadata['race_class'] = '未勝利'
             elif '新馬' in race_name:
                 metadata['race_class'] = '新馬'
-
             else:
-                # 障害レースなど
+                # 障害レースや地方競馬など
                 metadata['race_class'] = 'その他'
 
     # 賞金情報（レース全体の賞金設定）
