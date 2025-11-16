@@ -133,7 +133,6 @@ dmypy.json
 .DS_Store
 
 # Data files
-*.csv
 *.parquet
 *.bin
 *.pkl
