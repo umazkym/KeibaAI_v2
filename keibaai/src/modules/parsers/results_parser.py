@@ -18,6 +18,65 @@ from .common_utils import (
     normalize_owner_name,
 )
 
+def extract_race_id_from_filename(file_path: str) -> str:
+    """
+    ファイル名からレースIDを抽出
+    """
+    filename = Path(file_path).stem
+    # race_202305020811... から 202305020811 を抽出
+    match = re.search(r'(\d{12})', filename)
+    if match:
+        return match.group(1)
+
+    # _202305020811... のような別プレフィックスにも対応
+    match = re.search(r'_(\d{12})', filename)
+    if match:
+        return match.group(1)
+
+    logging.warning(f"ファイル名 {filename} から race_id (12桁) を抽出できませんでした。")
+    return None
+
+
+def extract_race_date_from_html(soup: BeautifulSoup, race_id: str) -> Optional[str]:
+    """
+    レース結果HTMLからレース日付を抽出
+
+    Args:
+        soup: BeautifulSoup オブジェクト
+        race_id: レースID (フォールバック用)
+
+    Returns:
+        race_date (ISO8601形式: YYYY-MM-DD) または None
+    """
+    # 方法1: data_introのspanタグから日付を抽出
+    data_intro = soup.find('div', class_='data_intro')
+    if data_intro:
+        date_text = data_intro.get_text()
+        # "2020年7月25日" のような形式を探す
+        match = re.search(r'(\d{4})年(\d{1,2})月(\d{1,2})日', date_text)
+        if match:
+            year, month, day = match.groups()
+            return f"{year}-{int(month):02d}-{int(day):02d}"
+
+    # 方法2: smalltxtから抽出（フォールバック）
+    smalltxt = soup.find('p', class_='smalltxt')
+    if smalltxt:
+        date_text = smalltxt.get_text()
+        match = re.search(r'(\d{4})年(\d{1,2})月(\d{1,2})日', date_text)
+        if match:
+            year, month, day = match.groups()
+            return f"{year}-{int(month):02d}-{int(day):02d}"
+
+    # 方法3: race_idから年を抽出（最終フォールバック）
+    if race_id and len(race_id) >= 4:
+        year = race_id[:4]
+        logging.warning(f"HTML から日付を抽出できませんでした。race_id から年のみ抽出: {year}")
+        return f"{year}-01-01"  # デフォルト日付
+
+    logging.error(f"日付の抽出に完全に失敗しました")
+    return None
+
+
 def parse_results_html(file_path: str, race_id: str = None) -> pd.DataFrame:
     """レース結果HTMLをパースしてDataFrameを返す (拡張版)"""
     logging.info(f"レース結果パース開始: {file_path}")
