@@ -41,7 +41,7 @@ except ImportError:
 def parse_shutuba_html(file_path: str, race_id: str = None) -> pd.DataFrame:
     """
     出馬表HTMLをパースしてDataFrameを返す
-    
+
     重要な注意:
     netkeiba.comの出馬表ページには基本情報のみが含まれ、
     以下のフィールドは取得できません:
@@ -49,10 +49,14 @@ def parse_shutuba_html(file_path: str, race_id: str = None) -> pd.DataFrame:
     - career_stats (戦績)
     - last_5_finishes (直近5走)
     - owner_name (馬主名)
-    
-    (※ morning_odds, morning_popularity は取得できるように修正)
-    
-    これらは別ページ（馬詳細ページ等）から取得する必要があります。
+    - morning_odds (前日オッズ) ← HTMLに含まれない
+    - morning_popularity (前日人気) ← HTMLに含まれない
+
+    オッズ・人気情報は、レース結果HTML（races.parquet）の
+    win_odds, popularityを評価時に使用してください。
+
+    学習時にはオッズを使わないため、これらのフィールドが
+    Noneでも問題ありません（features.yamlで除外済み）。
     """
     logging.info(f"出馬表パース開始: {file_path}")
     
