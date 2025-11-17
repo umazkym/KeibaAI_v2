@@ -178,8 +178,9 @@ def scrape_kaisai_date(from_: str, to_: str) -> List[str]:
         
     kaisai_date_list = []
     session = get_robust_session()
-    
-    for date in date_range:
+
+    logger.info(f"カレンダーを取得: {len(date_range)}ヶ月分")
+    for date in tqdm(date_range, desc="開催日取得", unit="月"):
         year, month = date.year, date.month
         url = f'{UrlPaths.CALENDAR_URL}?year={year}&month={month}'
         logger.debug(f'カレンダーページを取得: {url}')
