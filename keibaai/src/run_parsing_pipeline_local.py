@@ -8,6 +8,7 @@ from datetime import datetime
 import sys
 import pandas as pd
 import os
+from tqdm import tqdm
 
 # プロジェクトルートをsys.pathに追加
 project_root = Path(__file__).resolve().parent.parent
@@ -72,7 +73,7 @@ def main():
                     race_html_files.append(os.path.join(root, file))
         log.info(f"{len(race_html_files)}件のレース結果HTMLファイルが見つかりました。")
         all_results_df = []
-        for html_file in race_html_files:
+        for html_file in tqdm(race_html_files, desc="レース結果パース", unit="件"):
             df = pipeline_core.parse_with_error_handling(str(html_file), "results_parser", results_parser.parse_results_html, conn)
             if df is not None and not df.empty:
                 all_results_df.append(df)
@@ -96,7 +97,7 @@ def main():
                     shutuba_html_files.append(os.path.join(root, file))
         log.info(f"{len(shutuba_html_files)}件の出馬表HTMLファイルが見つかりました。")
         all_shutuba_df = []
-        for html_file in shutuba_html_files:
+        for html_file in tqdm(shutuba_html_files, desc="出馬表パース", unit="件"):
             df = pipeline_core.parse_with_error_handling(str(html_file), "shutuba_parser", shutuba_parser.parse_shutuba_html, conn)
             if df is not None and not df.empty:
                 all_shutuba_df.append(df)
@@ -126,11 +127,11 @@ def main():
         # ▲▲▲ 修正箇所1 ▲▲▲
         
         log.info(f"{len(horse_html_files)}件の馬プロフィールHTMLファイルが見つかりました。")
-        
+
         # ▼▼▼ 修正箇所2: 辞書ではなくリストで管理 + 空データの除外 ▼▼▼
         all_horses_data = []
-        
-        for html_file in horse_html_files:
+
+        for html_file in tqdm(horse_html_files, desc="馬プロフィールパース", unit="頭"):
             data = pipeline_core.parse_with_error_handling(
                 str(html_file), 
                 "horse_info_parser", 
@@ -174,7 +175,7 @@ def main():
                     ped_html_files.append(os.path.join(root, file))
         log.info(f"{len(ped_html_files)}件の血統HTMLファイルが見つかりました。")
         all_pedigrees_df = []
-        for html_file in ped_html_files:
+        for html_file in tqdm(ped_html_files, desc="血統パース", unit="頭"):
             df = pipeline_core.parse_with_error_handling(str(html_file), "pedigree_parser", pedigree_parser.parse_pedigree_html, conn)
             if df is not None and not df.empty:
                 all_pedigrees_df.append(df)
@@ -200,7 +201,7 @@ def main():
         log.info(f"{len(horse_perf_files)}件の馬過去成績ファイルが見つかりました。")
 
         all_perf_df = []
-        for html_file in horse_perf_files:
+        for html_file in tqdm(horse_perf_files, desc="馬過去成績パース", unit="頭"):
             # parse_horse_performanceを直接使用（ファイルパスを渡す）
             df = pipeline_core.parse_with_error_handling(
                 str(html_file),

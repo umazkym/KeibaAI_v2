@@ -18,6 +18,7 @@ from typing import Dict, Any
 
 import pandas as pd
 import yaml
+from tqdm import tqdm
 
 # --- プロジェクトルート (keibaai/) を基準にする ---
 script_dir = Path(__file__).resolve().parent  # keibaai/src/features/
@@ -43,42 +44,54 @@ def load_data_for_features(
     project_root: Path
 ) -> Dict[str, pd.DataFrame]:
     """特徴量生成に必要なデータをロードする"""
-    logging.info("特徴量生成用のデータをロード中...")
-    
+    logging.info("=" * 60)
+    logging.info("フェーズ1/3: データロード開始")
+    logging.info("=" * 60)
+
     data_path_val = paths_config.get('data_path', 'data')
     parsed_base_dir = project_root / data_path_val / 'parsed' / 'parquet'
-    
+
     logging.info(f"データ検索パス: {parsed_base_dir}")
-    
+
     # 1. 出馬表 (対象期間)
+    logging.info("  → 出馬表データを読み込み中...")
     shutuba_dir = parsed_base_dir / 'shutuba'
     shutuba_df = load_parquet_data_by_date(
         shutuba_dir, start_dt, end_dt, date_col='race_date'
     )
-    
+
     if shutuba_df.empty:
         logging.warning(f"期間 {start_dt.strftime('%Y-%m-%d')} - {end_dt.strftime('%Y-%m-%d')} の出馬表データが見つかりません。")
         return {}
-        
+    logging.info(f"  ✓ 出馬表: {len(shutuba_df):,}行ロード完了")
+
     # 2. 過去成績 (全期間 - 終了日まで)
+    logging.info("  → 過去成績データを読み込み中...")
     results_history_dir = parsed_base_dir / 'races'
     results_history_df = load_parquet_data_by_date(
         results_history_dir, None, end_dt, date_col='race_date'
-    ) 
+    )
+    logging.info(f"  ✓ 過去成績: {len(results_history_df):,}行ロード完了")
 
     # 3. 馬プロフィール (全期間)
+    logging.info("  → 馬プロフィールデータを読み込み中...")
     horse_profiles_dir = parsed_base_dir / 'horses'
     horse_profiles_df = load_parquet_data_by_date(
         horse_profiles_dir, None, None, date_col='birth_date'
     )
+    logging.info(f"  ✓ 馬プロフィール: {len(horse_profiles_df):,}行ロード完了")
 
     # 4. 血統 (全期間)
+    logging.info("  → 血統データを読み込み中...")
     pedigree_dir = parsed_base_dir / 'pedigrees'
     pedigree_df = load_parquet_data_by_date(
         pedigree_dir, None, None, date_col=None
     )
-    
-    logging.info(f"データロード完了: 出馬表={len(shutuba_df)}行, 過去成績={len(results_history_df)}行")
+    logging.info(f"  ✓ 血統: {len(pedigree_df):,}行ロード完了")
+
+    logging.info("=" * 60)
+    logging.info(f"データロード完了: 合計 {len(shutuba_df) + len(results_history_df):,}行")
+    logging.info("=" * 60)
     
     return {
         "shutuba_df": shutuba_df,
@@ -192,8 +205,11 @@ def main():
         sys.exit(0)
 
     # --- 3. 特徴量エンジン初期化とデータ前処理 ---
-    logging.info("特徴量生成エンジンの初期化とデータの前処理を開始します...")
-    
+    logging.info("=" * 60)
+    logging.info("フェーズ2/3: 特徴量生成開始")
+    logging.info("=" * 60)
+    logging.info("  → 特徴量エンジンを初期化中...")
+
     # history_df に血統情報をマージ (エンティティ集計で sire_id などを使うため)
     if "horse_profiles_df" in data and not data["horse_profiles_df"].empty:
         ped_cols = ['horse_id', 'sire_id', 'damsire_id']
@@ -207,8 +223,10 @@ def main():
             logging.warning("horse_profiles_df に十分な血統情報（sire_idなど）が見つかりませんでした。")
 
     engine = FeatureEngine(config_path=str(features_config_path))
+    logging.info("  ✓ 特徴量エンジン初期化完了")
 
     # --- 4. 特徴量生成 ---
+    logging.info("  → 特徴量を生成中...")
     try:
         features_df = engine.generate_features(
             shutuba_df=data["shutuba_df"],
@@ -218,12 +236,18 @@ def main():
     except Exception as e:
         logging.error(f"特徴量生成中にエラーが発生しました: {e}", exc_info=True)
         sys.exit(1)
-    
+
     if features_df.empty:
         logging.warning("特徴量生成の結果が空です。")
         sys.exit(0)
-    
+
+    logging.info(f"  ✓ 特徴量生成完了: {len(features_df):,}行 x {len(features_df.columns)}列")
+    logging.info("=" * 60)
+
     # --- 5. 特徴量保存 ---
+    logging.info("=" * 60)
+    logging.info("フェーズ3/3: 特徴量保存開始")
+    logging.info("=" * 60)
     output_dir_base = paths_config.get('features_path', 'data/features')
     output_dir = project_root / output_dir_base / 'parquet'
     partition_cols = features_config.get('output', {}).get('partition_by', ['year', 'month'])
@@ -246,14 +270,16 @@ def main():
             except Exception as ex_date:
                 logging.error(f"race_id から日付を復元できませんでした: {ex_date}")
         
+    logging.info(f"  → パーティション化して保存中... (partition_by={partition_cols})")
     engine.save_features(
         features_df=features_df,
         output_dir=str(output_dir),
         partition_cols=partition_cols
     )
+    logging.info(f"  ✓ 保存完了: {output_dir}")
 
     logging.info("=" * 60)
-    logging.info("Keiba AI 特徴量生成パイプライン完了")
+    logging.info("✓ Keiba AI 特徴量生成パイプライン完了")
     logging.info("=" * 60)
 
 if __name__ == '__main__':

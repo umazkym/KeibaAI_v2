@@ -224,14 +224,14 @@ def scrape_race_id_list(
         レースIDリスト
     """
     logger.info(f'レースIDを取得中（{len(kaisai_date_list)}日分）')
-    
+
     race_id_list = []
     driver = None
-    
+
     try:
         driver = prepare_chrome_driver()
-        
-        for kaisai_date in kaisai_date_list:
+
+        for kaisai_date in tqdm(kaisai_date_list, desc="レースID取得", unit="日"):
             url = f'{UrlPaths.RACE_LIST_URL}?kaisai_date={kaisai_date}'
             
             for attempt in range(1, max_retries + 1):
@@ -274,21 +274,21 @@ def scrape_race_id_list(
 def scrape_html_race(race_id_list: List[str], skip: bool = True) -> List[str]:
     """
     レース結果HTMLを取得して.bin形式で保存
-    
+
     Args:
         race_id_list: レースIDリスト
         skip: 既存ファイルをスキップするか
-        
+
     Returns:
         保存したファイルパスのリスト
     """
     logger.info(f'レース結果HTMLを取得中（{len(race_id_list)}件）')
-    
+
     updated_paths = []
     session = get_robust_session()
     os.makedirs(LocalPaths.HTML_RACE_DIR, exist_ok=True)
-    
-    for race_id in race_id_list:
+
+    for race_id in tqdm(race_id_list, desc="レース結果HTML取得", unit="件"):
         filename = os.path.join(LocalPaths.HTML_RACE_DIR, f'{race_id}.bin')
         
         if skip and os.path.exists(filename):
@@ -322,14 +322,14 @@ def scrape_html_shutuba(race_id_list: List[str], skip: bool = True, force_today_
     force_today_refresh=Trueの場合、レース当日であればキャッシュを無視して再取得する
     """
     logger.info(f'出馬表HTMLを取得中（{len(race_id_list)}件）')
-    
+
     updated_paths = []
     session = get_robust_session()
     os.makedirs(LocalPaths.HTML_SHUTUBA_DIR, exist_ok=True)
-    
+
     today_str = datetime.now().strftime('%Y%m%d')
 
-    for race_id in race_id_list:
+    for race_id in tqdm(race_id_list, desc="出馬表HTML取得", unit="件"):
         filename = os.path.join(LocalPaths.HTML_SHUTUBA_DIR, f'{race_id}.bin')
         
         # スキップ条件の判定
@@ -401,15 +401,15 @@ def scrape_html_horse(horse_id_list: List[str], skip: bool = True, cache_ttl_day
     プロフィールと成績を分けて保存し、成績はキャッシュの鮮度を考慮する
     """
     logger.info(f'馬情報HTMLを取得中（{len(horse_id_list)}件, TTL: {cache_ttl_days}日）')
-    
+
     updated_paths = []
     session = get_robust_session()
     os.makedirs(LocalPaths.HTML_HORSE_DIR, exist_ok=True)
-    
+
     # キャッシュログを読み込む
     cache_df = _load_horse_cache()
 
-    for horse_id in horse_id_list:
+    for horse_id in tqdm(horse_id_list, desc="馬情報HTML取得", unit="頭"):
         # --- 1. プロフィール (不変データ) ---
         # ファイルが存在しない場合のみ取得
         profile_filename = os.path.join(LocalPaths.HTML_HORSE_DIR, f'{horse_id}_profile.bin')
@@ -494,16 +494,16 @@ def scrape_html_ped(horse_id_list: List[str], skip: bool = True) -> List[str]:
     血統HTMLを取得して.bin形式で保存（Selenium使用）
     """
     logger.info(f'血統HTMLを取得中（{len(horse_id_list)}件）')
-    
+
     updated_paths = []
     os.makedirs(LocalPaths.HTML_PED_DIR, exist_ok=True)
-    
+
     driver = None
-    
+
     try:
         driver = prepare_chrome_driver()
-        
-        for horse_id in horse_id_list:
+
+        for horse_id in tqdm(horse_id_list, desc="血統HTML取得", unit="頭"):
             filename = os.path.join(LocalPaths.HTML_PED_DIR, f'{horse_id}.bin')
             
             if skip and os.path.exists(filename):
