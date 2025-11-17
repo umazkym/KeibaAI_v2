@@ -190,26 +190,29 @@ def parse_shutuba_row(tr: element.Tag, race_id: str) -> Optional[Dict]:
         row_data['horse_weight'] = None
         row_data['horse_weight_change'] = None
 
-    # ▼▼▼ 修正: オッズと人気をclass属性から取得 ▼▼▼
-    # 前日オッズ (morning_odds) - class="Txt_R Popular" から取得
-    # HTMLサンプル: <td class="Txt_R Popular"><span id="odds-1_01">61.8</span></td>
-    odds_td = tr.find('td', class_=lambda x: x and 'Txt_R' in x and 'Popular' in x)
-    if odds_td:
-        odds_span = odds_td.find('span')
-        if odds_span:
-            row_data['morning_odds'] = parse_float_or_none(odds_span.get_text(strip=True))
+    # ▼▼▼ 修正: オッズと人気をid属性から取得（より確実） ▼▼▼
+    # 前日オッズ (morning_odds) - <span id="odds-X_XX"> から取得
+    # HTMLサンプル: <span id="odds-1_01">61.8</span> または <span id="odds-1_01">---.-</span>
+    # デバッグ結果から: id属性で検索する方が確実
+    odds_span = tr.find('span', id=lambda x: x and x.startswith('odds-') if x else False)
+    if odds_span:
+        odds_text = odds_span.get_text(strip=True)
+        # "---.-"や"**"は未確定を意味するのでNoneとして扱う
+        if odds_text and odds_text not in ['---.-', '--.-', '---', '**']:
+            row_data['morning_odds'] = parse_float_or_none(odds_text)
         else:
             row_data['morning_odds'] = None
     else:
         row_data['morning_odds'] = None
 
-    # 前日人気 (morning_popularity) - class中に"Ninki"を含むtdから取得
-    # HTMLサンプル: <td class="Popular Popular_Ninki Txt_C"><span id="ninki-1_01">8</span></td>
-    ninki_td = tr.find('td', class_=lambda x: x and 'Ninki' in x)
-    if ninki_td:
-        ninki_span = ninki_td.find('span')
-        if ninki_span:
-            row_data['morning_popularity'] = parse_int_or_none(ninki_span.get_text(strip=True))
+    # 前日人気 (morning_popularity) - <span id="ninki-X_XX"> から取得
+    # HTMLサンプル: <span id="ninki-1_01">8</span> または <span id="ninki-1_01">**</span>
+    ninki_span = tr.find('span', id=lambda x: x and x.startswith('ninki-') if x else False)
+    if ninki_span:
+        ninki_text = ninki_span.get_text(strip=True)
+        # "**"は未確定を意味するのでNoneとして扱う
+        if ninki_text and ninki_text not in ['**', '--', '---']:
+            row_data['morning_popularity'] = parse_int_or_none(ninki_text)
         else:
             row_data['morning_popularity'] = None
     else:
