@@ -408,9 +408,6 @@ def scrape_html_horse(horse_id_list: List[str], skip: bool = True, cache_ttl_day
     
     # キャッシュログを読み込む
     cache_df = _load_horse_cache()
-    
-    # 更新があったかどうかのフラグ
-    cache_updated = False
 
     for horse_id in horse_id_list:
         # --- 1. プロフィール (不変データ) ---
@@ -477,10 +474,10 @@ def scrape_html_horse(horse_id_list: List[str], skip: bool = True, cache_ttl_day
                         f.write(perf_html)
                     updated_paths.append(perf_filename)
                     logger.info(f'保存 (過去成績): {perf_filename}')
-                    
-                    # キャッシュログを更新
+
+                    # キャッシュログを更新（逐次保存で中断時も安全）
                     cache_df.loc[horse_id, 'last_updated'] = datetime.now()
-                    cache_updated = True
+                    _save_horse_cache(cache_df)
                 else:
                     logger.warning(f"AJAX取得失敗 (Status: {response.status_code}): {horse_id}_perf")
                     
@@ -489,10 +486,6 @@ def scrape_html_horse(horse_id_list: List[str], skip: bool = True, cache_ttl_day
         else:
             logger.debug(f'スキップ (過去成績キャッシュ有効): {perf_filename}')
 
-    # 更新があった場合のみキャッシュを保存
-    if cache_updated:
-        _save_horse_cache(cache_df)
-            
     return updated_paths
 
 
