@@ -190,19 +190,31 @@ def parse_shutuba_row(tr: element.Tag, race_id: str) -> Optional[Dict]:
         row_data['horse_weight'] = None
         row_data['horse_weight_change'] = None
 
-    # 前日オッズ (morning_odds) - cells[9]
-    if len(cells) > 9:
-        odds_text = cells[9].get_text(strip=True)
-        row_data['morning_odds'] = parse_float_or_none(odds_text)
+    # ▼▼▼ 修正: オッズと人気をclass属性から取得 ▼▼▼
+    # 前日オッズ (morning_odds) - class="Txt_R Popular" から取得
+    # HTMLサンプル: <td class="Txt_R Popular"><span id="odds-1_01">61.8</span></td>
+    odds_td = tr.find('td', class_=lambda x: x and 'Txt_R' in x and 'Popular' in x)
+    if odds_td:
+        odds_span = odds_td.find('span')
+        if odds_span:
+            row_data['morning_odds'] = parse_float_or_none(odds_span.get_text(strip=True))
+        else:
+            row_data['morning_odds'] = None
     else:
         row_data['morning_odds'] = None
 
-    # 前日人気 (morning_popularity) - cells[10]
-    if len(cells) > 10:
-        pop_text = cells[10].get_text(strip=True)
-        row_data['morning_popularity'] = parse_int_or_none(pop_text)
+    # 前日人気 (morning_popularity) - class中に"Ninki"を含むtdから取得
+    # HTMLサンプル: <td class="Popular Popular_Ninki Txt_C"><span id="ninki-1_01">8</span></td>
+    ninki_td = tr.find('td', class_=lambda x: x and 'Ninki' in x)
+    if ninki_td:
+        ninki_span = ninki_td.find('span')
+        if ninki_span:
+            row_data['morning_popularity'] = parse_int_or_none(ninki_span.get_text(strip=True))
+        else:
+            row_data['morning_popularity'] = None
     else:
         row_data['morning_popularity'] = None
+    # ▲▲▲ 修正終了 ▲▲▲
 
     # 以下のフィールドは出馬表HTMLには含まれていないため、Noneに設定
     row_data['owner_name'] = None
