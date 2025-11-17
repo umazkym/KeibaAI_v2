@@ -359,13 +359,20 @@ def add_derived_features(df: pd.DataFrame) -> pd.DataFrame:
         curr_col = f'passing_order_{i}'
         next_col = f'passing_order_{i+1}'
         if curr_col in df.columns and next_col in df.columns:
-            df[f'position_change_{i}_{i+1}'] = df[next_col] - df[curr_col]
-    
+            # NoneType比較エラーを防ぐため、Noneを含む計算を安全に処理
+            df[f'position_change_{i}_{i+1}'] = (
+                df[next_col].astype('float64') - df[curr_col].astype('float64')
+            )
+
     # 最終コーナーから着順への変化
     if 'passing_order_4' in df.columns:
-        df['final_corner_to_finish'] = df['finish_position'] - df['passing_order_4']
+        df['final_corner_to_finish'] = (
+            df['finish_position'].astype('float64') - df['passing_order_4'].astype('float64')
+        )
     elif 'passing_order_3' in df.columns:
-        df['final_corner_to_finish'] = df['finish_position'] - df['passing_order_3']
+        df['final_corner_to_finish'] = (
+            df['finish_position'].astype('float64') - df['passing_order_3'].astype('float64')
+        )
     
     # 3. 相対的な指標
     # レース内での馬体重の偏差値
@@ -375,7 +382,9 @@ def add_derived_features(df: pd.DataFrame) -> pd.DataFrame:
     
     # 人気と着順の乖離
     if 'popularity' in df.columns:
-        df['popularity_finish_diff'] = df['finish_position'] - df['popularity']
+        df['popularity_finish_diff'] = (
+            df['finish_position'].astype('float64') - df['popularity'].astype('float64')
+        )
     
     # 4. オッズ関連
     if 'win_odds' in df.columns:
