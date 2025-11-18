@@ -80,12 +80,19 @@ st.markdown("""
 def main():
     """メインアプリケーション"""
 
-    # ヘッダー
-    st.markdown('<div class="main-header">🐴 KeibaAI_v2 統合ダッシュボード</div>', unsafe_allow_html=True)
+    # セッションステートの初期化
+    if "navigation" not in st.session_state:
+        st.session_state.navigation = "🏠 ダッシュボード"
 
     # サイドバー
     with st.sidebar:
-        st.image("https://via.placeholder.com/300x100/1f77b4/ffffff?text=KeibaAI+v2", use_container_width=True)
+        st.markdown("""
+        <div style='text-align: center; padding: 1rem 0;'>
+            <h1 style='font-size: 2rem; margin: 0;'>🐴 KeibaAI_v2</h1>
+            <p style='font-size: 0.9rem; color: #666;'>競馬AI予測システム</p>
+        </div>
+        """, unsafe_allow_html=True)
+
         st.markdown("---")
 
         # ページ選択
@@ -93,7 +100,9 @@ def main():
             "📋 ナビゲーション",
             [
                 "🏠 ダッシュボード",
+                "🚀 クイックスタート",
                 "📊 データパイプライン",
+                "🔍 データエクスプローラー",
                 "🤖 モデル学習",
                 "🎲 シミュレーション",
                 "💰 ポートフォリオ最適化",
@@ -101,18 +110,56 @@ def main():
                 "⚙️ 設定管理",
                 "📝 ログビューア"
             ],
-            key="navigation"
+            index=[
+                "🏠 ダッシュボード",
+                "🚀 クイックスタート",
+                "📊 データパイプライン",
+                "🔍 データエクスプローラー",
+                "🤖 モデル学習",
+                "🎲 シミュレーション",
+                "💰 ポートフォリオ最適化",
+                "📈 結果分析",
+                "⚙️ 設定管理",
+                "📝 ログビューア"
+            ].index(st.session_state.navigation) if st.session_state.navigation in [
+                "🏠 ダッシュボード",
+                "🚀 クイックスタート",
+                "📊 データパイプライン",
+                "🔍 データエクスプローラー",
+                "🤖 モデル学習",
+                "🎲 シミュレーション",
+                "💰 ポートフォリオ最適化",
+                "📈 結果分析",
+                "⚙️ 設定管理",
+                "📝 ログビューア"
+            ] else 0,
+            key="navigation_radio"
         )
+
+        # ページ状態を更新
+        st.session_state.navigation = page
+
+        st.markdown("---")
+        st.markdown("### 💡 ヒント")
+        st.info("""
+        **初めての方は**
+        🚀 クイックスタート
+        から始めましょう！
+        """)
 
         st.markdown("---")
         st.markdown("### システム情報")
-        st.info(f"**Version:** 1.0.0\n**Status:** ✅ Running")
+        st.success("**Version:** 2.0.0\n**Status:** ✅ Running")
 
     # ページルーティング
     if page == "🏠 ダッシュボード":
         show_dashboard()
+    elif page == "🚀 クイックスタート":
+        show_quick_start()
     elif page == "📊 データパイプライン":
         show_data_pipeline()
+    elif page == "🔍 データエクスプローラー":
+        show_data_explorer()
     elif page == "🤖 モデル学習":
         show_model_training()
     elif page == "🎲 シミュレーション":
@@ -133,10 +180,22 @@ def show_dashboard():
     render_dashboard()
 
 
+def show_quick_start():
+    """クイックスタート: 初心者向けガイド"""
+    from components.quick_start_view import render_quick_start
+    render_quick_start()
+
+
 def show_data_pipeline():
     """データパイプライン: スクレイピング・パース・特徴量生成"""
     from components.data_pipeline_view import render_data_pipeline
     render_data_pipeline()
+
+
+def show_data_explorer():
+    """データエクスプローラー: データの詳細表示"""
+    from components.data_explorer_view import render_data_explorer
+    render_data_explorer()
 
 
 def show_model_training():
