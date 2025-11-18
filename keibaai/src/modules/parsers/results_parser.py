@@ -397,11 +397,21 @@ def add_derived_features(df: pd.DataFrame) -> pd.DataFrame:
         )
     
     # 5. 馬場・距離適性の準備（実際の計算は過去成績と結合後）
-    df['distance_category'] = pd.cut(
-        df['distance_m'],
-        bins=[0, 1400, 1800, 2200, 3000, 4000],
-        labels=['sprint', 'mile', 'intermediate', 'long', 'extreme_long']
-    )
+    # distance_mがNoneの場合に対応
+    if 'distance_m' in df.columns:
+        # 欠損値を一時的に除外してpd.cutを適用
+        valid_distances = df['distance_m'].notna()
+        if valid_distances.any():
+            df.loc[valid_distances, 'distance_category'] = pd.cut(
+                df.loc[valid_distances, 'distance_m'],
+                bins=[0, 1400, 1800, 2200, 3000, 4000],
+                labels=['sprint', 'mile', 'intermediate', 'long', 'extreme_long']
+            )
+            # 欠損値の行にはpd.NAを設定
+            df.loc[~valid_distances, 'distance_category'] = pd.NA
+        else:
+            # すべて欠損値の場合
+            df['distance_category'] = pd.NA
     
     return df
 
