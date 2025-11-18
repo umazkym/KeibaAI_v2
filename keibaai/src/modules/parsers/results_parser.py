@@ -144,26 +144,43 @@ def extract_race_metadata_enhanced(soup: BeautifulSoup) -> Dict:
             span_content = span_text.find('span')
             if span_content:
                 text = span_content.get_text()
-                
-                # 距離と馬場（改善版）
+
+                # 距離と馬場（改善版 - 複数パターン対応）
+                # パターン1: 「芝1800m」「ダ1800m」「障3300m」
                 distance_match = re.search(r'(芝|ダ|障)\s*(?:右|左|直|外|内)?\s*(\d+)m', text)
                 if distance_match:
                     surface_map = {'芝': '芝', 'ダ': 'ダート', '障': '障害'}
                     metadata['track_surface'] = surface_map.get(distance_match.group(1))
                     metadata['distance_m'] = int(distance_match.group(2))
-                
+                else:
+                    # パターン2: 「馬場 ：1800m」（芝/ダート表記なし）
+                    distance_match2 = re.search(r'馬場\s*[：:]\s*(\d+)m', text)
+                    if distance_match2:
+                        metadata['distance_m'] = int(distance_match2.group(1))
+                        # track_surfaceは馬場状態から推測（後で設定）
+
                 # 天候
-                weather_match = re.search(r'天候\s*:\s*(\S+)', text)
+                weather_match = re.search(r'天候\s*[：:]\s*(\S+)', text)
                 if weather_match:
                     metadata['weather'] = weather_match.group(1)
-                
-                # 馬場状態（改善版）
-                condition_match = re.search(r'(?:芝|ダート)\s*:\s*(\S+)', text)
+
+                # 馬場状態（改善版 - 複数パターン対応）
+                # パターン1: 「芝 : 良」「ダート : 稍重」
+                condition_match = re.search(r'(?:芝|ダート)\s*[：:]\s*(\S+)', text)
                 if condition_match:
                     metadata['track_condition'] = condition_match.group(1)
-                
+                else:
+                    # パターン2: 「馬場 : 稍重」（距離表記の後に出現）
+                    # 「馬場 : 稍重」の「稍重」を抽出（「馬場 ：1800m」と区別）
+                    condition_match2 = re.search(r'(?:馬場|馬場状態)\s*[：:]\s*([^0-9\s/]+)', text)
+                    if condition_match2:
+                        cond_text = condition_match2.group(1).strip()
+                        # 距離以外の情報を馬場状態として判断
+                        if cond_text and not re.match(r'\d+m', cond_text):
+                            metadata['track_condition'] = cond_text
+
                 # 発走時刻
-                time_match = re.search(r'発走\s*:\s*(\d{1,2}:\d{2})', text)
+                time_match = re.search(r'発走\s*[：:]\s*(\d{1,2}:\d{2})', text)
                 if time_match:
                     metadata['post_time'] = time_match.group(1)
     
