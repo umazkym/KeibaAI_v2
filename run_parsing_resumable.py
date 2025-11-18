@@ -79,12 +79,63 @@ def get_already_parsed_ids(parquet_path: Path, id_column: str) -> set:
         return set()
 
 
+def get_error_files(conn, parser_name: str) -> set:
+    """
+    データベースからエラーが発生したファイルのパスを取得
+
+    Args:
+        conn: SQLite接続
+        parser_name: パーサ名 (例: 'results_parser', 'shutuba_parser')
+
+    Returns:
+        エラーファイルのパスのセット
+    """
+    try:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT DISTINCT source_file
+            FROM parse_failures
+            WHERE parser_name = ?
+            ORDER BY failed_ts DESC
+        ''', (parser_name,))
+
+        error_files = {row[0] for row in cursor.fetchall()}
+        return error_files
+    except Exception as e:
+        logging.warning(f"エラーファイル取得失敗 ({parser_name}): {e}")
+        return set()
+
+
+def clear_error_record(conn, file_path: str, parser_name: str):
+    """
+    パース成功時にエラーレコードを削除
+
+    Args:
+        conn: SQLite接続
+        file_path: ファイルパス
+        parser_name: パーサ名
+    """
+    try:
+        cursor = conn.cursor()
+        cursor.execute('''
+            DELETE FROM parse_failures
+            WHERE source_file = ? AND parser_name = ?
+        ''', (file_path, parser_name))
+        conn.commit()
+
+        deleted_count = cursor.rowcount
+        if deleted_count > 0:
+            logging.debug(f"エラーレコード削除: {file_path} ({deleted_count}件)")
+    except Exception as e:
+        logging.warning(f"エラーレコード削除失敗 ({file_path}): {e}")
+
+
 def extract_race_id_from_filename(file_path: str) -> str:
     """ファイル名からrace_idを抽出 (例: 202305040301.bin → 202305040301)"""
     return Path(file_path).stem.replace('_perf', '').replace('_profile', '')
 
 
-def parse_phase_races(cfg, conn, skip_existing: bool = False):
+def parse_phase_races(cfg, conn, skip_existing: bool = False, retry_errors: bool = False):
     """フェーズ1: レース結果HTMLのパース"""
     log = logging.getLogger(__name__)
     log.info("\n" + "=" * 80)
@@ -105,28 +156,46 @@ def parse_phase_races(cfg, conn, skip_existing: bool = False):
 
     log.info(f"  → {len(race_html_files):,}件のレース結果HTMLファイルが見つかりました")
 
+    # エラーファイルを取得
+    error_files = get_error_files(conn, 'results_parser')
+    if error_files:
+        log.info(f"  → エラー履歴: {len(error_files):,}件 (自動的に再処理対象に含めます)")
+
     # スキップ処理
-    if skip_existing:
+    if skip_existing and not retry_errors:
         already_parsed = get_already_parsed_ids(output_path, 'race_id')
         log.info(f"  → 既にパース済み: {len(already_parsed):,}件")
 
+        # 新規ファイル + エラーファイル
         race_html_files_to_process = [
             f for f in race_html_files
-            if extract_race_id_from_filename(f) not in already_parsed
+            if extract_race_id_from_filename(f) not in already_parsed or f in error_files
         ]
-        log.info(f"  → 処理対象: {len(race_html_files_to_process):,}件 (新規)")
+
+        new_files = len([f for f in race_html_files if extract_race_id_from_filename(f) not in already_parsed])
+        error_retry = len([f for f in race_html_files_to_process if f in error_files])
+        log.info(f"  → 処理対象: {len(race_html_files_to_process):,}件 (新規: {new_files:,}件, エラー再処理: {error_retry:,}件)")
+    elif retry_errors:
+        # エラーファイルのみ
+        race_html_files_to_process = [f for f in race_html_files if f in error_files]
+        log.info(f"  → 処理対象: {len(race_html_files_to_process):,}件 (エラー再処理のみ)")
     else:
         race_html_files_to_process = race_html_files
         log.info(f"  → 処理対象: {len(race_html_files_to_process):,}件 (全ファイル)")
 
     # パース実行
     all_results_df = []
+    success_count = 0
     for html_file in tqdm(race_html_files_to_process, desc="レース結果パース", unit="件"):
         df = pipeline_core.parse_with_error_handling(
             str(html_file), "results_parser", results_parser.parse_results_html, conn
         )
         if df is not None and not df.empty:
             all_results_df.append(df)
+            success_count += 1
+            # パース成功時にエラーレコードをクリア
+            if html_file in error_files:
+                clear_error_record(conn, html_file, 'results_parser')
 
     # 保存 (既存データと結合)
     if all_results_df:
@@ -150,7 +219,7 @@ def parse_phase_races(cfg, conn, skip_existing: bool = False):
         log.warning("処理できるレース結果データがありませんでした。")
 
 
-def parse_phase_shutuba(cfg, conn, skip_existing: bool = False):
+def parse_phase_shutuba(cfg, conn, skip_existing: bool = False, retry_errors: bool = False):
     """フェーズ2: 出馬表HTMLのパース"""
     log = logging.getLogger(__name__)
     log.info("\n" + "=" * 80)
@@ -170,15 +239,26 @@ def parse_phase_shutuba(cfg, conn, skip_existing: bool = False):
 
     log.info(f"  → {len(shutuba_html_files):,}件の出馬表HTMLファイルが見つかりました")
 
-    if skip_existing:
+    # エラーファイルを取得
+    error_files = get_error_files(conn, 'shutuba_parser')
+    if error_files:
+        log.info(f"  → エラー履歴: {len(error_files):,}件 (自動的に再処理対象に含めます)")
+
+    if skip_existing and not retry_errors:
         already_parsed = get_already_parsed_ids(output_path, 'race_id')
         log.info(f"  → 既にパース済み: {len(already_parsed):,}件")
 
         shutuba_html_files_to_process = [
             f for f in shutuba_html_files
-            if extract_race_id_from_filename(f) not in already_parsed
+            if extract_race_id_from_filename(f) not in already_parsed or f in error_files
         ]
-        log.info(f"  → 処理対象: {len(shutuba_html_files_to_process):,}件 (新規)")
+
+        new_files = len([f for f in shutuba_html_files if extract_race_id_from_filename(f) not in already_parsed])
+        error_retry = len([f for f in shutuba_html_files_to_process if f in error_files])
+        log.info(f"  → 処理対象: {len(shutuba_html_files_to_process):,}件 (新規: {new_files:,}件, エラー再処理: {error_retry:,}件)")
+    elif retry_errors:
+        shutuba_html_files_to_process = [f for f in shutuba_html_files if f in error_files]
+        log.info(f"  → 処理対象: {len(shutuba_html_files_to_process):,}件 (エラー再処理のみ)")
     else:
         shutuba_html_files_to_process = shutuba_html_files
 
@@ -189,6 +269,8 @@ def parse_phase_shutuba(cfg, conn, skip_existing: bool = False):
         )
         if df is not None and not df.empty:
             all_shutuba_df.append(df)
+            if html_file in error_files:
+                clear_error_record(conn, html_file, 'shutuba_parser')
 
     if all_shutuba_df:
         new_shutuba_df = pd.concat(all_shutuba_df, ignore_index=True)
@@ -209,7 +291,7 @@ def parse_phase_shutuba(cfg, conn, skip_existing: bool = False):
         log.warning("処理できる出馬表データがありませんでした。")
 
 
-def parse_phase_horses(cfg, conn, skip_existing: bool = False):
+def parse_phase_horses(cfg, conn, skip_existing: bool = False, retry_errors: bool = False):
     """フェーズ3: 馬プロフィールHTMLのパース"""
     log = logging.getLogger(__name__)
     log.info("\n" + "=" * 80)
@@ -231,15 +313,26 @@ def parse_phase_horses(cfg, conn, skip_existing: bool = False):
 
     log.info(f"  → {len(horse_html_files):,}件の馬プロフィールHTMLファイルが見つかりました")
 
-    if skip_existing:
+    # エラーファイルを取得
+    error_files = get_error_files(conn, 'horse_info_parser')
+    if error_files:
+        log.info(f"  → エラー履歴: {len(error_files):,}件 (自動的に再処理対象に含めます)")
+
+    if skip_existing and not retry_errors:
         already_parsed = get_already_parsed_ids(output_path, 'horse_id')
         log.info(f"  → 既にパース済み: {len(already_parsed):,}頭")
 
         horse_html_files_to_process = [
             f for f in horse_html_files
-            if extract_race_id_from_filename(f) not in already_parsed
+            if extract_race_id_from_filename(f) not in already_parsed or f in error_files
         ]
-        log.info(f"  → 処理対象: {len(horse_html_files_to_process):,}頭 (新規)")
+
+        new_files = len([f for f in horse_html_files if extract_race_id_from_filename(f) not in already_parsed])
+        error_retry = len([f for f in horse_html_files_to_process if f in error_files])
+        log.info(f"  → 処理対象: {len(horse_html_files_to_process):,}頭 (新規: {new_files:,}頭, エラー再処理: {error_retry:,}頭)")
+    elif retry_errors:
+        horse_html_files_to_process = [f for f in horse_html_files if f in error_files]
+        log.info(f"  → 処理対象: {len(horse_html_files_to_process):,}頭 (エラー再処理のみ)")
     else:
         horse_html_files_to_process = horse_html_files
 
@@ -251,6 +344,8 @@ def parse_phase_horses(cfg, conn, skip_existing: bool = False):
         if data and 'horse_id' in data and data['horse_id']:
             if not data.get('_is_empty', False):
                 all_horses_data.append(data)
+                if html_file in error_files:
+                    clear_error_record(conn, html_file, 'horse_info_parser')
 
     if all_horses_data:
         new_horses_df = pd.DataFrame(all_horses_data)
@@ -269,7 +364,7 @@ def parse_phase_horses(cfg, conn, skip_existing: bool = False):
         log.warning("処理できる馬プロフィールデータがありませんでした。")
 
 
-def parse_phase_pedigrees(cfg, conn, skip_existing: bool = False):
+def parse_phase_pedigrees(cfg, conn, skip_existing: bool = False, retry_errors: bool = False):
     """フェーズ4: 血統HTMLのパース"""
     log = logging.getLogger(__name__)
     log.info("\n" + "=" * 80)
@@ -289,15 +384,26 @@ def parse_phase_pedigrees(cfg, conn, skip_existing: bool = False):
 
     log.info(f"  → {len(ped_html_files):,}件の血統HTMLファイルが見つかりました")
 
-    if skip_existing:
+    # エラーファイルを取得
+    error_files = get_error_files(conn, 'pedigree_parser')
+    if error_files:
+        log.info(f"  → エラー履歴: {len(error_files):,}件 (自動的に再処理対象に含めます)")
+
+    if skip_existing and not retry_errors:
         already_parsed = get_already_parsed_ids(output_path, 'horse_id')
         log.info(f"  → 既にパース済み: {len(already_parsed):,}頭")
 
         ped_html_files_to_process = [
             f for f in ped_html_files
-            if extract_race_id_from_filename(f) not in already_parsed
+            if extract_race_id_from_filename(f) not in already_parsed or f in error_files
         ]
-        log.info(f"  → 処理対象: {len(ped_html_files_to_process):,}頭 (新規)")
+
+        new_files = len([f for f in ped_html_files if extract_race_id_from_filename(f) not in already_parsed])
+        error_retry = len([f for f in ped_html_files_to_process if f in error_files])
+        log.info(f"  → 処理対象: {len(ped_html_files_to_process):,}頭 (新規: {new_files:,}頭, エラー再処理: {error_retry:,}頭)")
+    elif retry_errors:
+        ped_html_files_to_process = [f for f in ped_html_files if f in error_files]
+        log.info(f"  → 処理対象: {len(ped_html_files_to_process):,}頭 (エラー再処理のみ)")
     else:
         ped_html_files_to_process = ped_html_files
 
@@ -308,6 +414,8 @@ def parse_phase_pedigrees(cfg, conn, skip_existing: bool = False):
         )
         if df is not None and not df.empty:
             all_pedigrees_df.append(df)
+            if html_file in error_files:
+                clear_error_record(conn, html_file, 'pedigree_parser')
 
     if all_pedigrees_df:
         new_pedigrees_df = pd.concat(all_pedigrees_df, ignore_index=True)
@@ -332,7 +440,7 @@ def parse_phase_pedigrees(cfg, conn, skip_existing: bool = False):
         log.warning("処理できる血統データがありませんでした。")
 
 
-def parse_phase_performance(cfg, conn, skip_existing: bool = False):
+def parse_phase_performance(cfg, conn, skip_existing: bool = False, retry_errors: bool = False):
     """フェーズ5: 馬過去成績のパース"""
     log = logging.getLogger(__name__)
     log.info("\n" + "=" * 80)
@@ -352,15 +460,26 @@ def parse_phase_performance(cfg, conn, skip_existing: bool = False):
 
     log.info(f"  → {len(horse_perf_files):,}件の馬過去成績ファイルが見つかりました")
 
-    if skip_existing:
+    # エラーファイルを取得
+    error_files = get_error_files(conn, 'horse_performance_parser')
+    if error_files:
+        log.info(f"  → エラー履歴: {len(error_files):,}件 (自動的に再処理対象に含めます)")
+
+    if skip_existing and not retry_errors:
         already_parsed = get_already_parsed_ids(output_path, 'horse_id')
         log.info(f"  → 既にパース済み: {len(already_parsed):,}頭")
 
         horse_perf_files_to_process = [
             f for f in horse_perf_files
-            if extract_race_id_from_filename(f) not in already_parsed
+            if extract_race_id_from_filename(f) not in already_parsed or f in error_files
         ]
-        log.info(f"  → 処理対象: {len(horse_perf_files_to_process):,}頭 (新規)")
+
+        new_files = len([f for f in horse_perf_files if extract_race_id_from_filename(f) not in already_parsed])
+        error_retry = len([f for f in horse_perf_files_to_process if f in error_files])
+        log.info(f"  → 処理対象: {len(horse_perf_files_to_process):,}頭 (新規: {new_files:,}頭, エラー再処理: {error_retry:,}頭)")
+    elif retry_errors:
+        horse_perf_files_to_process = [f for f in horse_perf_files if f in error_files]
+        log.info(f"  → 処理対象: {len(horse_perf_files_to_process):,}頭 (エラー再処理のみ)")
     else:
         horse_perf_files_to_process = horse_perf_files
 
@@ -371,6 +490,8 @@ def parse_phase_performance(cfg, conn, skip_existing: bool = False):
         )
         if df is not None and not df.empty:
             all_perf_df.append(df)
+            if html_file in error_files:
+                clear_error_record(conn, html_file, 'horse_performance_parser')
 
     if all_perf_df:
         new_perf_df = pd.concat(all_perf_df, ignore_index=True)
@@ -407,6 +528,8 @@ def main():
     parser = argparse.ArgumentParser(description='再開可能なパースパイプライン')
     parser.add_argument('--force-reparse', action='store_true',
                         help='既存ファイルを含めて全件再パース（デフォルトは新規ファイルのみ処理）')
+    parser.add_argument('--retry-errors', action='store_true',
+                        help='エラーファイルのみ再処理（他のファイルはスキップ）')
     parser.add_argument('--phase', type=str, default='all',
                         choices=['1', '2', '3', '4', '5', 'all'],
                         help='実行するフェーズ (1=レース, 2=出馬表, 3=馬, 4=血統, 5=成績, all=全て)')
@@ -421,7 +544,12 @@ def main():
     log = logging.getLogger(__name__)
     log.info("=" * 80)
     log.info("再開可能なデータ整形パイプラインを開始します...")
-    log.info(f"モード: {'全件再パース' if args.force_reparse else '新規ファイルのみ処理 (デフォルト)'}")
+    if args.retry_errors:
+        log.info(f"モード: エラーファイルのみ再処理")
+    elif args.force_reparse:
+        log.info(f"モード: 全件再パース")
+    else:
+        log.info(f"モード: 新規ファイルのみ処理 (デフォルト)")
     log.info(f"フェーズ: {args.phase}")
     log.info("=" * 80)
 
@@ -430,19 +558,19 @@ def main():
 
     try:
         if args.phase in ['1', 'all']:
-            parse_phase_races(cfg, conn, skip_existing=skip_existing)
+            parse_phase_races(cfg, conn, skip_existing=skip_existing, retry_errors=args.retry_errors)
 
         if args.phase in ['2', 'all']:
-            parse_phase_shutuba(cfg, conn, skip_existing=skip_existing)
+            parse_phase_shutuba(cfg, conn, skip_existing=skip_existing, retry_errors=args.retry_errors)
 
         if args.phase in ['3', 'all']:
-            parse_phase_horses(cfg, conn, skip_existing=skip_existing)
+            parse_phase_horses(cfg, conn, skip_existing=skip_existing, retry_errors=args.retry_errors)
 
         if args.phase in ['4', 'all']:
-            parse_phase_pedigrees(cfg, conn, skip_existing=skip_existing)
+            parse_phase_pedigrees(cfg, conn, skip_existing=skip_existing, retry_errors=args.retry_errors)
 
         if args.phase in ['5', 'all']:
-            parse_phase_performance(cfg, conn, skip_existing=skip_existing)
+            parse_phase_performance(cfg, conn, skip_existing=skip_existing, retry_errors=args.retry_errors)
 
     except KeyboardInterrupt:
         log.warning("\n" + "=" * 80)
