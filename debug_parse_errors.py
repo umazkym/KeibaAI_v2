@@ -25,8 +25,14 @@ logger = logging.getLogger(__name__)
 project_root = Path(__file__).resolve().parent
 sys.path.append(str(project_root / 'keibaai'))
 
-from keibaai.src.modules.parsers import results_parser
 from bs4 import BeautifulSoup
+
+try:
+    from keibaai.src.modules.parsers.results_parser import parse_results_html
+    PARSER_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"パーサーのインポートに失敗: {e}")
+    PARSER_AVAILABLE = False
 
 
 def analyze_race_file(file_path: Path) -> dict:
@@ -66,13 +72,24 @@ def analyze_race_file(file_path: Path) -> dict:
         title = soup.find('title')
         analysis['html_structure']['title'] = title.text if title else None
 
-        # エラーページのチェック
-        if "404" in html_text or "Not Found" in html_text:
+        # エラーページのチェック（より厳密に）
+        if "404 Not Found" in html_text or "404 - File or directory not found" in html_text:
             analysis['errors'].append("404 エラーページ")
         if "レース情報が見つかりません" in html_text:
             analysis['errors'].append("レース情報が見つかりません")
         if "該当するデータがありません" in html_text:
             analysis['errors'].append("該当するデータがありません")
+        if "開催されていません" in html_text:
+            analysis['errors'].append("レースが開催されていません")
+
+        # "404"文字列の出現確認（デバッグ用）
+        if "404" in html_text and "404 Not Found" not in html_text:
+            # 404が含まれるが、エラーページではない場合の調査
+            import re
+            matches = re.finditer(r'.{0,30}404.{0,30}', html_text)
+            contexts = [match.group() for match in list(matches)[:3]]  # 最初の3件
+            if contexts:
+                analysis['html_structure']['404_contexts'] = contexts
 
         # レース結果テーブルの確認
         result_table = soup.find('table', class_='race_table_01')
@@ -99,14 +116,19 @@ def analyze_race_file(file_path: Path) -> dict:
         analysis['html_structure']['racedata'] = meta_data is not None
 
         # パース試行
-        try:
-            df = results_parser.parse_race_results(file_path)
-            if df.empty:
-                analysis['warnings'].append("パース結果が空のDataFrame")
-            else:
-                analysis['html_structure']['parsed_rows'] = len(df)
-        except Exception as e:
-            analysis['errors'].append(f"パースエラー: {str(e)}")
+        if PARSER_AVAILABLE:
+            try:
+                race_id = file_path.stem  # ファイル名からrace_idを取得
+                df = parse_results_html(str(file_path), race_id=race_id)
+                if df.empty:
+                    analysis['warnings'].append("パース結果が空のDataFrame")
+                else:
+                    analysis['html_structure']['parsed_rows'] = len(df)
+                    analysis['html_structure']['parsed_columns'] = len(df.columns)
+            except Exception as e:
+                analysis['errors'].append(f"パースエラー: {str(e)}")
+        else:
+            analysis['warnings'].append("パーサーが利用できません")
 
     except Exception as e:
         analysis['errors'].append(f"ファイル読み込みエラー: {str(e)}")
@@ -157,6 +179,8 @@ def main():
 
         error_summary = defaultdict(int)
         warning_summary = defaultdict(int)
+        parse_success_count = 0
+        parse_failure_count = 0
 
         for i, file_path in enumerate(files_2025[:sample_size], 1):
             logger.info(f"\n--- ファイル {i}/{sample_size}: {file_path.name} ---")
@@ -171,7 +195,19 @@ def main():
             logger.info("HTML構造:")
             for key, value in analysis['html_structure'].items():
                 if key != 'title':
-                    logger.info(f"  {key}: {value}")
+                    if key == '404_contexts':
+                        logger.info(f"  {key}:")
+                        for ctx in value:
+                            logger.info(f"    - {ctx}")
+                    else:
+                        logger.info(f"  {key}: {value}")
+
+            # パース成功判定
+            if 'parsed_rows' in analysis['html_structure'] and analysis['html_structure']['parsed_rows'] > 0:
+                parse_success_count += 1
+                logger.info(f"✅ パース成功: {analysis['html_structure']['parsed_rows']}行")
+            else:
+                parse_failure_count += 1
 
             # エラー
             if analysis['errors']:
@@ -191,19 +227,28 @@ def main():
 
         # サマリー
         logger.info("\n" + "=" * 80)
-        logger.info("エラーサマリー (2025年サンプル)")
+        logger.info("2025年サンプル分析結果")
         logger.info("=" * 80)
 
+        # パース統計
+        logger.info(f"\nパース統計:")
+        logger.info(f"  ✅ 成功: {parse_success_count}/{sample_size} ({parse_success_count/sample_size*100:.1f}%)")
+        logger.info(f"  ❌ 失敗: {parse_failure_count}/{sample_size} ({parse_failure_count/sample_size*100:.1f}%)")
+
+        # エラーサマリー
+        logger.info(f"\nエラーサマリー:")
         if error_summary:
             for error, count in sorted(error_summary.items(), key=lambda x: -x[1]):
                 logger.info(f"  {count}/{sample_size} ファイル: {error}")
         else:
             logger.info("  エラーなし")
 
+        logger.info(f"\n警告サマリー:")
         if warning_summary:
-            logger.info("\n警告サマリー:")
             for warning, count in sorted(warning_summary.items(), key=lambda x: -x[1]):
                 logger.info(f"  {count}/{sample_size} ファイル: {warning}")
+        else:
+            logger.info("  警告なし")
 
     # 全年度のランダムサンプル分析
     logger.info("\n" + "=" * 80)
