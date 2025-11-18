@@ -1,6 +1,12 @@
 import re
 from typing import Optional
 
+# ★正規表現パターンを事前コンパイル（パフォーマンス向上）★
+TIME_PATTERN_FULL = re.compile(r'(\d+):(\d+)\.(\d+)')  # 分:秒.小数
+TIME_PATTERN_SHORT = re.compile(r'(\d+)\.(\d+)')      # 秒.小数
+HORSE_WEIGHT_PATTERN = re.compile(r'(\d+)\(([+-]?\d+)\)')  # 馬体重(増減)
+HORSE_WEIGHT_SIMPLE = re.compile(r'(\d+)')             # 馬体重のみ
+
 def parse_int_or_none(text: str) -> Optional[int]:
     """
     文字列をintに変換、失敗時はNone
@@ -68,24 +74,24 @@ def parse_time_to_seconds(time_str: str) -> Optional[float]:
     """
     if not time_str or time_str == '---':
         return None
-    
-    # 分:秒.小数 の形式
-    match = re.match(r'(\d+):(\d+)\.(\d+)', time_str)
+
+    # 分:秒.小数 の形式（事前コンパイル済みパターン使用）
+    match = TIME_PATTERN_FULL.match(time_str)
     if match:
         minutes = int(match.group(1))
         seconds = int(match.group(2))
         decimal = int(match.group(3))
-        
+
         total_seconds = minutes * 60 + seconds + decimal / 10.0
         return total_seconds
-    
-    # 秒.小数 の形式
-    match = re.match(r'(\d+)\.(\d+)', time_str)
+
+    # 秒.小数 の形式（事前コンパイル済みパターン使用）
+    match = TIME_PATTERN_SHORT.match(time_str)
     if match:
         seconds = int(match.group(1))
         decimal = int(match.group(2))
         return seconds + decimal / 10.0
-    
+
     return None
 
 
@@ -152,26 +158,26 @@ def parse_horse_weight(weight_text: str) -> tuple:
     馬体重文字列をパース
     例: "478(+2)" → (478, 2)
     例: "450(-5)" → (450, -5)
-    
+
     Returns:
         (馬体重, 増減)
     """
     if not weight_text or weight_text == '---':
         return (None, None)
-    
-    # パターン: 数字(+/-数字)
-    match = re.match(r'(\d+)\(([+-]?\d+)\)', weight_text)
+
+    # パターン: 数字(+/-数字) 事前コンパイル済みパターン使用
+    match = HORSE_WEIGHT_PATTERN.match(weight_text)
     if match:
         weight = int(match.group(1))
         change = int(match.group(2))
         return (weight, change)
-    
-    # 数字のみ
-    match = re.match(r'(\d+)', weight_text)
+
+    # 数字のみ 事前コンパイル済みパターン使用
+    match = HORSE_WEIGHT_SIMPLE.match(weight_text)
     if match:
         weight = int(match.group(1))
         return (weight, None)
-    
+
     return (None, None)
 
 

@@ -120,9 +120,24 @@ def parse_results_html(file_path: str, race_id: str = None) -> pd.DataFrame:
     # 派生特徴量の生成
     if not df.empty:
         df = add_derived_features(df)
-    
+
+    # ★追加: nullable integer型の統一★
+    if not df.empty:
+        int_columns = [
+            'finish_position', 'bracket_number', 'horse_number', 'age',
+            'passing_order_1', 'passing_order_2', 'passing_order_3', 'passing_order_4',
+            'popularity', 'horse_weight', 'horse_weight_change',
+            'distance_m', 'head_count', 'round_of_year', 'day_of_meeting',
+            'prize_1st', 'prize_2nd', 'prize_3rd', 'prize_4th', 'prize_5th',
+            'last3f_rank', 'margin_rank', 'horse_weight_rank', 'odds_rank'
+        ]
+
+        for col in int_columns:
+            if col in df.columns:
+                df[col] = df[col].astype('Int64')
+
     logging.info(f"レース結果パース完了: {file_path} ({len(df)}行)")
-    
+
     return df
 
 def extract_race_metadata_enhanced(soup: BeautifulSoup) -> Dict:

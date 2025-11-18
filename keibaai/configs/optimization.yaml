@@ -7,7 +7,7 @@ optimizer:
 
   # Fractional Kelly の設定
   fractional_kelly:
-    # 켈리比率に乗じる係数 (0.0 ~ 1.0)
+    # ケリー比率に乗じる係数 (0.0 ~ 1.0)
     # 1.0に近いほど積極的、0.0に近いほど保守的
     fraction: 0.1
 
