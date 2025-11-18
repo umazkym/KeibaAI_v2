@@ -11,31 +11,13 @@ from pathlib import Path
 import pandas as pd
 from bs4 import BeautifulSoup, element
 
-# common_utils のインポートパスを修正 (プロジェクトルートからの相対パスを想定)
-try:
-    from .common_utils import (
-        parse_int_or_none,
-        parse_float_or_none,
-        parse_sex_age,
-        parse_horse_weight,
-    )
-except ImportError:
-    # スクリプトとして直接実行された場合などのフォールバック
-    logging.warning("common_utils の相対インポートに失敗。絶対インポートを試みます。")
-    try:
-        from modules.parsers.common_utils import (
-            parse_int_or_none,
-            parse_float_or_none,
-            parse_sex_age,
-            parse_horse_weight,
-        )
-    except ImportError:
-        logging.error("common_utils が見つかりません。")
-        # 簡易的なフォールバック（実際には環境設定が必要）
-        parse_int_or_none = lambda x: int(x) if x and x.isdigit() else None
-        parse_float_or_none = lambda x: float(x) if x and x.replace('.', '', 1).isdigit() else None
-        parse_sex_age = lambda x: (x[0], int(x[1:])) if x and len(x) > 1 else (None, None)
-        parse_horse_weight = lambda x: (None, None)
+# common_utils のインポート
+from .common_utils import (
+    parse_int_or_none,
+    parse_float_or_none,
+    parse_sex_age,
+    parse_horse_weight,
+)
 
 
 def parse_shutuba_html(file_path: str, race_id: str = None) -> pd.DataFrame:
