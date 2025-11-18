@@ -109,8 +109,8 @@ def render_scraping_section():
             cmd = [
                 sys.executable,
                 str(script_path),
-                "--start_date", start_date.strftime("%Y-%m-%d"),
-                "--end_date", end_date.strftime("%Y-%m-%d")
+                "--from", start_date.strftime("%Y-%m-%d"),
+                "--to", end_date.strftime("%Y-%m-%d")
             ]
 
             try:
