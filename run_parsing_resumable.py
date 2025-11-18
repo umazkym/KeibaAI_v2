@@ -405,12 +405,15 @@ def parse_phase_performance(cfg, conn, skip_existing: bool = False):
 def main():
     """再開可能なパースパイプライン"""
     parser = argparse.ArgumentParser(description='再開可能なパースパイプライン')
-    parser.add_argument('--skip-existing', action='store_true',
-                        help='既にパース済みのファイルをスキップ（再開モード）')
+    parser.add_argument('--force-reparse', action='store_true',
+                        help='既存ファイルを含めて全件再パース（デフォルトは新規ファイルのみ処理）')
     parser.add_argument('--phase', type=str, default='all',
                         choices=['1', '2', '3', '4', '5', 'all'],
                         help='実行するフェーズ (1=レース, 2=出馬表, 3=馬, 4=血統, 5=成績, all=全て)')
     args = parser.parse_args()
+
+    # デフォルトはスキップモード（既存ファイルを処理しない）
+    skip_existing = not args.force_reparse
 
     cfg = load_config()
     setup_logging(cfg["default"]["logging"]["log_file"])
@@ -418,7 +421,7 @@ def main():
     log = logging.getLogger(__name__)
     log.info("=" * 80)
     log.info("再開可能なデータ整形パイプラインを開始します...")
-    log.info(f"モード: {'スキップモード (再開)' if args.skip_existing else '全件処理モード'}")
+    log.info(f"モード: {'全件再パース' if args.force_reparse else '新規ファイルのみ処理 (デフォルト)'}")
     log.info(f"フェーズ: {args.phase}")
     log.info("=" * 80)
 
@@ -427,25 +430,25 @@ def main():
 
     try:
         if args.phase in ['1', 'all']:
-            parse_phase_races(cfg, conn, skip_existing=args.skip_existing)
+            parse_phase_races(cfg, conn, skip_existing=skip_existing)
 
         if args.phase in ['2', 'all']:
-            parse_phase_shutuba(cfg, conn, skip_existing=args.skip_existing)
+            parse_phase_shutuba(cfg, conn, skip_existing=skip_existing)
 
         if args.phase in ['3', 'all']:
-            parse_phase_horses(cfg, conn, skip_existing=args.skip_existing)
+            parse_phase_horses(cfg, conn, skip_existing=skip_existing)
 
         if args.phase in ['4', 'all']:
-            parse_phase_pedigrees(cfg, conn, skip_existing=args.skip_existing)
+            parse_phase_pedigrees(cfg, conn, skip_existing=skip_existing)
 
         if args.phase in ['5', 'all']:
-            parse_phase_performance(cfg, conn, skip_existing=args.skip_existing)
+            parse_phase_performance(cfg, conn, skip_existing=skip_existing)
 
     except KeyboardInterrupt:
         log.warning("\n" + "=" * 80)
         log.warning("⚠️ ユーザーによる中断を検出しました")
-        log.warning("次回実行時に --skip-existing を指定すると、ここから再開できます:")
-        log.warning(f"  python run_parsing_resumable.py --skip-existing --phase {args.phase}")
+        log.warning("次回実行時にそのまま再実行すると、ここから再開できます:")
+        log.warning(f"  python run_parsing_resumable.py --phase {args.phase}")
         log.warning("=" * 80)
     except Exception as e:
         log.error(f"パイプラインの実行中にエラーが発生しました: {e}", exc_info=True)
