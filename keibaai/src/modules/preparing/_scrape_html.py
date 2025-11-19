@@ -22,7 +22,8 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException, NoSuchElementException
+from selenium.common.exceptions import TimeoutException, NoSuchElementException, WebDriverException
+from urllib3.exceptions import ReadTimeoutError
 
 from ..constants import UrlPaths, LocalPaths
 
@@ -113,13 +114,13 @@ def prepare_chrome_driver(headless: bool = True) -> webdriver.Chrome:
     """
     from selenium.webdriver.chrome.options import Options
     from selenium.webdriver.chrome.service import Service
-    
+
     try:
         from webdriver_manager.chrome import ChromeDriverManager
         service = Service(ChromeDriverManager().install())
     except ImportError:
         service = None
-        
+
     options = Options()
     if headless:
         options.add_argument('--headless=new')
@@ -128,21 +129,28 @@ def prepare_chrome_driver(headless: bool = True) -> webdriver.Chrome:
     options.add_argument('--disable-gpu')
     options.add_argument('--window-size=1280x800')
     options.add_argument(f"user-agent={random.choice(USER_AGENTS)}")
-    
+
+    # --- ページロード戦略の設定（タイムアウト対策） ---
+    options.page_load_strategy = 'eager'  # DOMが読み込まれたら続行（画像やCSSを待たない）
+
     # --- 自動化検出の回避 ---
     options.add_argument("--disable-blink-features=AutomationControlled")
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     options.add_experimental_option('useAutomationExtension', False)
     # -------------------------
-    
+
     if service:
         driver = webdriver.Chrome(service=service, options=options)
     else:
         driver = webdriver.Chrome(options=options)
-        
+
     # WebDriverフラグの隠蔽
     driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-    
+
+    # タイムアウト設定（タイムアウト対策）
+    driver.set_page_load_timeout(60)  # ページロードタイムアウト: 60秒
+    driver.set_script_timeout(30)     # スクリプトタイムアウト: 30秒
+
     return driver
 
 
@@ -239,29 +247,41 @@ def scrape_race_id_list(
                 try:
                     # 待機時間
                     time.sleep(random.uniform(MIN_SLEEP_SECONDS, MAX_SLEEP_SECONDS))
-                    
+
                     driver.get(url)
-                    
+
                     # レース一覧が表示されるまで待機
                     wait = WebDriverWait(driver, SELENIUM_WAIT_TIMEOUT)
                     race_list_box = wait.until(
                         EC.presence_of_element_located((By.CLASS_NAME, 'RaceList_Box'))
                     )
-                    
+
                     # リンクを取得
                     links = race_list_box.find_elements(By.TAG_NAME, 'a')
-                    
+
                     for link in links:
                         href = link.get_attribute('href')
                         if href:
                             match = re.search(r'(?:shutuba|result)\.html\?race_id=(\d{12})', href)
                             if match:
                                 race_id_list.append(match.group(1))
-                                
+
                     break  # 成功したらループを抜ける
-                    
-                except (TimeoutException, NoSuchElementException) as e:
-                    logger.warning(f'レースリスト取得エラー（試行 {attempt}/{max_retries}）: {e}')
+
+                except (TimeoutException, NoSuchElementException, WebDriverException, ReadTimeoutError) as e:
+                    logger.warning(f'レースリスト取得エラー（試行 {attempt}/{max_retries}）: {type(e).__name__}: {e}')
+
+                    # タイムアウトエラーの場合はドライバーを再起動
+                    if isinstance(e, (ReadTimeoutError, WebDriverException)) and attempt < max_retries:
+                        logger.info('ドライバーを再起動します...')
+                        try:
+                            driver.quit()
+                        except:
+                            pass
+                        time.sleep(5)  # 少し待機
+                        driver = prepare_chrome_driver()
+                        logger.info('ドライバーの再起動が完了しました')
+
                     if attempt == max_retries:
                         logger.error(f'レースID取得失敗: {kaisai_date}')
                         
@@ -506,36 +526,55 @@ def scrape_html_ped(horse_id_list: List[str], skip: bool = True) -> List[str]:
 
         for horse_id in tqdm(horse_id_list, desc="血統HTML取得", unit="頭"):
             filename = os.path.join(LocalPaths.HTML_PED_DIR, f'{horse_id}.bin')
-            
+
             if skip and os.path.exists(filename):
                 logger.debug(f'スキップ: {horse_id} (既存)')
                 continue
-                
-            try:
-                # 待機時間
-                time.sleep(random.uniform(MIN_SLEEP_SECONDS, MAX_SLEEP_SECONDS))
-                
-                url = UrlPaths.PED_URL + horse_id
-                driver.get(url)
-                
-                # 血統表が表示されるまで待機
-                wait = WebDriverWait(driver, SELENIUM_WAIT_TIMEOUT)
-                wait.until(
-                    EC.presence_of_element_located((By.CLASS_NAME, 'blood_table'))
-                )
-                
-                # レンダリング完了後のHTMLを取得
-                html_content = driver.page_source.encode('euc-jp', errors='replace')
-                
-                with open(filename, 'wb') as f:
-                    f.write(html_content)
-                updated_paths.append(filename)
-                logger.info(f'保存: {filename}')
-                
-            except (TimeoutException, NoSuchElementException) as e:
-                logger.warning(f'血統ページ取得エラー: {horse_id} - {e}')
-            except Exception as e:
-                logger.error(f'予期せぬエラー: {horse_id} - {e}')
+
+            max_retries = 3
+            for attempt in range(1, max_retries + 1):
+                try:
+                    # 待機時間
+                    time.sleep(random.uniform(MIN_SLEEP_SECONDS, MAX_SLEEP_SECONDS))
+
+                    url = UrlPaths.PED_URL + horse_id
+                    driver.get(url)
+
+                    # 血統表が表示されるまで待機
+                    wait = WebDriverWait(driver, SELENIUM_WAIT_TIMEOUT)
+                    wait.until(
+                        EC.presence_of_element_located((By.CLASS_NAME, 'blood_table'))
+                    )
+
+                    # レンダリング完了後のHTMLを取得
+                    html_content = driver.page_source.encode('euc-jp', errors='replace')
+
+                    with open(filename, 'wb') as f:
+                        f.write(html_content)
+                    updated_paths.append(filename)
+                    logger.info(f'保存: {filename}')
+                    break  # 成功したらループを抜ける
+
+                except (TimeoutException, NoSuchElementException, WebDriverException, ReadTimeoutError) as e:
+                    logger.warning(f'血統ページ取得エラー（試行 {attempt}/{max_retries}）: {horse_id} - {type(e).__name__}: {e}')
+
+                    # タイムアウトエラーの場合はドライバーを再起動
+                    if isinstance(e, (ReadTimeoutError, WebDriverException)) and attempt < max_retries:
+                        logger.info('ドライバーを再起動します...')
+                        try:
+                            driver.quit()
+                        except:
+                            pass
+                        time.sleep(5)  # 少し待機
+                        driver = prepare_chrome_driver()
+                        logger.info('ドライバーの再起動が完了しました')
+
+                    if attempt == max_retries:
+                        logger.error(f'血統データ取得失敗: {horse_id}')
+
+                except Exception as e:
+                    logger.error(f'予期せぬエラー: {horse_id} - {e}')
+                    break
                 
     finally:
         if driver:
