@@ -219,76 +219,65 @@ def scrape_kaisai_date(from_: str, to_: str) -> List[str]:
     return sorted(list(set(kaisai_date_list)))
 
 def scrape_race_id_list(
-    kaisai_date_list: List[str], 
+    kaisai_date_list: List[str],
     max_retries: int = 3
 ) -> List[str]:
     """
-    レースIDリストを取得（Selenium使用）
-    
+    レースIDリストを取得（requestsベース - Seleniumタイムアウト問題の回避）
+
     Args:
         kaisai_date_list: 開催日リスト
         max_retries: リトライ回数
-        
+
     Returns:
         レースIDリスト
     """
     logger.info(f'レースIDを取得中（{len(kaisai_date_list)}日分）')
 
     race_id_list = []
-    driver = None
+    session = get_robust_session()
 
-    try:
-        driver = prepare_chrome_driver()
+    for kaisai_date in tqdm(kaisai_date_list, desc="レースID取得", unit="日"):
+        url = f'{UrlPaths.RACE_LIST_URL}?kaisai_date={kaisai_date}'
 
-        for kaisai_date in tqdm(kaisai_date_list, desc="レースID取得", unit="日"):
-            url = f'{UrlPaths.RACE_LIST_URL}?kaisai_date={kaisai_date}'
-            
-            for attempt in range(1, max_retries + 1):
-                try:
-                    # 待機時間
-                    time.sleep(random.uniform(MIN_SLEEP_SECONDS, MAX_SLEEP_SECONDS))
+        for attempt in range(1, max_retries + 1):
+            try:
+                # 待機時間
+                time.sleep(random.uniform(MIN_SLEEP_SECONDS, MAX_SLEEP_SECONDS))
 
-                    driver.get(url)
+                # requestsで取得（Seleniumより軽量・安定）
+                html_content = fetch_html_robust_get(url, session=session)
 
-                    # レース一覧が表示されるまで待機
-                    wait = WebDriverWait(driver, SELENIUM_WAIT_TIMEOUT)
-                    race_list_box = wait.until(
-                        EC.presence_of_element_located((By.CLASS_NAME, 'RaceList_Box'))
-                    )
+                if html_content is None:
+                    logger.warning(f'HTML取得失敗: {kaisai_date} (試行 {attempt}/{max_retries})')
+                    continue
 
+                # HTMLをパース
+                soup = BeautifulSoup(html_content, 'html.parser')
+
+                # レース一覧ボックスを探す
+                race_list_box = soup.find('div', class_='RaceList_Box')
+
+                if race_list_box:
                     # リンクを取得
-                    links = race_list_box.find_elements(By.TAG_NAME, 'a')
+                    links = race_list_box.find_all('a', href=True)
 
                     for link in links:
-                        href = link.get_attribute('href')
-                        if href:
-                            match = re.search(r'(?:shutuba|result)\.html\?race_id=(\d{12})', href)
-                            if match:
-                                race_id_list.append(match.group(1))
+                        href = link.get('href', '')
+                        match = re.search(r'(?:shutuba|result)\.html\?race_id=(\d{12})', href)
+                        if match:
+                            race_id_list.append(match.group(1))
 
                     break  # 成功したらループを抜ける
+                else:
+                    logger.warning(f'レースリストボックスが見つかりません: {kaisai_date} (試行 {attempt}/{max_retries})')
 
-                except (TimeoutException, NoSuchElementException, WebDriverException, ReadTimeoutError) as e:
-                    logger.warning(f'レースリスト取得エラー（試行 {attempt}/{max_retries}）: {type(e).__name__}: {e}')
+            except Exception as e:
+                logger.warning(f'レースリスト取得エラー（試行 {attempt}/{max_retries}）: {type(e).__name__}: {e}')
 
-                    # タイムアウトエラーの場合はドライバーを再起動
-                    if isinstance(e, (ReadTimeoutError, WebDriverException)) and attempt < max_retries:
-                        logger.info('ドライバーを再起動します...')
-                        try:
-                            driver.quit()
-                        except:
-                            pass
-                        time.sleep(5)  # 少し待機
-                        driver = prepare_chrome_driver()
-                        logger.info('ドライバーの再起動が完了しました')
+                if attempt == max_retries:
+                    logger.error(f'レースID取得失敗: {kaisai_date}')
 
-                    if attempt == max_retries:
-                        logger.error(f'レースID取得失敗: {kaisai_date}')
-                        
-    finally:
-        if driver:
-            driver.quit()
-            
     return sorted(list(set(race_id_list)))
 
 
