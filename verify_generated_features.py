@@ -121,7 +121,15 @@ def verify_features():
 
     try:
         # パーティション化されたParquetを読み込み
-        df = pd.read_parquet(features_dir)
+        # YAMLファイルを除外するため、フィルタを使用
+        import pyarrow.parquet as pq
+        import pyarrow.dataset as ds
+
+        # Parquetファイルのみを含むデータセットを作成
+        dataset = ds.dataset(features_dir, format='parquet',
+                            exclude_invalid_files=True,
+                            partitioning='hive')
+        df = dataset.to_table().to_pandas()
 
         print(f"✓ データ読み込み成功")
         print(f"✓ 総行数: {len(df):,}")
