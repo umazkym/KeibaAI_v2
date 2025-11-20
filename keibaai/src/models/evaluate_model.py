@@ -104,37 +104,6 @@ def main():
         logging.error("必須カラムの欠損値を除去した結果、評価データが0行になりました。")
         sys.exit(1)
     
-    # horses_performanceからオッズデータをマージ
-    perf_path = Path(config.get('parsed_data_path', 'data/parsed')) / 'parquet' / 'horses_performance' / 'horses_performance.parquet'
-    if perf_path.exists():
-        logging.info("horses_performance.parquetからオッズデータを読み込んでいます...")
-        perf_df = pd.read_parquet(perf_path)
-        
-        # race_dateをdatetime型に変換
-        perf_df['race_date'] = pd.to_datetime(perf_df['race_date'])
-        
-        # 評価期間のデータのみを抽出
-        perf_df = perf_df[(perf_df['race_date'] >= start_dt) & (perf_df['race_date'] <= end_dt)]
-        
-        # race_id, horse_idを文字列として統一
-        perf_df['race_id'] = perf_df['race_id'].astype(str).str.strip()
-        if 'horse_id' in perf_df.columns:
-            perf_df['horse_id'] = perf_df['horse_id'].astype(str).str.strip()
-        
-        final_df['race_id'] = final_df['race_id'].astype(str).str.strip()
-        if 'horse_id' in final_df.columns:
-            final_df['horse_id'] = final_df['horse_id'].astype(str).str.strip()
-        
-        # オッズデータをマージ
-        odds_df = perf_df[['race_id', 'horse_id', 'win_odds']].copy()
-        final_df = pd.merge(final_df, odds_df, on=['race_id', 'horse_id'], how='left')
-        
-        odds_available = final_df['win_odds'].notna().sum()
-        logging.info(f"  オッズデータマージ完了: {odds_available:,}/{len(final_df):,}行でオッズ取得 ({odds_available/len(final_df)*100:.1f}%)")
-    else:
-        logging.warning(f"horses_performance.parquetが見つかりません: {perf_path}")
-        final_df['win_odds'] = None
-    
     for col in feature_names:
         if col in final_df.columns:
             final_df[col] = pd.to_numeric(final_df[col], errors='coerce').fillna(0)
@@ -202,15 +171,23 @@ def main():
                 bet_amount = 100
                 total_bet += bet_amount
                 
-                # 勝利した場合のみ払い戻し（実オッズを使用）
+                # 勝利した場合のみ払い戻し
                 if best_horse_rank == 1:
-                    # win_oddsを使用（horses_performanceから取得した実オッズ）
-                    if 'win_odds' in race_df.columns:
-                        odds = race_df.loc[best_horse_idx, 'win_odds']
+                    # relative_oddsがあれば使用、なければ推定オッズ
+                    if 'relative_odds' in race_df.columns:
+                        odds = race_df.loc[best_horse_idx, 'relative_odds']
+                        # relative_oddsは倍率なので、100円 × oddsが払い戻し
+                        # ただし、実際のオッズデータがない場合はデフォルト値を使う
                         if pd.notna(odds) and odds > 0:
                             payout = bet_amount * odds
-                            total_return += payout
-                        # オッズがない場合は払い戻しなし（ベットしたが回収できず）
+                        else:
+                            # オッズデータがない場合は平均的なオッズ（5倍）を仮定
+                            payout = bet_amount * 5.0
+                    else:
+                        # オッズ列がない場合は平均的なオッズを仮定
+                        payout = bet_amount * 5.0
+                    
+                    total_return += payout
                 
                 races_count += 1
         
