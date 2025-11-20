@@ -1,5 +1,3 @@
-# src/features/advanced_features.py (新規)
-
 import pandas as pd
 import numpy as np
 from typing import Dict, List, Optional
@@ -147,14 +145,147 @@ class AdvancedFeatureEngine:
         sire_stats.columns = ['sire_id', 'sire_avg_finish', 'sire_std_finish',
                              'sire_avg_distance', 'sire_avg_odds']
         
-        # 母父系の成績集計
-        damsire_df = pedigree_df[
-            (pedigree_df['generation'] == 2) & 
-            (pedigree_df['ancestor_name'].str.contains('母'))
-        ]
+        df = df.merge(sire_stats, left_on='sire_id', right_on='sire_id', how='left')
         
-        # ニックス（相性の良い配合）
-        # 父×母父の組み合わせでの成績
+        return df
+
+    def generate_pace_features(
+        self,
+        df: pd.DataFrame
+    ) -> pd.DataFrame:
+        """展開・ペース特徴量"""
+        # 通過順位から脚質を判定する簡易ロジック
+        # 1-1-1-1 のような形式を解析
+        
+        def estimate_running_style(passing_order_str):
+            if not isinstance(passing_order_str, str):
+                return 'unknown'
+            try:
+                # 最初の通過順を取得
+                first_pos = int(passing_order_str.split('-')[0])
+                if first_pos == 1:
+                    return 'nige' # 逃げ
+                elif first_pos <= 4:
+                    return 'senko' # 先行
+                elif first_pos <= 10:
+                    return 'sashi' # 差し
+                else:
+                    return 'oikomi' # 追込
+            except:
+                return 'unknown'
+
+        if 'passing_order' in df.columns:
+            df['running_style'] = df['passing_order'].apply(estimate_running_style)
+            
+            # レースごとの脚質構成比率
+            race_styles = df.groupby('race_id')['running_style'].value_counts(normalize=True).unstack(fill_value=0)
+            
+            # 逃げ馬の割合（ペース予想の指標）
+            if 'nige' in race_styles.columns:
+                df = df.merge(race_styles[['nige']].rename(columns={'nige': 'nige_ratio'}), on='race_id', how='left')
+            else:
+                df['nige_ratio'] = 0.0
+                
+            # 先行馬の割合
+            if 'senko' in race_styles.columns:
+                df = df.merge(race_styles[['senko']].rename(columns={'senko': 'senko_ratio'}), on='race_id', how='left')
+            else:
+                df['senko_ratio'] = 0.0
+
+        return df
+
+    def generate_deep_pedigree_features(
+        self,
+        df: pd.DataFrame,
+        pedigree_df: pd.DataFrame,
+        performance_df: pd.DataFrame
+    ) -> pd.DataFrame:
+        """詳細な血統特徴量（ニックス、コース適性）"""
+        
+        # 1. ニックス（父×母父）
+        # まず、各馬の父と母父を特定
+        sires = pedigree_df[pedigree_df['generation'] == 1][['horse_id', 'ancestor_id']].rename(columns={'ancestor_id': 'sire_id'})
+        damsires = pedigree_df[(pedigree_df['generation'] == 2) & (pedigree_df['ancestor_name'].str.contains('母'))][['horse_id', 'ancestor_id']].rename(columns={'ancestor_id': 'damsire_id'})
+        
+        horse_pedigree = sires.merge(damsires, on='horse_id', how='inner')
+        
+        # パフォーマンスデータに血統情報を結合
+        perf_ped = performance_df.merge(horse_pedigree, on='horse_id', how='inner')
+        
+        # ニックスごとの成績集計
+        nicks_stats = perf_ped.groupby(['sire_id', 'damsire_id']).agg({
+            'finish_position': ['mean', 'count', 'std'],
+            'win_odds': 'mean'
+        }).reset_index()
+        nicks_stats.columns = ['sire_id', 'damsire_id', 'nicks_avg_finish', 'nicks_count', 'nicks_std_finish', 'nicks_avg_odds']
+        
+        # 信頼度のため、ある程度の出走数があるもののみ採用
+        nicks_stats = nicks_stats[nicks_stats['nicks_count'] >= 5]
+        
+        # メインデータフレームに結合（父・母父が必要）
+        # dfにsire_id, damsire_idがある前提、なければ結合してから
+        if 'sire_id' not in df.columns or 'damsire_id' not in df.columns:
+             df = df.merge(horse_pedigree, on='horse_id', how='left')
+             
+        df = df.merge(nicks_stats, on=['sire_id', 'damsire_id'], how='left')
+        
+        # 2. 種牡馬×コース適性
+        # 種牡馬ごとの、競馬場・距離カテゴリ・芝ダート別の成績
+        perf_ped['distance_category'] = pd.cut(
+            perf_ped['distance_m'],
+            bins=[0, 1400, 1800, 2200, 3000, 4000],
+            labels=['sprint', 'mile', 'intermediate', 'long', 'extreme_long']
+        )
+        
+        sire_course_stats = perf_ped.groupby(['sire_id', 'place', 'distance_category', 'track_surface']).agg({
+            'finish_position': 'mean',
+            'win_odds': 'mean'
+        }).reset_index()
+        sire_course_stats.columns = ['sire_id', 'place', 'distance_category', 'track_surface', 'sire_course_avg_finish', 'sire_course_avg_odds']
+        
+        # メインデータフレームに結合
+        # dfにdistance_categoryなどが必要
+        if 'distance_category' not in df.columns:
+             df['distance_category'] = pd.cut(
+                df['distance_m'],
+                bins=[0, 1400, 1800, 2200, 3000, 4000],
+                labels=['sprint', 'mile', 'intermediate', 'long', 'extreme_long']
+            )
+            
+        df = df.merge(sire_course_stats, on=['sire_id', 'place', 'distance_category', 'track_surface'], how='left')
+
+        return df
+
+    def generate_course_bias_features(
+        self,
+        df: pd.DataFrame,
+        performance_df: pd.DataFrame
+    ) -> pd.DataFrame:
+        """コースバイアス（枠順など）"""
+        
+        # 枠順バイアス
+        # コース（競馬場、距離、芝ダート）ごとの枠番別成績
+        
+        performance_df['distance_category'] = pd.cut(
+            performance_df['distance_m'],
+            bins=[0, 1400, 1800, 2200, 3000, 4000],
+            labels=['sprint', 'mile', 'intermediate', 'long', 'extreme_long']
+        )
+        
+        bracket_stats = performance_df.groupby(['place', 'distance_category', 'track_surface', 'bracket_number']).agg({
+            'finish_position': 'mean'
+        }).reset_index()
+        bracket_stats.columns = ['place', 'distance_category', 'track_surface', 'bracket_number', 'bracket_avg_finish']
+        
+        # メインデータフレームに結合
+        if 'distance_category' not in df.columns:
+             df['distance_category'] = pd.cut(
+                df['distance_m'],
+                bins=[0, 1400, 1800, 2200, 3000, 4000],
+                labels=['sprint', 'mile', 'intermediate', 'long', 'extreme_long']
+            )
+            
+        df = df.merge(bracket_stats, on=['place', 'distance_category', 'track_surface', 'bracket_number'], how='left')
         
         return df
     
@@ -184,9 +315,6 @@ class AdvancedFeatureEngine:
         df['race_importance'] = df['prize_1st'].fillna(500).apply(
             lambda x: 'high' if x >= 2000 else ('medium' if x >= 1000 else 'low')
         )
-        
-        # 4. 休養明けフラグ
-        # （過去成績データと結合後に計算）
         
         return df
     

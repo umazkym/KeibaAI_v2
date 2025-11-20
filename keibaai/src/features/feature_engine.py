@@ -16,13 +16,19 @@ class FeatureEngine:
     YAML設定ファイルに基づいて動的に特徴量を生成するエンジン。
     """
     
-    def __init__(self, config_path: str):
+    def __init__(self, config_or_path):
         """
         Args:
-            config_path (str): features.yamlへのパス
+            config_or_path (str | Path | dict): features.yamlへのパス または 設定辞書
         """
-        with open(config_path, 'r', encoding='utf-8') as f:
-            self.config = yaml.safe_load(f)
+        if isinstance(config_or_path, (str, Path)):
+            with open(config_or_path, 'r', encoding='utf-8') as f:
+                self.config = yaml.safe_load(f)
+        elif isinstance(config_or_path, dict):
+            self.config = config_or_path
+        else:
+            raise TypeError(f"config_or_path must be str, Path, or dict. Got {type(config_or_path)}")
+
         self.recipes = self.config.get('feature_recipes', {})
         self.feature_names_ = []
         logging.info(f"FeatureEngine (v{self.config.get('feature_engine', {}).get('version', 'N/A')}) が初期化されました")
@@ -32,6 +38,7 @@ class FeatureEngine:
         shutuba_df: pd.DataFrame,
         results_history_df: pd.DataFrame,
         horse_profiles_df: pd.DataFrame,
+        pedigree_df: Optional[pd.DataFrame] = None,
     ) -> pd.DataFrame:
         """
         shutuba_df と各種履歴データから特徴量を生成する
@@ -83,6 +90,31 @@ class FeatureEngine:
         if self.recipes.get('relative_features', {}).get('enabled', False):
             df = self._add_relative_features(df)
 
+        # --- 高度な特徴量 (Advanced Features) ---
+        # ユーザー要望により追加: ペース、血統(Deep)、コースバイアス
+        # 設定ファイルで制御可能にするのがベストだが、今回は直接組み込む
+        try:
+            from src.features.advanced_features import AdvancedFeatureEngine
+            adv_engine = AdvancedFeatureEngine()
+            
+            # 1. ペース・脚質
+            df = adv_engine.generate_pace_features(df, results_history_df)
+            
+            # 2. 血統 (Deep)
+            if pedigree_df is not None:
+                df = adv_engine.generate_deep_pedigree_features(df, pedigree_df, results_history_df)
+            
+            # 3. コースバイアス
+            df = adv_engine.generate_course_bias_features(df, results_history_df)
+            
+            # 4. パフォーマンストレンド (既存のadvanced_features機能)
+            df = adv_engine.generate_performance_trend_features(df, results_history_df)
+            
+        except ImportError:
+            logging.warning("AdvancedFeatureEngineが見つかりません。高度な特徴量はスキップされます。")
+        except Exception as e:
+            logging.error(f"高度な特徴量の生成中にエラー: {e}", exc_info=True)
+
         # --- 後処理 ---
         df = self._handle_missing_values(df)
         self.feature_names_ = self._select_features(df)
@@ -129,7 +161,7 @@ class FeatureEngine:
         
         # is_win を事前に計算
         if 'finish_position' in combined.columns:
-            combined['is_win'] = (combined['finish_position'] == 1).astype(int)
+            combined['is_win'] = (combined['finish_position'] == 1).fillna(False).astype(int)
         else:
             combined['is_win'] = 0
             
@@ -200,7 +232,7 @@ class FeatureEngine:
                 flag_col_name = f'is_{col}_changed'
                 df[prev_col_name] = grouped[col].shift(1)
                 is_changed = (df[col] != df[prev_col_name]) & (df[prev_col_name].notna())
-                df[flag_col_name] = is_changed.astype(int)
+                df[flag_col_name] = is_changed.fillna(False).astype(int)
         
         return df
 
@@ -211,7 +243,7 @@ class FeatureEngine:
         
         history_df = history_df.copy()
         if 'finish_position' in history_df.columns:
-            history_df['is_win'] = (history_df['finish_position'] == 1).astype(int)
+            history_df['is_win'] = (history_df['finish_position'] == 1).fillna(False).astype(int)
         
         for entity_recipe in entities:
             entity_name = entity_recipe.get('name')
@@ -269,7 +301,7 @@ class FeatureEngine:
         # is_winカラムの確保
         history_df = history_df.copy()
         if 'finish_position' in history_df.columns and 'is_win' not in history_df.columns:
-            history_df['is_win'] = (history_df['finish_position'] == 1).astype(int)
+            history_df['is_win'] = (history_df['finish_position'] == 1).fillna(False).astype(int)
 
         for interaction_recipe in interaction_recipes:
             if not isinstance(interaction_recipe, dict):

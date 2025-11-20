@@ -141,42 +141,17 @@ def main():
         
         # ロギング設定
         logging_config = default_config.get('logging', {})
-        log_file = project_root / logging_config.get('log_file', 'logs/features.log')
+        log_file_tmpl = logging_config.get('log_file', 'logs/features.log')
+        
+        # ${logs_path} を置換
+        if '${logs_path}' in log_file_tmpl:
+            logs_path_val = paths_config.get('logs_path', 'data/logs').replace('${data_path}', data_path_val)
+            log_file_tmpl = log_file_tmpl.replace('${logs_path}', logs_path_val)
+            
         log_format = logging_config.get('log_format', '%(asctime)s [%(levelname)s] %(name)s: %(message)s')
-        setup_logging(args.log_level.upper(), str(log_file), log_format)
             
     except Exception as e:
-        # フォールバック: 簡易ロギング設定
         print(f"設定の初期化に失敗しました: {e}")
-        logging.basicConfig(
-            level=args.log_level.upper(),
-            format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
-            handlers=[logging.StreamHandler(sys.stdout)]
-        )
-        
-        # 設定の再ロード試行
-        try:
-            with open(config_path, 'r', encoding='utf-8') as f:
-                paths_config_raw = yaml.safe_load(f)
-            data_path_val = paths_config_raw.get('data_path', 'data')
-            paths_config = paths_config_raw.copy()
-            for key, value in paths_config.items():
-                if isinstance(value, str):
-                    paths_config[key] = value.replace('${data_path}', data_path_val)
-        except Exception as ex:
-            logging.error(f"設定のロードに完全に失敗しました: {ex}")
-            sys.exit(1)
-
-    logging.info("=" * 60)
-    logging.info("Keiba AI 特徴量生成パイプライン開始")
-    logging.info("=" * 60)
-
-    # 特徴量設定をロード
-    try:
-        with open(features_config_path, 'r', encoding='utf-8') as f:
-            features_config = yaml.safe_load(f)
-    except FileNotFoundError:
-        logging.error(f"特徴量設定ファイルが見つかりません: {features_config_path}")
         sys.exit(1)
 
     # --- 1. 日付範囲の決定 ---
@@ -188,13 +163,29 @@ def main():
             start_dt = datetime.strptime(args.start_date, '%Y-%m-%d')
             end_dt = datetime.strptime(args.end_date, '%Y-%m-%d')
         else:
-            logging.error("日付 (--date) または期間 (--start_date, --end_date) を指定してください")
-            sys.exit(1)
+            # デフォルト: 2020-01-01 から 今日まで
+            start_dt = datetime(2020, 1, 1)
+            end_dt = datetime.now()
             
+        # ロギングのセットアップ（日付確定後）
+        log_file = project_root / log_file_tmpl.replace('{YYYY}', str(start_dt.year)).replace('{MM}', f"{start_dt.month:02}").replace('{DD}', f"{start_dt.day:02}")
+        setup_logging(args.log_level.upper(), str(log_file), log_format)
+        
+        logging.info("=" * 60)
+        logging.info("Keiba AI 特徴量生成パイプライン開始")
+        logging.info("=" * 60)
         logging.info(f"処理対象期間: {start_dt.strftime('%Y-%m-%d')} - {end_dt.strftime('%Y-%m-%d')}")
             
     except ValueError as e:
         logging.error(f"日付フォーマットエラー: {e}")
+        sys.exit(1)
+
+    # 特徴量設定をロード
+    try:
+        with open(features_config_path, 'r', encoding='utf-8') as f:
+            features_config = yaml.safe_load(f)
+    except FileNotFoundError:
+        logging.error(f"特徴量設定ファイルが見つかりません: {features_config_path}")
         sys.exit(1)
 
     # --- 2. データロード ---
@@ -209,6 +200,8 @@ def main():
     logging.info("フェーズ2/3: 特徴量生成開始")
     logging.info("=" * 60)
     logging.info("  → 特徴量エンジンを初期化中...")
+    
+    engine = FeatureEngine(features_config)
 
     # history_df に血統情報をマージ (エンティティ集計で sire_id などを使うため)
     if "horse_profiles_df" in data and not data["horse_profiles_df"].empty:
@@ -222,20 +215,13 @@ def main():
         else:
             logging.warning("horse_profiles_df に十分な血統情報（sire_idなど）が見つかりませんでした。")
 
-    engine = FeatureEngine(config_path=str(features_config_path))
-    logging.info("  ✓ 特徴量エンジン初期化完了")
-
     # --- 4. 特徴量生成 ---
-    logging.info("  → 特徴量を生成中...")
-    try:
-        features_df = engine.generate_features(
-            shutuba_df=data["shutuba_df"],
-            results_history_df=data["results_history_df"],
-            horse_profiles_df=data["horse_profiles_df"]
-        )
-    except Exception as e:
-        logging.error(f"特徴量生成中にエラーが発生しました: {e}", exc_info=True)
-        sys.exit(1)
+    features_df = engine.generate_features(
+        shutuba_df=data["shutuba_df"],
+        results_history_df=data["results_history_df"],
+        horse_profiles_df=data["horse_profiles_df"],
+        pedigree_df=data["pedigree_df"]
+    )
 
     if features_df.empty:
         logging.warning("特徴量生成の結果が空です。")

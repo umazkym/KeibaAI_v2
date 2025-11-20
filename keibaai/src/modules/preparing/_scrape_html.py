@@ -10,6 +10,7 @@ import logging
 from typing import List, Optional, Dict
 from pathlib import Path
 from datetime import datetime, timedelta
+import json
 
 import pandas as pd
 import requests
@@ -154,9 +155,31 @@ def prepare_chrome_driver(headless: bool = True) -> webdriver.Chrome:
     return driver
 
 
+def _load_calendar_cache() -> Dict[str, List[str]]:
+    """カレンダーキャッシュを読み込む"""
+    path = LocalPaths.CALENDAR_CACHE_PATH
+    if os.path.exists(path):
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            logger.error(f"カレンダーキャッシュ読み込みエラー: {e}")
+            return {}
+    return {}
+
+def _save_calendar_cache(cache: Dict[str, List[str]]):
+    """カレンダーキャッシュを保存する"""
+    path = LocalPaths.CALENDAR_CACHE_PATH
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    try:
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(cache, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.error(f"カレンダーキャッシュ保存エラー: {e}")
+
 def scrape_kaisai_date(from_: str, to_: str) -> List[str]:
     """
-    開催日リストを取得
+    開催日リストを取得（キャッシュ対応）
     
     Args:
         from_: 開始日（YYYY-MM-DD形式）
@@ -186,10 +209,24 @@ def scrape_kaisai_date(from_: str, to_: str) -> List[str]:
         
     kaisai_date_list = []
     session = get_robust_session()
+    
+    # キャッシュ読み込み
+    cache = _load_calendar_cache()
+    current_month_key = datetime.now().strftime('%Y%m')
 
     logger.info(f"カレンダーを取得: {len(date_range)}ヶ月分")
     for date in tqdm(date_range, desc="開催日取得", unit="月"):
         year, month = date.year, date.month
+        month_key = f"{year}{month:02}"
+        
+        # 過去の月でキャッシュがあればそれを使用
+        if month_key < current_month_key and month_key in cache:
+            logger.debug(f"キャッシュヒット (カレンダー): {month_key}")
+            # 範囲内の日付のみ抽出
+            cached_dates = [d for d in cache[month_key] if from_.replace('-', '') <= d <= to_.replace('-', '')]
+            kaisai_date_list.extend(cached_dates)
+            continue
+
         url = f'{UrlPaths.CALENDAR_URL}?year={year}&month={month}'
         logger.debug(f'カレンダーページを取得: {url}')
         
@@ -199,15 +236,22 @@ def scrape_kaisai_date(from_: str, to_: str) -> List[str]:
                 soup = BeautifulSoup(html_content, "lxml", from_encoding='euc-jp')
                 calendar_table = soup.find('table', class_='Calendar_Table')
                 
+                month_dates = []
                 if calendar_table:
                     for a in calendar_table.find_all('a'):
                         href = a.get('href', '')
                         match = re.search(r'kaisai_date=(\d{8})', href)
                         if match:
                             kaisai_date = match.group(1)
+                            month_dates.append(kaisai_date)
                             # 日付範囲チェック
                             if from_.replace('-', '') <= kaisai_date <= to_.replace('-', ''):
                                 kaisai_date_list.append(kaisai_date)
+                    
+                    # キャッシュ更新（空でも保存して再取得を防ぐ）
+                    cache[month_key] = sorted(list(set(month_dates)))
+                    _save_calendar_cache(cache)
+                    
                 else:
                     logger.warning(f"カレンダーテーブルが見つかりません: {url}")
                                 
@@ -218,30 +262,64 @@ def scrape_kaisai_date(from_: str, to_: str) -> List[str]:
             
     return sorted(list(set(kaisai_date_list)))
 
+def _load_race_id_cache() -> Dict[str, List[str]]:
+    """レースIDキャッシュを読み込む"""
+    path = LocalPaths.RACE_ID_CACHE_PATH
+    if os.path.exists(path):
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            logger.error(f"レースIDキャッシュ読み込みエラー: {e}")
+            return {}
+    return {}
+
+def _save_race_id_cache(cache: Dict[str, List[str]]):
+    """レースIDキャッシュを保存する"""
+    path = LocalPaths.RACE_ID_CACHE_PATH
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    try:
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(cache, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.error(f"レースIDキャッシュ保存エラー: {e}")
+
 def scrape_race_id_list(
     kaisai_date_list: List[str], 
-    max_retries: int = 3
+    max_retries: int = 3,
+    force_refresh: bool = False
 ) -> List[str]:
     """
-    レースIDリストを取得（Selenium使用）
-    
-    Args:
-        kaisai_date_list: 開催日リスト
-        max_retries: リトライ回数
-        
-    Returns:
-        レースIDリスト
+    レースIDリストを取得（Selenium使用 + キャッシュ）
     """
     logger.info(f'レースIDを取得中（{len(kaisai_date_list)}日分）')
 
     race_id_list = []
+    dates_to_fetch = []
+    
+    # キャッシュ読み込み
+    cache = _load_race_id_cache()
+    
+    for date in kaisai_date_list:
+        if not force_refresh and date in cache:
+            logger.debug(f"キャッシュヒット: {date}")
+            race_id_list.extend(cache[date])
+        else:
+            dates_to_fetch.append(date)
+            
+    if not dates_to_fetch:
+        logger.info("すべてのレースIDをキャッシュから取得しました")
+        return sorted(list(set(race_id_list)))
+
+    logger.info(f"新規取得対象: {len(dates_to_fetch)}日分")
     driver = None
 
     try:
         driver = prepare_chrome_driver()
 
-        for kaisai_date in tqdm(kaisai_date_list, desc="レースID取得", unit="日"):
+        for kaisai_date in tqdm(dates_to_fetch, desc="レースID取得", unit="日"):
             url = f'{UrlPaths.RACE_LIST_URL}?kaisai_date={kaisai_date}'
+            daily_race_ids = []
             
             for attempt in range(1, max_retries + 1):
                 try:
@@ -264,8 +342,15 @@ def scrape_race_id_list(
                         if href:
                             match = re.search(r'(?:shutuba|result)\.html\?race_id=(\d{12})', href)
                             if match:
-                                race_id_list.append(match.group(1))
+                                rid = match.group(1)
+                                race_id_list.append(rid)
+                                daily_race_ids.append(rid)
 
+                    # キャッシュ更新
+                    if daily_race_ids:
+                        cache[kaisai_date] = daily_race_ids
+                        _save_race_id_cache(cache)
+                    
                     break  # 成功したらループを抜ける
 
                 except (TimeoutException, NoSuchElementException, WebDriverException, ReadTimeoutError) as e:
@@ -512,74 +597,39 @@ def scrape_html_horse(horse_id_list: List[str], skip: bool = True, cache_ttl_day
 
 def scrape_html_ped(horse_id_list: List[str], skip: bool = True) -> List[str]:
     """
-    血統HTMLを取得して.bin形式で保存（Selenium使用）
+    血統HTMLを取得して.bin形式で保存（requests使用）
     """
     logger.info(f'血統HTMLを取得中（{len(horse_id_list)}件）')
 
     updated_paths = []
+    session = get_robust_session()
     os.makedirs(LocalPaths.HTML_PED_DIR, exist_ok=True)
 
-    driver = None
+    for horse_id in tqdm(horse_id_list, desc="血統HTML取得", unit="頭"):
+        filename = os.path.join(LocalPaths.HTML_PED_DIR, f'{horse_id}.bin')
 
-    try:
-        driver = prepare_chrome_driver()
+        if skip and os.path.exists(filename):
+            logger.debug(f'スキップ: {horse_id} (既存)')
+            continue
 
-        for horse_id in tqdm(horse_id_list, desc="血統HTML取得", unit="頭"):
-            filename = os.path.join(LocalPaths.HTML_PED_DIR, f'{horse_id}.bin')
-
-            if skip and os.path.exists(filename):
-                logger.debug(f'スキップ: {horse_id} (既存)')
-                continue
-
-            max_retries = 3
-            for attempt in range(1, max_retries + 1):
-                try:
-                    # 待機時間
-                    time.sleep(random.uniform(MIN_SLEEP_SECONDS, MAX_SLEEP_SECONDS))
-
-                    url = UrlPaths.PED_URL + horse_id
-                    driver.get(url)
-
-                    # 血統表が表示されるまで待機
-                    wait = WebDriverWait(driver, SELENIUM_WAIT_TIMEOUT)
-                    wait.until(
-                        EC.presence_of_element_located((By.CLASS_NAME, 'blood_table'))
-                    )
-
-                    # レンダリング完了後のHTMLを取得
-                    html_content = driver.page_source.encode('euc-jp', errors='replace')
-
+        url = UrlPaths.PED_URL + horse_id
+        html_content = fetch_html_robust_get(url, session)
+        
+        if html_content:
+            try:
+                # 有効性チェック
+                soup = BeautifulSoup(html_content, "lxml", from_encoding='euc-jp')
+                if soup.find("table", class_="blood_table"):
                     with open(filename, 'wb') as f:
                         f.write(html_content)
                     updated_paths.append(filename)
                     logger.info(f'保存: {filename}')
-                    break  # 成功したらループを抜ける
-
-                except (TimeoutException, NoSuchElementException, WebDriverException, ReadTimeoutError) as e:
-                    logger.warning(f'血統ページ取得エラー（試行 {attempt}/{max_retries}）: {horse_id} - {type(e).__name__}: {e}')
-
-                    # タイムアウトエラーの場合はドライバーを再起動
-                    if isinstance(e, (ReadTimeoutError, WebDriverException)) and attempt < max_retries:
-                        logger.info('ドライバーを再起動します...')
-                        try:
-                            driver.quit()
-                        except:
-                            pass
-                        time.sleep(5)  # 少し待機
-                        driver = prepare_chrome_driver()
-                        logger.info('ドライバーの再起動が完了しました')
-
-                    if attempt == max_retries:
-                        logger.error(f'血統データ取得失敗: {horse_id}')
-
-                except Exception as e:
-                    logger.error(f'予期せぬエラー: {horse_id} - {e}')
-                    break
+                else:
+                    logger.warning(f'無効なページ (blood_tableなし): {horse_id}')
+                    
+            except Exception as e:
+                logger.error(f'保存エラー: {horse_id} - {e}')
                 
-    finally:
-        if driver:
-            driver.quit()
-            
     return updated_paths
 
 

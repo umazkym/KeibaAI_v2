@@ -196,34 +196,68 @@ def main():
         logging.warning(f"{args.date} のシミュレーションデータが見つかりません (検索パス: {sim_dir})。処理を終了します。")
         sys.exit(0)
 
-    # --- 2. オプティマイザ初期化 ---
-    optimizer = PortfolioOptimizer(config=optimization_config)
-
-    # --- 3. レースごとに最適化実行 ---
+    # --- 2. オッズデータのロード (全レース分) ---
     odds_dir = Path(paths.get('raw_json_jra_odds', 'data/raw/json/jra_odds'))
-    
-    logging.info(f"{len(simulations)} レースの最適化を実行します")
-    
-    for i, sim_result in enumerate(simulations, 1):
-        race_id = sim_result['race_id']
-        logging.info(f"--- レース {i}/{len(simulations)} ({race_id}) ---")
+    daily_odds = []
+    valid_simulations = []
 
-        # 3.1 オッズデータのロード
-        odds_data = load_odds_data(odds_dir, race_id)
+    for sim in simulations:
+        race_id = sim['race_id']
+        odds = load_odds_data(odds_dir, race_id)
+        if odds.get('win'):
+            daily_odds.append(odds)
+            valid_simulations.append(sim)
+        else:
+            logging.warning(f"レース {race_id}: オッズデータ不足のため除外")
+
+    if not valid_simulations:
+        logging.error("有効なオッズデータを持つレースがありません。")
+        sys.exit(0)
+
+    # --- 3. 朝一の予算配分 (Daily Allocation) ---
+    from src.optimizer.daily_allocator import DailyAllocator
+    
+    allocator = DailyAllocator(config=optimization_config)
+    
+    # 1日の総予算 (args.W_0) を配分
+    # ※ここでは「朝一オッズ」として daily_odds (現状は確定オッズ) を使用
+    race_budgets = allocator.allocate_budget(
+        daily_simulations=valid_simulations,
+        daily_odds=daily_odds,
+        total_daily_budget=args.W_0
+    )
+
+    logging.info(f"予算配分結果: {json.dumps(race_budgets, indent=2, ensure_ascii=False)}")
+
+    # --- 4. レースごとの最適化実行 (Execution) ---
+    optimizer = PortfolioOptimizer(config=optimization_config)
+    
+    logging.info(f"{len(valid_simulations)} レースの最適化を実行します")
+    
+    for i, sim_result in enumerate(valid_simulations, 1):
+        race_id = sim_result['race_id']
+        allocated_budget = race_budgets.get(race_id, 0.0)
         
-        if not odds_data.get('win'):
-            logging.warning(f"レース {race_id} のオッズデータ（単勝）が不十分なためスキップします")
+        logging.info(f"--- レース {i}/{len(valid_simulations)} ({race_id}) ---")
+        logging.info(f"  配分予算: ¥{allocated_budget:,.0f}")
+
+        if allocated_budget < 100:
+            logging.info("  予算不足のためスキップ")
             continue
+
+        # 4.1 オッズデータのロード (本番ではここで「直前オッズ」を再取得する)
+        # 現状は daily_odds[i] と同じだが、構造上分けておく
+        current_odds = daily_odds[i-1] 
             
-        # 3.2 最適化実行
+        # 4.2 最適化実行
         try:
             allocation_result = optimizer.optimize(
                 simulation_results=sim_result,
-                odds_data=odds_data,
-                W_0=args.W_0
+                odds_data=current_odds,
+                W_0=allocated_budget # ★ここが変更点: 日次予算ではなく、配分されたレース予算を渡す
             )
             
-            # 3.3 発注（ログ）保存
+            # 4.3 発注（ログ）保存
             if allocation_result['total_investment'] > 0:
                 output_dir_str = paths.get('orders_path', 'data/orders')
                 optimizer.save_allocation(
@@ -240,7 +274,7 @@ def main():
                     print(f"    {bet['type']:<7} {selection_str:<6} ¥{bet['amount']:>6,.0f} (Odds:{bet['odds']:>5.1f}, EV:{bet['ev']:>4.2f})")
 
             else:
-                logging.info(f"レース {race_id}: 投資対象なし")
+                logging.info(f"レース {race_id}: 投資対象なし (条件不適合)")
                 
         except Exception as e:
             logging.error(f"レース {race_id} の最適化に失敗: {e}", exc_info=True)

@@ -7,3 +7,5 @@ class LocalPaths:
     # キャッシュログ
     MASTER_DIR = "keibaai/data/master"
     HORSE_CACHE_LOG_PATH = "keibaai/data/master/horse_cache_log.csv"
+    RACE_ID_CACHE_PATH = "keibaai/data/master/race_id_cache.json"
+    CALENDAR_CACHE_PATH = "keibaai/data/master/calendar_cache.json"

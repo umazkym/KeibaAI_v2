@@ -10,13 +10,13 @@ from scipy.stats import spearmanr
 from sklearn.metrics import mean_squared_error
 
 # プロジェクトルートをパスに追加
-project_root = Path(__file__).resolve().parent.parent.parent
+project_root = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.append(str(project_root))
 
 try:
-    from src.pipeline_core import setup_logging
-    from src.utils.data_utils import load_parquet_data_by_date
-    from src.models.model_train import MuEstimator
+    from keibaai.src.pipeline_core import setup_logging
+    from keibaai.src.utils.data_utils import load_parquet_data_by_date
+    from keibaai.src.modules.models.model_train import MuEstimator
 except ImportError as e:
     print(f"エラー: 必要なモジュールのインポートに失敗しました: {e}")
     sys.exit(1)
@@ -66,11 +66,12 @@ def main():
     end_dt = datetime.strptime(args.end_date, '%Y-%m-%d')
 
     # --- 1. モデルと特徴量リストのロード ---
-    model_path = Path(args.model_dir)
+    # --- 1. モデルと特徴量リストのロード ---
+    model_path = Path(args.model_dir) / 'mu_model.pkl'
     try:
-        estimator = MuEstimator({}) # configはloadで上書きされるので空でOK
-        estimator.load_model(model_path)
-        feature_names = estimator.feature_names
+        import joblib
+        estimator = joblib.load(model_path)
+        feature_names = estimator.feature_names_
         logging.info(f"{len(feature_names)}個の特徴量を持つモデルをロードしました")
     except FileNotFoundError:
         logging.error(f"モデルファイルが見つかりません: {model_path}")
@@ -84,33 +85,21 @@ def main():
         logging.error(f"期間 {args.start_date} - {args.end_date} の特徴量データが見つかりません。")
         sys.exit(1)
     
-    parsed_data_path = config['parsed_data_path']
-    races_parquet_path = Path(parsed_data_path) / 'parquet' / 'races' / 'races.parquet'
-    try:
-        races_df = pd.read_parquet(races_parquet_path)
-    except FileNotFoundError:
-        logging.error(f"レース結果ファイルが見つかりません: {races_parquet_path}")
-        sys.exit(1)
-
-    # 学習時と全く同じ前処理
-    merge_keys = ['race_id', 'horse_id']
-    for df in [features_df, races_df]:
-        for key in merge_keys:
-            if key in df.columns:
-                df[key] = df[key].astype(str).str.strip()
-    
-    if features_df.duplicated(subset=merge_keys).any():
-        features_df = features_df.drop_duplicates(subset=merge_keys, keep='first')
+    # features_dfにターゲットが含まれていることを前提とする
+    # train_full_pipeline.pyではfeatures_dfから直接学習しているため、ここでも同様にする
     
     target_cols = ['finish_position', 'finish_time_seconds']
-    races_subset_df = races_df[merge_keys + target_cols].copy()
-    merged_df = pd.merge(features_df, races_subset_df, on=merge_keys, how='inner')
+    missing_targets = [col for col in target_cols if col not in features_df.columns]
     
-    if merged_df.empty:
-        logging.error("マージの結果、データが0行になりました。")
+    if missing_targets:
+        logging.warning(f"特徴量データにターゲット列が含まれていません: {missing_targets}")
+        # もし含まれていない場合は、race_entries.parquetから結合する必要があるが、
+        # 現状のパイプラインではfeatures.parquetに含まれているはず。
+        # 万が一のため、race_entriesからの結合ロジックを入れることも検討できるが、
+        # まずはエラーにする。
         sys.exit(1)
 
-    final_df = merged_df.dropna(subset=target_cols + ['race_id']).copy()
+    final_df = features_df.dropna(subset=target_cols + ['race_id']).copy()
     if final_df.empty:
         logging.error("必須カラムの欠損値を除去した結果、評価データが0行になりました。")
         sys.exit(1)
@@ -122,71 +111,111 @@ def main():
 
     # --- 3. 予測の実行 ---
     try:
-        predictions = estimator.predict(final_df)
+        # モデルが使用する特徴量のみを渡す
+        X_eval = final_df[feature_names]
+        
+        logging.info(f"予測入力データ形状: {X_eval.shape}")
+        logging.info(f"モデル期待特徴量数 (Ranker): {estimator.ranker.n_features_}")
+        if hasattr(estimator.regressor, 'n_features_'):
+             logging.info(f"モデル期待特徴量数 (Regressor): {estimator.regressor.n_features_}")
+        
+        predictions = estimator.predict(X_eval)
         final_df['predicted_score'] = predictions
         logging.info("予測スコアの計算が完了しました。")
     except Exception as e:
         logging.error(f"予測の実行中にエラーが発生しました: {e}", exc_info=True)
         sys.exit(1)
 
-    # --- 4. 評価指標の計算 ---
+    # --- 4. 評価指標の計算と保存 ---
     logging.info("評価指標の計算を開始します...")
     
-    # 4.1 Regressor評価 (RMSE)
-    try:
-        pred_reg = estimator.model_regressor.predict(final_df[feature_names])
-        true_time = final_df['finish_time_seconds']
-        rmse = np.sqrt(mean_squared_error(true_time, pred_reg))
-        logging.info(f"[Regressor評価] タイム予測RMSE: {rmse:.4f} 秒")
-    except Exception as e:
-        logging.error(f"Regressor評価中にエラー: {e}")
-
-    # 4.2 Ranker単体評価 (Spearman's Rank Correlation)
-    try:
-        pred_ranker = estimator.model_ranker.predict(final_df[feature_names])
-        final_df['predicted_ranker_score'] = pred_ranker
+    daily_metrics = []
+    
+    # 日付ごとに集計
+    for date, date_df in final_df.groupby('race_date'):
+        metrics = {'date': date}
         
-        correlations_ranker = []
-        for race_id, group in final_df.groupby('race_id'):
-            if len(group) > 1:
-                corr, _ = spearmanr(group['predicted_ranker_score'], group['finish_position'])
-                if not np.isnan(corr):
-                    correlations_ranker.append(corr)
+        # 4.1 RMSE (Regressor)
+        if estimator.regressor is not None:
+            # pred_reg = estimator.regressor.predict(date_df[feature_names]) # これはエラーになる（rank_scoreがないため）
+            # 既に計算済みの predicted_score を使用する
+            pred_reg = date_df['predicted_score']
+            true_time = date_df['finish_time_seconds']
+            metrics['rmse'] = np.sqrt(mean_squared_error(true_time, pred_reg))
         
-        if correlations_ranker:
-            avg_corr_ranker = np.mean(correlations_ranker)
-            median_corr_ranker = np.median(correlations_ranker)
-            std_corr_ranker = np.std(correlations_ranker)
-            logging.info(f"[Ranker単体評価] スピアマン順位相関係数 (Rankerスコア vs 着順):")
-            logging.info(f"  - 平均: {avg_corr_ranker:.4f}")
-            logging.info(f"  - 中央値: {median_corr_ranker:.4f}")
-            logging.info(f"  - 標準偏差: {std_corr_ranker:.4f}")
-    except Exception as e:
-        logging.error(f"Ranker単体評価中にエラー: {e}")
-
-
-    # 4.3 総合スコア評価 (Spearman's Rank Correlation)
-    try:
+        # 4.2 Spearman Correlation, Hit Rate, ROI
         correlations = []
-        for race_id, group in final_df.groupby('race_id'):
-            if len(group) > 1:
-                corr, _ = spearmanr(group['predicted_score'], group['finish_position'])
+        hits = 0
+        races_count = 0
+        total_bet = 0
+        total_return = 0
+        
+        for race_id, race_df in date_df.groupby('race_id'):
+            if len(race_df) > 1:
+                # 相関係数
+                pred_score = race_df['predicted_score']
+                true_rank = race_df['finish_position']
+                corr, _ = spearmanr(pred_score, true_rank)
                 if not np.isnan(corr):
                     correlations.append(corr)
+                
+                # AI本命馬を特定 (予測タイムが最小 = 最速予想)
+                best_horse_idx = race_df['predicted_score'].idxmin()
+                best_horse_rank = race_df.loc[best_horse_idx, 'finish_position']
+                
+                # Hit Rate (3着以内に入ったか)
+                if best_horse_rank <= 3:
+                    hits += 1
+                
+                # ROI計算 (単勝100円ベット想定)
+                bet_amount = 100
+                total_bet += bet_amount
+                
+                # 勝利した場合のみ払い戻し
+                if best_horse_rank == 1:
+                    # relative_oddsがあれば使用、なければ推定オッズ
+                    if 'relative_odds' in race_df.columns:
+                        odds = race_df.loc[best_horse_idx, 'relative_odds']
+                        # relative_oddsは倍率なので、100円 × oddsが払い戻し
+                        # ただし、実際のオッズデータがない場合はデフォルト値を使う
+                        if pd.notna(odds) and odds > 0:
+                            payout = bet_amount * odds
+                        else:
+                            # オッズデータがない場合は平均的なオッズ（5倍）を仮定
+                            payout = bet_amount * 5.0
+                    else:
+                        # オッズ列がない場合は平均的なオッズを仮定
+                        payout = bet_amount * 5.0
+                    
+                    total_return += payout
+                
+                races_count += 1
         
-        if correlations:
-            avg_corr = np.mean(correlations)
-            median_corr = np.median(correlations)
-            std_corr = np.std(correlations)
-            logging.info(f"[総合スコア評価] スピアマン順位相関係数 (予測スコア vs 着順):")
-            logging.info(f"  - 平均: {avg_corr:.4f}")
-            logging.info(f"  - 中央値: {median_corr:.4f}")
-            logging.info(f"  - 標準偏差: {std_corr:.4f}")
-            logging.info("  (注: 予測スコアが高いほど良い順位と予測するため、この値が負に大きく振れるほど良いモデルです)")
-        else:
-            logging.warning("相関係数を計算できるレースがありませんでした。")
-    except Exception as e:
-        logging.error(f"総合スコア評価中にエラー: {e}")
+        metrics['spearman_corr'] = np.mean(correlations) if correlations else 0
+        metrics['hit_rate'] = hits / races_count if races_count > 0 else 0
+        metrics['race_count'] = races_count
+        
+        # 回収率 (Recovery Rate) = 払戻金 / 購入金額
+        metrics['recovery_rate'] = total_return / total_bet if total_bet > 0 else 0
+        metrics['total_bet'] = total_bet
+        metrics['total_return'] = total_return
+        
+        daily_metrics.append(metrics)
+        
+    # CSVに保存
+    eval_df = pd.DataFrame(daily_metrics)
+    output_dir = Path(config.get('data_path', 'data')) / 'evaluation'
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_dir / 'evaluation_results.csv'
+    
+    eval_df.to_csv(output_path, index=False)
+    logging.info(f"評価結果を保存しました: {output_path}")
+    
+    # 全体平均のログ出力
+    logging.info(f"全体平均 RMSE: {eval_df['rmse'].mean():.4f}")
+    logging.info(f"全体平均 Spearman Correlation: {eval_df['spearman_corr'].mean():.4f}")
+    logging.info(f"全体平均 Hit Rate: {eval_df['hit_rate'].mean():.2%}")
+    logging.info(f"全体平均 回収率 (Recovery Rate): {eval_df['recovery_rate'].mean():.2%}")
 
 
     logging.info("=" * 60)
