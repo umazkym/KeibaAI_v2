@@ -38,7 +38,7 @@ def main():
         config_path = project_root_path / args.config
         with open(config_path, 'r', encoding='utf-8') as f:
             config = yaml.safe_load(f)
-        
+
         data_path = project_root_path / config.get('data_path', 'data')
         for key, value in config.items():
             if isinstance(value, str):
@@ -66,7 +66,6 @@ def main():
     end_dt = datetime.strptime(args.end_date, '%Y-%m-%d')
 
     # --- 1. モデルと特徴量リストのロード ---
-    # --- 1. モデルと特徴量リストのロード ---
     model_path = Path(args.model_dir) / 'mu_model.pkl'
     try:
         import joblib
@@ -84,72 +83,136 @@ def main():
     if features_df.empty:
         logging.error(f"期間 {args.start_date} - {args.end_date} の特徴量データが見つかりません。")
         sys.exit(1)
-    
+
     # features_dfにターゲットが含まれていることを前提とする
-    # train_full_pipeline.pyではfeatures_dfから直接学習しているため、ここでも同様にする
-    
     target_cols = ['finish_position', 'finish_time_seconds']
     missing_targets = [col for col in target_cols if col not in features_df.columns]
-    
+
     if missing_targets:
         logging.warning(f"特徴量データにターゲット列が含まれていません: {missing_targets}")
-        # もし含まれていない場合は、race_entries.parquetから結合する必要があるが、
-        # 現状のパイプラインではfeatures.parquetに含まれているはず。
-        # 万が一のため、race_entriesからの結合ロジックを入れることも検討できるが、
-        # まずはエラーにする。
         sys.exit(1)
 
     final_df = features_df.dropna(subset=target_cols + ['race_id']).copy()
     if final_df.empty:
         logging.error("必須カラムの欠損値を除去した結果、評価データが0行になりました。")
         sys.exit(1)
-    
-    # horses_performanceからオッズデータをマージ
-    perf_path = Path(config.get('parsed_data_path', 'data/parsed')) / 'parquet' / 'horses_performance' / 'horses_performance.parquet'
-    if perf_path.exists():
-        logging.info("horses_performance.parquetからオッズデータを読み込んでいます...")
-        perf_df = pd.read_parquet(perf_path)
-        
-        # race_dateをdatetime型に変換
-        perf_df['race_date'] = pd.to_datetime(perf_df['race_date'])
-        
-        # 評価期間のデータのみを抽出
-        perf_df = perf_df[(perf_df['race_date'] >= start_dt) & (perf_df['race_date'] <= end_dt)]
-        
-        # race_id, horse_idを文字列として統一
-        perf_df['race_id'] = perf_df['race_id'].astype(str).str.strip()
-        if 'horse_id' in perf_df.columns:
-            perf_df['horse_id'] = perf_df['horse_id'].astype(str).str.strip()
-        
-        final_df['race_id'] = final_df['race_id'].astype(str).str.strip()
-        if 'horse_id' in final_df.columns:
-            final_df['horse_id'] = final_df['horse_id'].astype(str).str.strip()
-        
-        # オッズデータをマージ
-        odds_df = perf_df[['race_id', 'horse_id', 'win_odds']].copy()
-        final_df = pd.merge(final_df, odds_df, on=['race_id', 'horse_id'], how='left')
-        
-        odds_available = final_df['win_odds'].notna().sum()
-        logging.info(f"  オッズデータマージ完了: {odds_available:,}/{len(final_df):,}行でオッズ取得 ({odds_available/len(final_df)*100:.1f}%)")
-    else:
-        logging.warning(f"horses_performance.parquetが見つかりません: {perf_path}")
-        final_df['win_odds'] = None
-    
+
     for col in feature_names:
         if col in final_df.columns:
             final_df[col] = pd.to_numeric(final_df[col], errors='coerce').fillna(0)
     logging.info(f"評価用データの準備完了: {len(final_df)}行")
 
+    # --- 2.5. horses_performanceからオッズデータをマージ ---
+    logging.info("horses_performance.parquetからオッズデータを読み込んでいます...")
+
+    # パスの優先順位: parsed_parquet_path > parsed_data_path/parquet > data_path/parsed/parquet
+    perf_path = None
+    if 'parsed_parquet_path' in config:
+        perf_path = Path(config['parsed_parquet_path']) / 'horses_performance' / 'horses_performance.parquet'
+    elif 'parsed_data_path' in config:
+        perf_path = Path(config['parsed_data_path']) / 'parquet' / 'horses_performance' / 'horses_performance.parquet'
+    else:
+        perf_path = Path(config.get('data_path', 'data')) / 'parsed' / 'parquet' / 'horses_performance' / 'horses_performance.parquet'
+
+    if perf_path.exists():
+        try:
+            perf_df = pd.read_parquet(perf_path)
+            logging.info(f"horses_performance.parquet読み込み完了: {len(perf_df):,}行")
+
+            # race_dateをdatetime型に変換（フィルタリング用）
+            if 'race_date' in perf_df.columns:
+                perf_df['race_date'] = pd.to_datetime(perf_df['race_date'])
+                # 評価期間のデータのみを抽出（メモリ効率化）
+                before_filter = len(perf_df)
+                perf_df = perf_df[(perf_df['race_date'] >= start_dt) & (perf_df['race_date'] <= end_dt)]
+                logging.info(f"評価期間でフィルタリング: {before_filter:,}行 → {len(perf_df):,}行")
+
+            # キーとなるカラムを文字列型に統一
+            final_df['race_id'] = final_df['race_id'].astype(str).str.strip()
+            if 'horse_id' in final_df.columns:
+                final_df['horse_id'] = final_df['horse_id'].astype(str).str.strip()
+
+            perf_df['race_id'] = perf_df['race_id'].astype(str).str.strip()
+            if 'horse_id' in perf_df.columns:
+                perf_df['horse_id'] = perf_df['horse_id'].astype(str).str.strip()
+
+            # win_oddsカラムのみを取得してマージ
+            logging.info(f"perf_dfのカラム: {list(perf_df.columns)[:10]}... (全{len(perf_df.columns)}個)")
+
+            # マージ前にfinal_dfから既存のwin_oddsカラムを削除（もし存在すれば）
+            if 'win_odds' in final_df.columns:
+                logging.info("final_dfに既存のwin_oddsカラムが存在します。削除してから再マージします。")
+                final_df = final_df.drop(columns=['win_odds'])
+
+            if 'win_odds' in perf_df.columns:
+                logging.info(f"win_oddsカラム発見: 非null数={perf_df['win_odds'].notna().sum():,}/{len(perf_df):,}")
+                odds_df = perf_df[['race_id', 'horse_id', 'win_odds']].copy()
+
+                # マージ前の行数を記録
+                rows_before = len(final_df)
+
+                # 左外部結合でオッズデータをマージ
+                final_df = final_df.merge(
+                    odds_df,
+                    on=['race_id', 'horse_id'],
+                    how='left'
+                )
+
+                # マージ成功確認
+                if 'win_odds' in final_df.columns:
+                    odds_available = final_df['win_odds'].notna().sum()
+                    logging.info(f"オッズデータのマージ完了: {odds_available}/{len(final_df)}行 ({odds_available/len(final_df)*100:.1f}%) でオッズ取得")
+
+                    if rows_before != len(final_df):
+                        logging.warning(f"マージ後に行数が変化しました: {rows_before} → {len(final_df)}")
+                else:
+                    logging.warning("マージ後にwin_oddsカラムが見つかりません")
+                    final_df['win_odds'] = pd.NA
+            else:
+                logging.warning("horses_performance.parquetにwin_oddsカラムが存在しません")
+                final_df['win_odds'] = pd.NA
+
+        except Exception as e:
+            logging.error(f"オッズデータの読み込みに失敗しました: {e}", exc_info=True)
+            logging.warning("オッズデータなしで評価を続行します")
+            final_df['win_odds'] = pd.NA
+    else:
+        logging.warning(f"horses_performance.parquetが見つかりません: {perf_path}")
+        logging.warning("オッズデータなしで評価を続行します")
+        final_df['win_odds'] = pd.NA
+
     # --- 3. 予測の実行 ---
     try:
-        # モデルが使用する特徴量のみを渡す
-        X_eval = final_df[feature_names]
-        
+        # モデルが期待する特徴量を確認
+        expected_features = estimator.ranker.n_features_
+        logging.info(f"モデルが期待する特徴量数: {expected_features}")
+        logging.info(f"モデルの特徴量リスト: {len(feature_names)}個")
+
+        # win_oddsがモデルの特徴量に含まれているか確認
+        if 'win_odds' in feature_names:
+            logging.warning("⚠️ win_oddsがモデルの特徴量に含まれています（データリークの可能性）")
+            logging.info("win_oddsをそのまま使用して予測を実行します（評価用）")
+            # モデルがwin_oddsを期待している場合は、そのまま使用
+            eval_feature_names = feature_names
+        else:
+            logging.info("✓ モデルの特徴量にwin_oddsは含まれていません（正常）")
+            eval_feature_names = feature_names
+
+        # 特徴量の存在確認
+        missing_features = [f for f in eval_feature_names if f not in final_df.columns]
+        if missing_features:
+            logging.error(f"必要な特徴量が見つかりません ({len(missing_features)}個): {missing_features[:10]}...")
+            logging.error("不足している特徴量をNaNで埋めて続行します")
+            for feat in missing_features:
+                final_df[feat] = 0
+
+        X_eval = final_df[eval_feature_names]
+
         logging.info(f"予測入力データ形状: {X_eval.shape}")
         logging.info(f"モデル期待特徴量数 (Ranker): {estimator.ranker.n_features_}")
         if hasattr(estimator.regressor, 'n_features_'):
              logging.info(f"モデル期待特徴量数 (Regressor): {estimator.regressor.n_features_}")
-        
+
         predictions = estimator.predict(X_eval)
         final_df['predicted_score'] = predictions
         logging.info("予測スコアの計算が完了しました。")
@@ -159,28 +222,26 @@ def main():
 
     # --- 4. 評価指標の計算と保存 ---
     logging.info("評価指標の計算を開始します...")
-    
+
     daily_metrics = []
-    
+
     # 日付ごとに集計
     for date, date_df in final_df.groupby('race_date'):
         metrics = {'date': date}
-        
+
         # 4.1 RMSE (Regressor)
         if estimator.regressor is not None:
-            # pred_reg = estimator.regressor.predict(date_df[feature_names]) # これはエラーになる（rank_scoreがないため）
-            # 既に計算済みの predicted_score を使用する
             pred_reg = date_df['predicted_score']
             true_time = date_df['finish_time_seconds']
             metrics['rmse'] = np.sqrt(mean_squared_error(true_time, pred_reg))
-        
+
         # 4.2 Spearman Correlation, Hit Rate, ROI
         correlations = []
         hits = 0
         races_count = 0
         total_bet = 0
         total_return = 0
-        
+
         for race_id, race_df in date_df.groupby('race_id'):
             if len(race_df) > 1:
                 # 相関係数
@@ -189,19 +250,19 @@ def main():
                 corr, _ = spearmanr(pred_score, true_rank)
                 if not np.isnan(corr):
                     correlations.append(corr)
-                
+
                 # AI本命馬を特定 (予測タイムが最小 = 最速予想)
                 best_horse_idx = race_df['predicted_score'].idxmin()
                 best_horse_rank = race_df.loc[best_horse_idx, 'finish_position']
-                
+
                 # Hit Rate (3着以内に入ったか)
                 if best_horse_rank <= 3:
                     hits += 1
-                
+
                 # ROI計算 (単勝100円ベット想定)
                 bet_amount = 100
                 total_bet += bet_amount
-                
+
                 # 勝利した場合のみ払い戻し（実オッズを使用）
                 if best_horse_rank == 1:
                     # win_oddsを使用（horses_performanceから取得した実オッズ）
@@ -211,35 +272,34 @@ def main():
                             payout = bet_amount * odds
                             total_return += payout
                         # オッズがない場合は払い戻しなし（ベットしたが回収できず）
-                
+
                 races_count += 1
-        
+
         metrics['spearman_corr'] = np.mean(correlations) if correlations else 0
         metrics['hit_rate'] = hits / races_count if races_count > 0 else 0
         metrics['race_count'] = races_count
-        
+
         # 回収率 (Recovery Rate) = 払戻金 / 購入金額
         metrics['recovery_rate'] = total_return / total_bet if total_bet > 0 else 0
         metrics['total_bet'] = total_bet
         metrics['total_return'] = total_return
-        
+
         daily_metrics.append(metrics)
-        
+
     # CSVに保存
     eval_df = pd.DataFrame(daily_metrics)
     output_dir = Path(config.get('data_path', 'data')) / 'evaluation'
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / 'evaluation_results.csv'
-    
+
     eval_df.to_csv(output_path, index=False)
     logging.info(f"評価結果を保存しました: {output_path}")
-    
+
     # 全体平均のログ出力
     logging.info(f"全体平均 RMSE: {eval_df['rmse'].mean():.4f}")
     logging.info(f"全体平均 Spearman Correlation: {eval_df['spearman_corr'].mean():.4f}")
     logging.info(f"全体平均 Hit Rate: {eval_df['hit_rate'].mean():.2%}")
     logging.info(f"全体平均 回収率 (Recovery Rate): {eval_df['recovery_rate'].mean():.2%}")
-
 
     logging.info("=" * 60)
     logging.info("Keiba AI μモデル評価パイプライン完了")
