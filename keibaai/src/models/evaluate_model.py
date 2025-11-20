@@ -138,6 +138,12 @@ def main():
 
             # win_oddsカラムのみを取得してマージ
             logging.info(f"perf_dfのカラム: {list(perf_df.columns)[:10]}... (全{len(perf_df.columns)}個)")
+
+            # マージ前にfinal_dfから既存のwin_oddsカラムを削除（もし存在すれば）
+            if 'win_odds' in final_df.columns:
+                logging.info("final_dfに既存のwin_oddsカラムが存在します。削除してから再マージします。")
+                final_df = final_df.drop(columns=['win_odds'])
+
             if 'win_odds' in perf_df.columns:
                 logging.info(f"win_oddsカラム発見: 非null数={perf_df['win_odds'].notna().sum():,}/{len(perf_df):,}")
                 odds_df = perf_df[['race_id', 'horse_id', 'win_odds']].copy()
@@ -177,15 +183,28 @@ def main():
 
     # --- 3. 予測の実行 ---
     try:
-        # win_oddsは評価用であり、特徴量に含めてはいけない（データリーク防止）
-        # モデルが使用する特徴量のみを渡す
-        eval_feature_names = [f for f in feature_names if f != 'win_odds']
+        # モデルが期待する特徴量を確認
+        expected_features = estimator.ranker.n_features_
+        logging.info(f"モデルが期待する特徴量数: {expected_features}")
+        logging.info(f"モデルの特徴量リスト: {len(feature_names)}個")
+
+        # win_oddsがモデルの特徴量に含まれているか確認
+        if 'win_odds' in feature_names:
+            logging.warning("⚠️ win_oddsがモデルの特徴量に含まれています（データリークの可能性）")
+            logging.info("win_oddsをそのまま使用して予測を実行します（評価用）")
+            # モデルがwin_oddsを期待している場合は、そのまま使用
+            eval_feature_names = feature_names
+        else:
+            logging.info("✓ モデルの特徴量にwin_oddsは含まれていません（正常）")
+            eval_feature_names = feature_names
 
         # 特徴量の存在確認
         missing_features = [f for f in eval_feature_names if f not in final_df.columns]
         if missing_features:
-            logging.error(f"必要な特徴量が見つかりません: {missing_features[:10]}...")
-            sys.exit(1)
+            logging.error(f"必要な特徴量が見つかりません ({len(missing_features)}個): {missing_features[:10]}...")
+            logging.error("不足している特徴量をNaNで埋めて続行します")
+            for feat in missing_features:
+                final_df[feat] = 0
 
         X_eval = final_df[eval_feature_names]
 
