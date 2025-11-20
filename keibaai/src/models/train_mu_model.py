@@ -143,8 +143,14 @@ def main():
         logging.warning(f"特徴量データに重複 ({features_df.duplicated(subset=merge_keys).sum()}行) が見つかりました。重複を排除します。")
         features_df = features_df.drop_duplicates(subset=merge_keys, keep='first')
     
-    # 2.5. データのマージ
+    # 2.4.5 特徴量データに含まれるターゲットカラムを削除 (マージ時の衝突回避)
     target_cols = ['finish_position', 'finish_time_seconds']
+    cols_to_drop = [c for c in target_cols if c in features_df.columns]
+    if cols_to_drop:
+        logging.warning(f"特徴量データにターゲットカラムが含まれています。マージ衝突を避けるため削除します: {cols_to_drop}")
+        features_df = features_df.drop(columns=cols_to_drop)
+
+    # 2.5. データのマージ
     races_subset_df = races_df[merge_keys + target_cols].copy()
     merged_df = pd.merge(features_df, races_subset_df, on=merge_keys, how='inner')
     logging.info(f"特徴量とレース結果をマージしました。結果: {len(merged_df)}行")
@@ -167,6 +173,17 @@ def main():
     estimator = MuEstimator(mu_model_config)
     
     try:
+        # 特徴量リストに含まれるがデータフレームに存在しないカラムを確認
+        missing_features = [col for col in feature_names if col not in final_df.columns]
+        if missing_features:
+            logging.warning(f"以下の特徴量がデータフレームに見つかりません。学習から除外します: {len(missing_features)}個")
+            logging.debug(f"欠損特徴量: {missing_features}")
+            feature_names = [col for col in feature_names if col in final_df.columns]
+
+        if not feature_names:
+            logging.error("学習に使用できる特徴量がありません。")
+            sys.exit(1)
+
         # 学習に使う特徴量カラムの欠損値を0で埋める
         for col in feature_names:
             if col in final_df.columns and final_df[col].dtype == 'object':

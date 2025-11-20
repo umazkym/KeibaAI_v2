@@ -128,57 +128,87 @@ def load_parquet_data_by_date(
 ) -> pd.DataFrame:
     """
     指定された日付範囲に基づいてパーティション化されたParquetデータをロードする。
-    rglobを使用して安定性を重視。
+    PyArrow Dataset APIを使用してメモリ効率よくフィルタリングを行う。
     """
     if not base_dir.exists():
         logging.warning(f"ディレクトリが見つかりません: {base_dir}")
         return pd.DataFrame()
 
     try:
-        all_dfs = []
+        # 1. 対象のParquetファイルを検索
         target_files = list(base_dir.rglob("*.parquet"))
-        
         if not target_files:
             logging.warning(f"Parquetファイルが見つかりません: {base_dir}")
             return pd.DataFrame()
             
-        for parquet_file in target_files:
-            try:
-                df = pd.read_parquet(parquet_file)
-                all_dfs.append(df)
-            except Exception as read_e:
-                logging.warning(f"Parquetファイルの読み込み失敗 ({parquet_file}): {read_e}")
-
-        if not all_dfs:
-            return pd.DataFrame()
-
-        combined_df = pd.concat(all_dfs, ignore_index=True)
-        logging.info(f"読み込み成功: {len(combined_df)}行 from {len(target_files)} files")
-
-        # 日付フィルタリング
-        if start_dt is None and end_dt is None:
-            return combined_df
-
-        if date_col not in combined_df.columns:
-            logging.warning(f"日付カラム '{date_col}' がDataFrameに存在しません。フィルタリングをスキップします。")
-            return combined_df
-
-        # タイムゾーン情報を除去して比較
-        combined_df[date_col] = pd.to_datetime(combined_df[date_col]).dt.tz_localize(None)
-
-        mask = True
-        if start_dt:
-            mask &= (combined_df[date_col] >= start_dt)
-        if end_dt:
-            mask &= (combined_df[date_col] <= end_dt)
+        # 2. PyArrow Datasetとして読み込む (ファイルリストを渡す)
+        # partitioning="hive" を指定することで、パス内の key=value をパーティションとして認識させる
+        dataset = ds.dataset(target_files, format="parquet", partitioning="hive")
         
-        filtered_df = combined_df[mask].copy()
+        # フィルタ式の構築
+        filter_expr = None
         
-        if filtered_df.empty:
-            logging.warning(f"指定期間のデータが見つかりませんでした: {start_dt} - {end_dt}")
+        if start_dt or end_dt:
+            # 日付カラムの型を確認するためにスキーマを取得
+            schema = dataset.schema
+            if date_col not in schema.names:
+                # 日付カラムがない場合はフィルタリングせずに警告
+                logging.warning(f"日付カラム '{date_col}' がスキーマに存在しません。フィルタリングなしでロードします。")
+            else:
+                field_type = schema.field(date_col).type
+                
+                # Timestamp型の場合のみPyArrowでフィルタリング (高速・省メモリ)
+                if pa.types.is_timestamp(field_type) or pa.types.is_date(field_type):
+                    field = ds.field(date_col)
+                    
+                    if start_dt:
+                        # タイムゾーンなしに変換
+                        s_dt = start_dt.replace(tzinfo=None)
+                        filter_expr = (field >= s_dt)
+                    
+                    if end_dt:
+                        e_dt = end_dt.replace(tzinfo=None)
+                        if filter_expr is not None:
+                            filter_expr &= (field <= e_dt)
+                        else:
+                            filter_expr = (field <= e_dt)
+                else:
+                    # 文字列などの場合はPyArrowでの比較が難しいため、Pandasロード後にフィルタリングする
+                    # (features.parquetはTimestamp型なので、メモリ問題は回避できるはず)
+                    logging.info(f"カラム '{date_col}' はTimestamp型ではありません ({field_type})。Pandasロード後にフィルタリングします。")
 
-        return filtered_df
+        # データをロード (フィルタ適用)
+        if filter_expr is not None:
+            table = dataset.to_table(filter=filter_expr)
+        else:
+            table = dataset.to_table()
+            
+        df = table.to_pandas()
+        
+        # PyArrowでフィルタできなかった場合 (文字列型など) のために、Pandasで再度フィルタリング
+        # (PyArrowでフィルタ済みの場合も、念のため実行してもコストは低い)
+        if not df.empty and (start_dt or end_dt) and date_col in df.columns:
+             # 型変換してフィルタ
+             # 既にTimestampなら高速、文字列なら変換される
+             temp_dates = pd.to_datetime(df[date_col], errors='coerce').dt.tz_localize(None)
+             
+             mask = True
+             if start_dt:
+                 mask &= (temp_dates >= start_dt.replace(tzinfo=None))
+             if end_dt:
+                 mask &= (temp_dates <= end_dt.replace(tzinfo=None))
+                 
+             df = df[mask].copy()
+        
+        logging.info(f"読み込み成功: {len(df)}行")
+        
+        if df.empty and (start_dt or end_dt):
+             logging.warning(f"指定期間のデータが見つかりませんでした: {start_dt} - {end_dt}")
+
+        return df
 
     except Exception as e:
         logging.error(f"Parquetデータのロード中に予期せぬエラーが発生しました: {e}", exc_info=True)
+        # フォールバック: 従来の方法 (ただしメモリ不足のリスクあり)
+        # ここではエラーを返して終了する方が安全
         return pd.DataFrame()

@@ -1,90 +1,86 @@
-# configs/models.yaml
-
-# モデル学習全般の設定
-training:
-  # 学習に使用する特徴量のバージョン
-  feature_version: "v1.0"
-  
-  # 学習対象期間
-  train_period:
-    start: "2018-01-01"
-    end: "2023-12-31"
-    
-  # 検証期間
-  validation_period:
-    start: "2024-01-01"
-    end: "2024-12-31"
-
-  # 乱数シード
-  random_seed: 42
-
-# モデルごとの設定
-models:
-  # LightGBMによる平均順位予測モデル
-  lgbm_ranker:
-    model_type: "ranker"
-    objective: "lambdarank"
-    metric: "ndcg"
-    
-    # ハイパーパラメータ
-    hyperparameters:
-      boosting_type: "gbdt"
-      n_estimators: 2000
-      learning_rate: 0.01
-      num_leaves: 31
-      max_depth: -1
-      reg_alpha: 0.1
-      reg_lambda: 0.1
-      colsample_bytree: 0.8
-      subsample: 0.8
-      
-    # 学習時のコールバック
-    callbacks:
-      - type: "early_stopping"
-        patience: 100
-        verbose: true
-
-  # LightGBMによる確率的回帰モデル（例: タイム予測）
-  lgbm_regressor_time:
-    model_type: "regressor"
-    objective: "regression_l1"
-    metric: "mae"
-
-    hyperparameters:
-      boosting_type: "gbdt"
-      n_estimators: 1000
-      learning_rate: 0.05
-      num_leaves: 64
-
-  # μ（馬の基礎能力）推定モデル
-  mu_estimator:
-    regressor_params:
-      objective: 'regression'
-      metric: 'mae'
-      boosting_type: 'gbdt'
-      n_estimators: 1000
-      learning_rate: 0.05
-      num_leaves: 64
-      max_depth: -1
-      reg_alpha: 0.1
-      reg_lambda: 0.1
-      colsample_bytree: 0.8
-      subsample: 0.8
-
-    ranker_params:
-      objective: 'lambdarank'
-      metric: 'ndcg'
-      boosting_type: 'gbdt'
-      n_estimators: 2000
-      learning_rate: 0.01
-      num_leaves: 31
-      max_depth: -1
-      reg_alpha: 0.1
-      reg_lambda: 0.1
-      colsample_bytree: 0.8
-      subsample: 0.8
-
-# 確率キャリブレーションの設定
 calibration:
-  method: "isotonic" # or "platt" (temperature scaling)
   cv_folds: 5
+  method: isotonic
+models:
+  lgbm_ranker:
+    callbacks:
+    - patience: 100
+      type: early_stopping
+      verbose: true
+    hyperparameters:
+      boosting_type: gbdt
+      colsample_bytree: 0.8
+      learning_rate: 0.01
+      max_depth: -1
+      n_estimators: 2000
+      num_leaves: 31
+      reg_alpha: 0.1
+      reg_lambda: 0.1
+      subsample: 0.8
+    metric: ndcg
+    model_type: ranker
+    objective: lambdarank
+  lgbm_regressor_time:
+    hyperparameters:
+      boosting_type: gbdt
+      learning_rate: 0.05
+      n_estimators: 1000
+      num_leaves: 64
+    metric: mae
+    model_type: regressor
+    objective: regression_l1
+  mu_estimator:
+    ranker_params:
+      boosting_type: gbdt
+      colsample_bytree: 0.8
+      learning_rate: 0.01
+      max_depth: -1
+      metric: ndcg
+      n_estimators: 2000
+      num_leaves: 31
+      objective: lambdarank
+      reg_alpha: 0.1
+      reg_lambda: 0.1
+      subsample: 0.8
+    regressor_params:
+      boosting_type: gbdt
+      colsample_bytree: 0.8
+      learning_rate: 0.05
+      max_depth: -1
+      metric: mae
+      n_estimators: 1000
+      num_leaves: 64
+      objective: regression
+      reg_alpha: 0.1
+      reg_lambda: 0.1
+      subsample: 0.8
+mu_estimator:
+  ranker_params:
+    colsample_bytree: 0.7866473356493093
+    learning_rate: 0.05151103155714929
+    max_depth: 9
+    metric: ndcg
+    min_child_samples: 93
+    n_estimators: 3316
+    num_leaves: 235
+    objective: lambdarank
+    subsample: 0.6749548457535717
+  regressor_params:
+    colsample_bytree: 0.7866473356493093
+    learning_rate: 0.05151103155714929
+    max_depth: 9
+    min_child_samples: 93
+    n_estimators: 3316
+    num_leaves: 235
+    reg_alpha: 6.4430105415388095e-06
+    reg_lambda: 4.093394476955171e-06
+    subsample: 0.6749548457535717
+training:
+  feature_version: v1.0
+  random_seed: 42
+  train_period:
+    end: '2023-12-31'
+    start: '2018-01-01'
+  validation_period:
+    end: '2024-12-31'
+    start: '2024-01-01'
