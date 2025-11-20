@@ -60,13 +60,21 @@ class AdvancedFeatureEngine:
         """コース適性特徴量の生成"""
         
         # 競馬場別成績
-        venue_stats = performance_df.groupby(['horse_id', 'place']).agg({
-            'finish_position': ['mean', 'count'],
-            'win_odds': 'mean'
-        }).reset_index()
-        
-        venue_stats.columns = ['horse_id', 'place', 'venue_avg_finish', 
-                              'venue_races', 'venue_avg_odds']
+        # Note: morning_oddsを使用（win_oddsはデータリークを引き起こす）
+        agg_dict = {
+            'finish_position': ['mean', 'count']
+        }
+        if 'morning_odds' in performance_df.columns:
+            agg_dict['morning_odds'] = 'mean'
+
+        venue_stats = performance_df.groupby(['horse_id', 'place']).agg(agg_dict).reset_index()
+
+        if 'morning_odds' in performance_df.columns:
+            venue_stats.columns = ['horse_id', 'place', 'venue_avg_finish',
+                                  'venue_races', 'venue_avg_odds']
+        else:
+            venue_stats.columns = ['horse_id', 'place', 'venue_avg_finish',
+                                  'venue_races']
         
         # 距離別成績
         performance_df['distance_category'] = pd.cut(
@@ -107,14 +115,22 @@ class AdvancedFeatureEngine:
         """騎手・調教師の相性特徴量"""
         
         # 騎手×調教師のコンビ成績
-        combo_stats = historical_df.groupby(['jockey_id', 'trainer_id']).agg({
+        # Note: morning_oddsを使用（win_oddsはデータリークを引き起こす）
+        agg_dict = {
             'finish_position': ['mean', 'count'],
-            'win_odds': 'mean',
             'popularity': 'mean'
-        }).reset_index()
-        
-        combo_stats.columns = ['jockey_id', 'trainer_id', 'combo_avg_finish',
-                              'combo_races', 'combo_avg_odds', 'combo_avg_popularity']
+        }
+        if 'morning_odds' in historical_df.columns:
+            agg_dict['morning_odds'] = 'mean'
+
+        combo_stats = historical_df.groupby(['jockey_id', 'trainer_id']).agg(agg_dict).reset_index()
+
+        if 'morning_odds' in historical_df.columns:
+            combo_stats.columns = ['jockey_id', 'trainer_id', 'combo_avg_finish',
+                                  'combo_races', 'combo_avg_odds', 'combo_avg_popularity']
+        else:
+            combo_stats.columns = ['jockey_id', 'trainer_id', 'combo_avg_finish',
+                                  'combo_races', 'combo_avg_popularity']
         
         # 期待値を上回る度合い
         combo_stats['combo_overperform'] = \
@@ -133,17 +149,27 @@ class AdvancedFeatureEngine:
         """血統特徴量の生成"""
         
         # 父系の成績集計
-        sire_stats = performance_df.merge(
+        # Note: morning_oddsを使用（win_oddsはデータリークを引き起こす）
+        perf_with_sire = performance_df.merge(
             pedigree_df[pedigree_df['generation'] == 1][['horse_id', 'ancestor_id']],
             on='horse_id'
-        ).groupby('ancestor_id').agg({
+        )
+
+        agg_dict = {
             'finish_position': ['mean', 'std'],
-            'distance_m': 'mean',
-            'win_odds': 'mean'
-        }).reset_index()
-        
-        sire_stats.columns = ['sire_id', 'sire_avg_finish', 'sire_std_finish',
-                             'sire_avg_distance', 'sire_avg_odds']
+            'distance_m': 'mean'
+        }
+        if 'morning_odds' in perf_with_sire.columns:
+            agg_dict['morning_odds'] = 'mean'
+
+        sire_stats = perf_with_sire.groupby('ancestor_id').agg(agg_dict).reset_index()
+
+        if 'morning_odds' in perf_with_sire.columns:
+            sire_stats.columns = ['sire_id', 'sire_avg_finish', 'sire_std_finish',
+                                 'sire_avg_distance', 'sire_avg_odds']
+        else:
+            sire_stats.columns = ['sire_id', 'sire_avg_finish', 'sire_std_finish',
+                                 'sire_avg_distance']
         
         df = df.merge(sire_stats, left_on='sire_id', right_on='sire_id', how='left')
         
@@ -213,11 +239,19 @@ class AdvancedFeatureEngine:
         perf_ped = performance_df.merge(horse_pedigree, on='horse_id', how='inner')
         
         # ニックスごとの成績集計
-        nicks_stats = perf_ped.groupby(['sire_id', 'damsire_id']).agg({
-            'finish_position': ['mean', 'count', 'std'],
-            'win_odds': 'mean'
-        }).reset_index()
-        nicks_stats.columns = ['sire_id', 'damsire_id', 'nicks_avg_finish', 'nicks_count', 'nicks_std_finish', 'nicks_avg_odds']
+        # Note: morning_oddsを使用（win_oddsはデータリークを引き起こす）
+        agg_dict = {
+            'finish_position': ['mean', 'count', 'std']
+        }
+        if 'morning_odds' in perf_ped.columns:
+            agg_dict['morning_odds'] = 'mean'
+
+        nicks_stats = perf_ped.groupby(['sire_id', 'damsire_id']).agg(agg_dict).reset_index()
+
+        if 'morning_odds' in perf_ped.columns:
+            nicks_stats.columns = ['sire_id', 'damsire_id', 'nicks_avg_finish', 'nicks_count', 'nicks_std_finish', 'nicks_avg_odds']
+        else:
+            nicks_stats.columns = ['sire_id', 'damsire_id', 'nicks_avg_finish', 'nicks_count', 'nicks_std_finish']
         
         # 信頼度のため、ある程度の出走数があるもののみ採用
         nicks_stats = nicks_stats[nicks_stats['nicks_count'] >= 5]
@@ -237,11 +271,17 @@ class AdvancedFeatureEngine:
             labels=['sprint', 'mile', 'intermediate', 'long', 'extreme_long']
         )
         
-        sire_course_stats = perf_ped.groupby(['sire_id', 'place', 'distance_category', 'track_surface']).agg({
-            'finish_position': 'mean',
-            'win_odds': 'mean'
-        }).reset_index()
-        sire_course_stats.columns = ['sire_id', 'place', 'distance_category', 'track_surface', 'sire_course_avg_finish', 'sire_course_avg_odds']
+        # Note: morning_oddsを使用（win_oddsはデータリークを引き起こす）
+        agg_dict = {'finish_position': 'mean'}
+        if 'morning_odds' in perf_ped.columns:
+            agg_dict['morning_odds'] = 'mean'
+
+        sire_course_stats = perf_ped.groupby(['sire_id', 'place', 'distance_category', 'track_surface']).agg(agg_dict).reset_index()
+
+        if 'morning_odds' in perf_ped.columns:
+            sire_course_stats.columns = ['sire_id', 'place', 'distance_category', 'track_surface', 'sire_course_avg_finish', 'sire_course_avg_odds']
+        else:
+            sire_course_stats.columns = ['sire_id', 'place', 'distance_category', 'track_surface', 'sire_course_avg_finish']
         
         # メインデータフレームに結合
         # dfにdistance_categoryなどが必要
@@ -344,7 +384,13 @@ class AdvancedFeatureEngine:
                     race_df['last_3f_time'] - min_last3f
             
             # 3. オッズの順位
-            if 'win_odds' in df.columns:
+            # Note: morning_oddsを使用（win_oddsはデータリークを引き起こす）
+            if 'morning_odds' in df.columns:
+                df.loc[race_indices, 'odds_rank'] = \
+                    race_df['morning_odds'].rank(method='min')
+            elif 'win_odds' in df.columns:
+                # フォールバック（警告を出すべき）
+                self.logger.warning("win_oddsを使用しています。morning_oddsの使用を推奨します（データリーク防止）")
                 df.loc[race_indices, 'odds_rank'] = \
                     race_df['win_odds'].rank(method='min')
             
