@@ -117,12 +117,15 @@ def main():
     if perf_path.exists():
         try:
             perf_df = pd.read_parquet(perf_path)
+            logging.info(f"horses_performance.parquet読み込み完了: {len(perf_df):,}行")
 
             # race_dateをdatetime型に変換（フィルタリング用）
             if 'race_date' in perf_df.columns:
                 perf_df['race_date'] = pd.to_datetime(perf_df['race_date'])
                 # 評価期間のデータのみを抽出（メモリ効率化）
+                before_filter = len(perf_df)
                 perf_df = perf_df[(perf_df['race_date'] >= start_dt) & (perf_df['race_date'] <= end_dt)]
+                logging.info(f"評価期間でフィルタリング: {before_filter:,}行 → {len(perf_df):,}行")
 
             # キーとなるカラムを文字列型に統一
             final_df['race_id'] = final_df['race_id'].astype(str).str.strip()
@@ -134,7 +137,9 @@ def main():
                 perf_df['horse_id'] = perf_df['horse_id'].astype(str).str.strip()
 
             # win_oddsカラムのみを取得してマージ
+            logging.info(f"perf_dfのカラム: {list(perf_df.columns)[:10]}... (全{len(perf_df.columns)}個)")
             if 'win_odds' in perf_df.columns:
+                logging.info(f"win_oddsカラム発見: 非null数={perf_df['win_odds'].notna().sum():,}/{len(perf_df):,}")
                 odds_df = perf_df[['race_id', 'horse_id', 'win_odds']].copy()
 
                 # マージ前の行数を記録
@@ -147,11 +152,16 @@ def main():
                     how='left'
                 )
 
-                odds_available = final_df['win_odds'].notna().sum()
-                logging.info(f"オッズデータのマージ完了: {odds_available}/{len(final_df)}行 ({odds_available/len(final_df)*100:.1f}%) でオッズ取得")
+                # マージ成功確認
+                if 'win_odds' in final_df.columns:
+                    odds_available = final_df['win_odds'].notna().sum()
+                    logging.info(f"オッズデータのマージ完了: {odds_available}/{len(final_df)}行 ({odds_available/len(final_df)*100:.1f}%) でオッズ取得")
 
-                if rows_before != len(final_df):
-                    logging.warning(f"マージ後に行数が変化しました: {rows_before} → {len(final_df)}")
+                    if rows_before != len(final_df):
+                        logging.warning(f"マージ後に行数が変化しました: {rows_before} → {len(final_df)}")
+                else:
+                    logging.warning("マージ後にwin_oddsカラムが見つかりません")
+                    final_df['win_odds'] = pd.NA
             else:
                 logging.warning("horses_performance.parquetにwin_oddsカラムが存在しません")
                 final_df['win_odds'] = pd.NA
@@ -167,8 +177,17 @@ def main():
 
     # --- 3. 予測の実行 ---
     try:
+        # win_oddsは評価用であり、特徴量に含めてはいけない（データリーク防止）
         # モデルが使用する特徴量のみを渡す
-        X_eval = final_df[feature_names]
+        eval_feature_names = [f for f in feature_names if f != 'win_odds']
+
+        # 特徴量の存在確認
+        missing_features = [f for f in eval_feature_names if f not in final_df.columns]
+        if missing_features:
+            logging.error(f"必要な特徴量が見つかりません: {missing_features[:10]}...")
+            sys.exit(1)
+
+        X_eval = final_df[eval_feature_names]
 
         logging.info(f"予測入力データ形状: {X_eval.shape}")
         logging.info(f"モデル期待特徴量数 (Ranker): {estimator.ranker.n_features_}")
