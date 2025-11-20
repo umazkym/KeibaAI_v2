@@ -109,6 +109,48 @@ def main():
             final_df[col] = pd.to_numeric(final_df[col], errors='coerce').fillna(0)
     logging.info(f"評価用データの準備完了: {len(final_df)}行")
 
+    # --- 2.5. horses_performanceからオッズデータをマージ ---
+    logging.info("horses_performance.parquetからオッズデータを読み込んでいます...")
+    perf_path = Path(config['parsed_parquet_path']) / 'horses_performance' / 'horses_performance.parquet'
+
+    if perf_path.exists():
+        try:
+            perf_df = pd.read_parquet(perf_path)
+
+            # キーとなるカラムを文字列型に統一
+            final_df['race_id'] = final_df['race_id'].astype(str)
+            final_df['horse_id'] = final_df['horse_id'].astype(str)
+            perf_df['race_id'] = perf_df['race_id'].astype(str)
+            perf_df['horse_id'] = perf_df['horse_id'].astype(str)
+
+            # win_oddsカラムのみを取得してマージ
+            odds_df = perf_df[['race_id', 'horse_id', 'win_odds']].copy()
+
+            # マージ前の行数を記録
+            rows_before = len(final_df)
+
+            # 左外部結合でオッズデータをマージ
+            final_df = final_df.merge(
+                odds_df,
+                on=['race_id', 'horse_id'],
+                how='left'
+            )
+
+            odds_available = final_df['win_odds'].notna().sum()
+            logging.info(f"オッズデータのマージ完了: {odds_available}/{len(final_df)}行 ({odds_available/len(final_df)*100:.1f}%) でオッズ取得")
+
+            if rows_before != len(final_df):
+                logging.warning(f"マージ後に行数が変化しました: {rows_before} → {len(final_df)}")
+
+        except Exception as e:
+            logging.error(f"オッズデータの読み込みに失敗しました: {e}", exc_info=True)
+            logging.warning("オッズデータなしで評価を続行します")
+            final_df['win_odds'] = pd.NA
+    else:
+        logging.warning(f"horses_performance.parquetが見つかりません: {perf_path}")
+        logging.warning("オッズデータなしで評価を続行します")
+        final_df['win_odds'] = pd.NA
+
     # --- 3. 予測の実行 ---
     try:
         # モデルが使用する特徴量のみを渡す
@@ -173,10 +215,10 @@ def main():
                 
                 # 勝利した場合のみ払い戻し
                 if best_horse_rank == 1:
-                    # relative_oddsがあれば使用、なければ推定オッズ
-                    if 'relative_odds' in race_df.columns:
-                        odds = race_df.loc[best_horse_idx, 'relative_odds']
-                        # relative_oddsは倍率なので、100円 × oddsが払い戻し
+                    # win_oddsがあれば使用（実際のオッズデータ）
+                    if 'win_odds' in race_df.columns:
+                        odds = race_df.loc[best_horse_idx, 'win_odds']
+                        # win_oddsは倍率なので、100円 × oddsが払い戻し
                         # ただし、実際のオッズデータがない場合はデフォルト値を使う
                         if pd.notna(odds) and odds > 0:
                             payout = bet_amount * odds
