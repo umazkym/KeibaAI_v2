@@ -23,7 +23,27 @@ def verify_features():
             feature_info = yaml.safe_load(f)
 
         print(f"✓ 特徴量リストファイル: {feature_names_file}")
-        print(f"✓ 生成された特徴量数: {len(feature_info['feature_names'])}")
+
+        # YAMLの構造を確認
+        if isinstance(feature_info, dict):
+            # 辞書の場合
+            if 'feature_names' in feature_info:
+                feature_names = feature_info['feature_names']
+            elif 'features' in feature_info:
+                feature_names = feature_info['features']
+            else:
+                # キーを表示
+                print(f"  YAMLキー: {list(feature_info.keys())}")
+                feature_names = list(feature_info.keys())
+        elif isinstance(feature_info, list):
+            # リストの場合
+            feature_names = feature_info
+        else:
+            print(f"  ⚠️  予期しないYAML構造: {type(feature_info)}")
+            print(f"  内容: {feature_info}")
+            return False
+
+        print(f"✓ 生成された特徴量数: {len(feature_names)}")
         print(f"\n{'─'*80}")
         print("特徴量カテゴリ:")
         print(f"{'─'*80}\n")
@@ -42,7 +62,7 @@ def verify_features():
             'others': []
         }
 
-        for feat in feature_info['feature_names']:
+        for feat in feature_names:
             categorized = False
             for category, features in categories.items():
                 if category in feat:
@@ -84,11 +104,11 @@ def verify_features():
         print("主要な特徴量（最初の20個）:")
         print(f"{'─'*80}\n")
 
-        for i, feat in enumerate(feature_info['feature_names'][:20], 1):
+        for i, feat in enumerate(feature_names[:20], 1):
             print(f"  {i:2d}. {feat}")
 
-        if len(feature_info['feature_names']) > 20:
-            print(f"\n  ... 他 {len(feature_info['feature_names']) - 20} 個")
+        if len(feature_names) > 20:
+            print(f"\n  ... 他 {len(feature_names) - 20} 個")
 
     else:
         print(f"❌ 特徴量リストファイルが見つかりません: {feature_names_file}")
