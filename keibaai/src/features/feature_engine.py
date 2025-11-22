@@ -116,20 +116,33 @@ class FeatureEngine:
             df = adv_engine.generate_jockey_trainer_synergy(df, results_history_df)
 
             # 🆕 Phase D: 以下3つの特徴量を新規追加 (ROI向上のため)
+            # 各特徴量は個別にtry-exceptで保護し、エラー時もパイプライン全体は継続
 
             # 6. コース適性特徴量 (競馬場別・距離別・馬場別成績)
-            logging.info("コース適性特徴量を生成中...")
-            df = adv_engine.generate_course_affinity_features(df, results_history_df)
+            try:
+                logging.info("コース適性特徴量を生成中...")
+                df = adv_engine.generate_course_affinity_features(df, results_history_df)
+                logging.info("✓ コース適性特徴量の生成完了")
+            except Exception as e:
+                logging.warning(f"コース適性特徴量の生成をスキップしました: {e}")
 
             # 7. レース条件特徴量 (フィールドサイズ・季節性・レース重要度)
-            logging.info("レース条件特徴量を生成中...")
-            df = adv_engine.generate_race_condition_features(df)
+            try:
+                logging.info("レース条件特徴量を生成中...")
+                df = adv_engine.generate_race_condition_features(df)
+                logging.info("✓ レース条件特徴量の生成完了")
+            except Exception as e:
+                logging.warning(f"レース条件特徴量の生成をスキップしました: {e}")
 
             # 8. 相対指標 (タイム偏差値・上がり3F相対値・オッズ順位)
-            logging.info("レース内相対指標を生成中...")
-            df = adv_engine.calculate_relative_metrics(df)
+            try:
+                logging.info("レース内相対指標を生成中...")
+                df = adv_engine.calculate_relative_metrics(df)
+                logging.info("✓ レース内相対指標の生成完了")
+            except Exception as e:
+                logging.warning(f"レース内相対指標の生成をスキップしました: {e}")
 
-            logging.info("✓ Phase D: 新規特徴量 3カテゴリを追加完了")
+            logging.info("Phase D: 新規特徴量カテゴリの処理完了")
 
         except ImportError as e:
             logging.warning(f"AdvancedFeatureEngineのインポートに失敗しました: {e}")

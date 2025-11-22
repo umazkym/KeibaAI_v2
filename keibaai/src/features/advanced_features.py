@@ -67,13 +67,13 @@ class AdvancedFeatureEngine:
         if 'morning_odds' in performance_df.columns:
             agg_dict['morning_odds'] = 'mean'
 
-        venue_stats = performance_df.groupby(['horse_id', 'place']).agg(agg_dict).reset_index()
+        venue_stats = performance_df.groupby(['horse_id', 'venue']).agg(agg_dict).reset_index()
 
         if 'morning_odds' in performance_df.columns:
-            venue_stats.columns = ['horse_id', 'place', 'venue_avg_finish',
+            venue_stats.columns = ['horse_id', 'venue', 'venue_avg_finish',
                                   'venue_races', 'venue_avg_odds']
         else:
-            venue_stats.columns = ['horse_id', 'place', 'venue_avg_finish',
+            venue_stats.columns = ['horse_id', 'venue', 'venue_avg_finish',
                                   'venue_races']
         
         # 距離別成績
@@ -85,7 +85,7 @@ class AdvancedFeatureEngine:
         
         distance_stats = performance_df.groupby(['horse_id', 'distance_category']).agg({
             'finish_position': ['mean', 'count'],
-            'finish_time_sec': 'mean'
+            'finish_time_seconds': 'mean'
         }).reset_index()
         
         distance_stats.columns = ['horse_id', 'distance_category', 
@@ -101,7 +101,7 @@ class AdvancedFeatureEngine:
                                 'surface_avg_finish', 'surface_races', 'surface_avg_last3f']
         
         # メインデータフレームにマージ
-        df = df.merge(venue_stats, on=['horse_id', 'place'], how='left')
+        df = df.merge(venue_stats, on=['horse_id', 'venue'], how='left')
         df = df.merge(distance_stats, on=['horse_id', 'distance_category'], how='left')
         df = df.merge(surface_stats, on=['horse_id', 'track_surface'], how='left')
         
@@ -289,7 +289,7 @@ class AdvancedFeatureEngine:
             )
 
             # 必要なカラムの存在チェック
-            required_cols = ['sire_id', 'place', 'distance_category', 'track_surface']
+            required_cols = ['sire_id', 'venue', 'distance_category', 'track_surface']
             missing_cols = [col for col in required_cols if col not in perf_ped.columns]
             if missing_cols:
                 self.logger.warning(f"種牡馬×コース適性に必要なカラムがありません: {missing_cols}")
@@ -300,12 +300,12 @@ class AdvancedFeatureEngine:
             if 'morning_odds' in perf_ped.columns:
                 agg_dict['morning_odds'] = 'mean'
 
-            sire_course_stats = perf_ped.groupby(['sire_id', 'place', 'distance_category', 'track_surface']).agg(agg_dict).reset_index()
+            sire_course_stats = perf_ped.groupby(['sire_id', 'venue', 'distance_category', 'track_surface']).agg(agg_dict).reset_index()
 
             if 'morning_odds' in perf_ped.columns:
-                sire_course_stats.columns = ['sire_id', 'place', 'distance_category', 'track_surface', 'sire_course_avg_finish', 'sire_course_avg_odds']
+                sire_course_stats.columns = ['sire_id', 'venue', 'distance_category', 'track_surface', 'sire_course_avg_finish', 'sire_course_avg_odds']
             else:
-                sire_course_stats.columns = ['sire_id', 'place', 'distance_category', 'track_surface', 'sire_course_avg_finish']
+                sire_course_stats.columns = ['sire_id', 'venue', 'distance_category', 'track_surface', 'sire_course_avg_finish']
 
             # メインデータフレームに結合
             # dfにdistance_categoryなどが必要
@@ -320,7 +320,7 @@ class AdvancedFeatureEngine:
                      self.logger.warning("distance_mカラムがないため、distance_categoryを生成できません。")
                      return df
 
-            df = df.merge(sire_course_stats, on=['sire_id', 'place', 'distance_category', 'track_surface'], how='left')
+            df = df.merge(sire_course_stats, on=['sire_id', 'venue', 'distance_category', 'track_surface'], how='left')
 
             return df
 
@@ -344,10 +344,10 @@ class AdvancedFeatureEngine:
             labels=['sprint', 'mile', 'intermediate', 'long', 'extreme_long']
         )
         
-        bracket_stats = performance_df.groupby(['place', 'distance_category', 'track_surface', 'bracket_number']).agg({
+        bracket_stats = performance_df.groupby(['venue', 'distance_category', 'track_surface', 'bracket_number']).agg({
             'finish_position': 'mean'
         }).reset_index()
-        bracket_stats.columns = ['place', 'distance_category', 'track_surface', 'bracket_number', 'bracket_avg_finish']
+        bracket_stats.columns = ['venue', 'distance_category', 'track_surface', 'bracket_number', 'bracket_avg_finish']
         
         # メインデータフレームに結合
         if 'distance_category' not in df.columns:
@@ -357,7 +357,7 @@ class AdvancedFeatureEngine:
                 labels=['sprint', 'mile', 'intermediate', 'long', 'extreme_long']
             )
             
-        df = df.merge(bracket_stats, on=['place', 'distance_category', 'track_surface', 'bracket_number'], how='left')
+        df = df.merge(bracket_stats, on=['venue', 'distance_category', 'track_surface', 'bracket_number'], how='left')
         
         return df
     
@@ -384,9 +384,21 @@ class AdvancedFeatureEngine:
         })
         
         # 3. レースの重要度（賞金ベース）
-        df['race_importance'] = df['prize_1st'].fillna(500).apply(
-            lambda x: 'high' if x >= 2000 else ('medium' if x >= 1000 else 'low')
-        )
+        # prize_1st または prize_money カラムを使用
+        prize_col = None
+        if 'prize_1st' in df.columns:
+            prize_col = 'prize_1st'
+        elif 'prize_money' in df.columns:
+            prize_col = 'prize_money'
+
+        if prize_col:
+            df['race_importance'] = df[prize_col].fillna(500).apply(
+                lambda x: 'high' if x >= 2000 else ('medium' if x >= 1000 else 'low')
+            )
+        else:
+            # デフォルト値を設定
+            df['race_importance'] = 'medium'
+            self.logger.warning("賞金カラム（prize_1st/prize_money）が見つかりません。race_importanceをデフォルト値に設定します。")
         
         return df
     
