@@ -267,14 +267,11 @@ def main():
         output_path = Path(args.output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
         
-        # EstimatorオブジェクトをMuModel.pklとして保存（evaluate_model.pyと互換性を保つ）
-        model_file = output_path / 'mu_model.pkl'
-        import pickle
-        with open(model_file, 'wb') as f:
-            pickle.dump(estimator, f)
-        
+        # MuEstimatorのsave_model()メソッドでranker.pkl, regressor.pkl, feature_names.jsonを保存
+        estimator.save_model(str(output_path))
+
         logging.info(f"μモデルを {output_path} に保存しました")
-        logging.info(f"  - モデルファイル: {model_file.name}")
+        logging.info(f"  - regressor.pkl, ranker.pkl, feature_names.json")
         logging.info(f"  - 特徴量数: {len(estimator.feature_names)}")
     except Exception as e:
         logging.error(f"学習済みμモデルの保存に失敗しました: {e}", exc_info=True)
