@@ -44,7 +44,7 @@ def get_race_dates(races_path, start_year, end_year):
 def main():
     project_root = Path(__file__).resolve().parent
     predict_script = project_root / 'keibaai/src/models/predict.py'
-    model_dir = project_root / 'keibaai/data/models/mu_model_20241122_complete'
+    model_dir = project_root / 'keibaai/data/models/mu_model_20241122_fixed'
     predictions_dir = project_root / 'keibaai/data/predictions/parquet'
     races_path = project_root / 'keibaai/data/parsed/parquet/races/races.parquet'
 
