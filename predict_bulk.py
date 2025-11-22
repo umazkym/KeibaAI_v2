@@ -114,9 +114,9 @@ def predict_mu(model, features_df: pd.DataFrame):
 
     X = features_df[prediction_cols].copy()
 
-    # 欠損値を0で埋める（race_id, horse_id以外）
-    numeric_cols = [c for c in X.columns if c not in ['race_id', 'horse_id']]
-    X[numeric_cols] = X[numeric_cols].fillna(0)
+    # 注: 特徴量データは feature_engine.py の _handle_missing_values で既に欠損値処理済み
+    # features.yaml の imputation 設定（numeric_strategy: median）により中央値で補完されている
+    # そのため、ここでの fillna は不要
 
     logging.info("μ予測を実行中...")
     mu_predictions = model.predict(X)
