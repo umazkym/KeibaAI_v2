@@ -39,11 +39,15 @@ except ImportError as e:
 
 
 # ロギング設定
+log_dir = Path("keibaai/data/logs")
+log_dir.mkdir(parents=True, exist_ok=True)
+log_file = log_dir / "sigma_nu_training.log"
+
 logging.basicConfig(
-    level=logging.INFO, 
+    level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(message)s',
     handlers=[
-        logging.FileHandler("data/logs/sigma_nu_training.log", encoding='utf-8'),
+        logging.FileHandler(str(log_file), encoding='utf-8'),
         logging.StreamHandler(sys.stdout)
     ]
 )
