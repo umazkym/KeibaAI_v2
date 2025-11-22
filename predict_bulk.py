@@ -22,6 +22,7 @@ import joblib
 # プロジェクトルートをPYTHONPATHに追加
 project_root = Path(__file__).resolve().parent
 sys.path.insert(0, str(project_root / 'keibaai' / 'src'))
+sys.path.insert(0, str(project_root / 'keibaai'))  # keibaaiディレクトリも追加
 
 # ロギング設定
 logging.basicConfig(
