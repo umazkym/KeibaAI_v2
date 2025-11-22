@@ -227,74 +227,106 @@ class AdvancedFeatureEngine:
         performance_df: pd.DataFrame
     ) -> pd.DataFrame:
         """詳細な血統特徴量（ニックス、コース適性）"""
-        
-        # 1. ニックス（父×母父）
-        # まず、各馬の父と母父を特定
-        sires = pedigree_df[pedigree_df['generation'] == 1][['horse_id', 'ancestor_id']].rename(columns={'ancestor_id': 'sire_id'})
-        damsires = pedigree_df[(pedigree_df['generation'] == 2) & (pedigree_df['ancestor_name'].str.contains('母'))][['horse_id', 'ancestor_id']].rename(columns={'ancestor_id': 'damsire_id'})
-        
-        horse_pedigree = sires.merge(damsires, on='horse_id', how='inner')
-        
-        # パフォーマンスデータに血統情報を結合
-        perf_ped = performance_df.merge(horse_pedigree, on='horse_id', how='inner')
-        
-        # ニックスごとの成績集計
-        # Note: morning_oddsを使用（win_oddsはデータリークを引き起こす）
-        agg_dict = {
-            'finish_position': ['mean', 'count', 'std']
-        }
-        if 'morning_odds' in perf_ped.columns:
-            agg_dict['morning_odds'] = 'mean'
 
-        nicks_stats = perf_ped.groupby(['sire_id', 'damsire_id']).agg(agg_dict).reset_index()
+        try:
+            # 1. ニックス（父×母父）
+            # まず、各馬の父と母父を特定
+            sires = pedigree_df[pedigree_df['generation'] == 1][['horse_id', 'ancestor_id']].rename(columns={'ancestor_id': 'sire_id'})
+            damsires = pedigree_df[(pedigree_df['generation'] == 2) & (pedigree_df['ancestor_name'].str.contains('母', na=False))][['horse_id', 'ancestor_id']].rename(columns={'ancestor_id': 'damsire_id'})
 
-        if 'morning_odds' in perf_ped.columns:
-            nicks_stats.columns = ['sire_id', 'damsire_id', 'nicks_avg_finish', 'nicks_count', 'nicks_std_finish', 'nicks_avg_odds']
-        else:
-            nicks_stats.columns = ['sire_id', 'damsire_id', 'nicks_avg_finish', 'nicks_count', 'nicks_std_finish']
-        
-        # 信頼度のため、ある程度の出走数があるもののみ採用
-        nicks_stats = nicks_stats[nicks_stats['nicks_count'] >= 5]
-        
-        # メインデータフレームに結合（父・母父が必要）
-        # dfにsire_id, damsire_idがある前提、なければ結合してから
-        if 'sire_id' not in df.columns or 'damsire_id' not in df.columns:
-             df = df.merge(horse_pedigree, on='horse_id', how='left')
-             
-        df = df.merge(nicks_stats, on=['sire_id', 'damsire_id'], how='left')
-        
-        # 2. 種牡馬×コース適性
-        # 種牡馬ごとの、競馬場・距離カテゴリ・芝ダート別の成績
-        perf_ped['distance_category'] = pd.cut(
-            perf_ped['distance_m'],
-            bins=[0, 1400, 1800, 2200, 3000, 4000],
-            labels=['sprint', 'mile', 'intermediate', 'long', 'extreme_long']
-        )
-        
-        # Note: morning_oddsを使用（win_oddsはデータリークを引き起こす）
-        agg_dict = {'finish_position': 'mean'}
-        if 'morning_odds' in perf_ped.columns:
-            agg_dict['morning_odds'] = 'mean'
+            if sires.empty or damsires.empty:
+                self.logger.warning("血統データ（父または母父）が見つかりません。血統特徴量をスキップします。")
+                return df
 
-        sire_course_stats = perf_ped.groupby(['sire_id', 'place', 'distance_category', 'track_surface']).agg(agg_dict).reset_index()
+            horse_pedigree = sires.merge(damsires, on='horse_id', how='inner')
 
-        if 'morning_odds' in perf_ped.columns:
-            sire_course_stats.columns = ['sire_id', 'place', 'distance_category', 'track_surface', 'sire_course_avg_finish', 'sire_course_avg_odds']
-        else:
-            sire_course_stats.columns = ['sire_id', 'place', 'distance_category', 'track_surface', 'sire_course_avg_finish']
-        
-        # メインデータフレームに結合
-        # dfにdistance_categoryなどが必要
-        if 'distance_category' not in df.columns:
-             df['distance_category'] = pd.cut(
-                df['distance_m'],
+            if horse_pedigree.empty:
+                self.logger.warning("父×母父の組み合わせが見つかりません。血統特徴量をスキップします。")
+                return df
+
+            # パフォーマンスデータに血統情報を結合
+            perf_ped = performance_df.merge(horse_pedigree, on='horse_id', how='inner')
+
+            if perf_ped.empty or 'sire_id' not in perf_ped.columns or 'damsire_id' not in perf_ped.columns:
+                self.logger.warning("血統情報のマージに失敗しました。血統特徴量をスキップします。")
+                return df
+
+            # ニックスごとの成績集計
+            # Note: morning_oddsを使用（win_oddsはデータリークを引き起こす）
+            agg_dict = {
+                'finish_position': ['mean', 'count', 'std']
+            }
+            if 'morning_odds' in perf_ped.columns:
+                agg_dict['morning_odds'] = 'mean'
+
+            nicks_stats = perf_ped.groupby(['sire_id', 'damsire_id']).agg(agg_dict).reset_index()
+
+            if 'morning_odds' in perf_ped.columns:
+                nicks_stats.columns = ['sire_id', 'damsire_id', 'nicks_avg_finish', 'nicks_count', 'nicks_std_finish', 'nicks_avg_odds']
+            else:
+                nicks_stats.columns = ['sire_id', 'damsire_id', 'nicks_avg_finish', 'nicks_count', 'nicks_std_finish']
+
+            # 信頼度のため、ある程度の出走数があるもののみ採用
+            nicks_stats = nicks_stats[nicks_stats['nicks_count'] >= 5]
+
+            # メインデータフレームに結合（父・母父が必要）
+            # dfにsire_id, damsire_idがある前提、なければ結合してから
+            if 'sire_id' not in df.columns or 'damsire_id' not in df.columns:
+                 df = df.merge(horse_pedigree, on='horse_id', how='left')
+
+            df = df.merge(nicks_stats, on=['sire_id', 'damsire_id'], how='left')
+
+            # 2. 種牡馬×コース適性
+            # 種牡馬ごとの、競馬場・距離カテゴリ・芝ダート別の成績
+            if 'distance_m' not in perf_ped.columns:
+                self.logger.warning("distance_mカラムがありません。種牡馬×コース適性をスキップします。")
+                return df
+
+            perf_ped['distance_category'] = pd.cut(
+                perf_ped['distance_m'],
                 bins=[0, 1400, 1800, 2200, 3000, 4000],
                 labels=['sprint', 'mile', 'intermediate', 'long', 'extreme_long']
             )
-            
-        df = df.merge(sire_course_stats, on=['sire_id', 'place', 'distance_category', 'track_surface'], how='left')
 
-        return df
+            # 必要なカラムの存在チェック
+            required_cols = ['sire_id', 'place', 'distance_category', 'track_surface']
+            missing_cols = [col for col in required_cols if col not in perf_ped.columns]
+            if missing_cols:
+                self.logger.warning(f"種牡馬×コース適性に必要なカラムがありません: {missing_cols}")
+                return df
+
+            # Note: morning_oddsを使用（win_oddsはデータリークを引き起こす）
+            agg_dict = {'finish_position': 'mean'}
+            if 'morning_odds' in perf_ped.columns:
+                agg_dict['morning_odds'] = 'mean'
+
+            sire_course_stats = perf_ped.groupby(['sire_id', 'place', 'distance_category', 'track_surface']).agg(agg_dict).reset_index()
+
+            if 'morning_odds' in perf_ped.columns:
+                sire_course_stats.columns = ['sire_id', 'place', 'distance_category', 'track_surface', 'sire_course_avg_finish', 'sire_course_avg_odds']
+            else:
+                sire_course_stats.columns = ['sire_id', 'place', 'distance_category', 'track_surface', 'sire_course_avg_finish']
+
+            # メインデータフレームに結合
+            # dfにdistance_categoryなどが必要
+            if 'distance_category' not in df.columns:
+                 if 'distance_m' in df.columns:
+                     df['distance_category'] = pd.cut(
+                        df['distance_m'],
+                        bins=[0, 1400, 1800, 2200, 3000, 4000],
+                        labels=['sprint', 'mile', 'intermediate', 'long', 'extreme_long']
+                    )
+                 else:
+                     self.logger.warning("distance_mカラムがないため、distance_categoryを生成できません。")
+                     return df
+
+            df = df.merge(sire_course_stats, on=['sire_id', 'place', 'distance_category', 'track_surface'], how='left')
+
+            return df
+
+        except Exception as e:
+            self.logger.error(f"血統特徴量の生成中にエラー: {e}", exc_info=True)
+            return df  # エラー時は元のDataFrameを返す
 
     def generate_course_bias_features(
         self,
