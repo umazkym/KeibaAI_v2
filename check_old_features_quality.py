@@ -42,13 +42,31 @@ def check_feature_quality():
             print(f"❌ {year}年のデータが存在しません")
             continue
 
-        # 年ごとの全データを読み込み
+        # 年ごとの全データを読み込み（月ごとに読んで結合）
         print(f"📅 {year}年のデータを読み込み中...")
         try:
-            table = pq.read_table(str(base_path), filters=[('year', '=', year)])
-            df = table.to_pandas()
+            year_dfs = []
+            for month in range(1, 13):
+                month_path = year_path / f"month={month}"
+                if month_path.exists():
+                    # 月ごとのparquetファイルを検索
+                    parquet_files = list(month_path.glob("*.parquet"))
+                    if parquet_files:
+                        # 各parquetファイルを読み込み
+                        for pq_file in parquet_files:
+                            month_df = pd.read_parquet(pq_file)
+                            year_dfs.append(month_df)
+
+            if not year_dfs:
+                print(f"❌ {year}年のParquetファイルが見つかりません")
+                continue
+
+            # 全月のデータを結合
+            df = pd.concat(year_dfs, ignore_index=True)
         except Exception as e:
             print(f"❌ エラー: {year}年のデータ読み込みに失敗: {e}")
+            import traceback
+            traceback.print_exc()
             continue
 
         total_rows = len(df)
