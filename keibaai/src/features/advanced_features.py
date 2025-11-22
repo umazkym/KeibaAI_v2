@@ -58,7 +58,16 @@ class AdvancedFeatureEngine:
         performance_df: pd.DataFrame
     ) -> pd.DataFrame:
         """コース適性特徴量の生成"""
-        
+
+        # 必要なカラムの存在チェック
+        required_cols = ['horse_id', 'venue', 'distance_m', 'track_surface', 'finish_position']
+        missing_cols = [col for col in required_cols if col not in performance_df.columns]
+        if missing_cols:
+            self.logger.warning(f"コース適性特徴量に必要なカラムがありません: {missing_cols}")
+            return df
+
+        self.logger.info(f"コース適性特徴量を生成中... (データ数: {len(performance_df):,}行)")
+
         # 競馬場別成績
         # Note: morning_oddsを使用（win_oddsはデータリークを引き起こす）
         agg_dict = {
@@ -67,7 +76,7 @@ class AdvancedFeatureEngine:
         if 'morning_odds' in performance_df.columns:
             agg_dict['morning_odds'] = 'mean'
 
-        venue_stats = performance_df.groupby(['horse_id', 'venue']).agg(agg_dict).reset_index()
+        venue_stats = performance_df.groupby(['horse_id', 'venue'], observed=True).agg(agg_dict).reset_index()
 
         if 'morning_odds' in performance_df.columns:
             venue_stats.columns = ['horse_id', 'venue', 'venue_avg_finish',
@@ -75,36 +84,60 @@ class AdvancedFeatureEngine:
         else:
             venue_stats.columns = ['horse_id', 'venue', 'venue_avg_finish',
                                   'venue_races']
-        
+
+        self.logger.info(f"競馬場別成績を計算完了: {len(venue_stats):,}パターン")
+
         # 距離別成績
         performance_df['distance_category'] = pd.cut(
             performance_df['distance_m'],
             bins=[0, 1400, 1800, 2200, 3000, 4000],
             labels=['sprint', 'mile', 'intermediate', 'long', 'extreme_long']
         )
-        
-        distance_stats = performance_df.groupby(['horse_id', 'distance_category']).agg({
-            'finish_position': ['mean', 'count'],
-            'finish_time_seconds': 'mean'
-        }).reset_index()
-        
-        distance_stats.columns = ['horse_id', 'distance_category', 
-                                 'dist_avg_finish', 'dist_races', 'dist_avg_time']
-        
+
+        if 'finish_time_seconds' in performance_df.columns:
+            distance_stats = performance_df.groupby(['horse_id', 'distance_category'], observed=True).agg({
+                'finish_position': ['mean', 'count'],
+                'finish_time_seconds': 'mean'
+            }).reset_index()
+
+            distance_stats.columns = ['horse_id', 'distance_category',
+                                     'dist_avg_finish', 'dist_races', 'dist_avg_time']
+        else:
+            self.logger.warning("finish_time_secondsカラムがありません。タイム統計をスキップします。")
+            distance_stats = performance_df.groupby(['horse_id', 'distance_category'], observed=True).agg({
+                'finish_position': ['mean', 'count']
+            }).reset_index()
+            distance_stats.columns = ['horse_id', 'distance_category',
+                                     'dist_avg_finish', 'dist_races']
+
+        self.logger.info(f"距離別成績を計算完了: {len(distance_stats):,}パターン")
+
         # 馬場別成績
-        surface_stats = performance_df.groupby(['horse_id', 'track_surface']).agg({
-            'finish_position': ['mean', 'count'],
-            'last_3f_time': 'mean'
-        }).reset_index()
-        
-        surface_stats.columns = ['horse_id', 'track_surface', 
-                                'surface_avg_finish', 'surface_races', 'surface_avg_last3f']
-        
+        if 'last_3f_time' in performance_df.columns:
+            surface_stats = performance_df.groupby(['horse_id', 'track_surface'], observed=True).agg({
+                'finish_position': ['mean', 'count'],
+                'last_3f_time': 'mean'
+            }).reset_index()
+
+            surface_stats.columns = ['horse_id', 'track_surface',
+                                    'surface_avg_finish', 'surface_races', 'surface_avg_last3f']
+        else:
+            self.logger.warning("last_3f_timeカラムがありません。上がり3F統計をスキップします。")
+            surface_stats = performance_df.groupby(['horse_id', 'track_surface'], observed=True).agg({
+                'finish_position': ['mean', 'count']
+            }).reset_index()
+            surface_stats.columns = ['horse_id', 'track_surface',
+                                    'surface_avg_finish', 'surface_races']
+
+        self.logger.info(f"馬場別成績を計算完了: {len(surface_stats):,}パターン")
+
         # メインデータフレームにマージ
         df = df.merge(venue_stats, on=['horse_id', 'venue'], how='left')
         df = df.merge(distance_stats, on=['horse_id', 'distance_category'], how='left')
         df = df.merge(surface_stats, on=['horse_id', 'track_surface'], how='left')
-        
+
+        self.logger.info("コース適性特徴量のマージ完了")
+
         return df
     
     def generate_jockey_trainer_synergy(
@@ -123,7 +156,7 @@ class AdvancedFeatureEngine:
         if 'morning_odds' in historical_df.columns:
             agg_dict['morning_odds'] = 'mean'
 
-        combo_stats = historical_df.groupby(['jockey_id', 'trainer_id']).agg(agg_dict).reset_index()
+        combo_stats = historical_df.groupby(['jockey_id', 'trainer_id'], observed=True).agg(agg_dict).reset_index()
 
         if 'morning_odds' in historical_df.columns:
             combo_stats.columns = ['jockey_id', 'trainer_id', 'combo_avg_finish',
@@ -162,7 +195,7 @@ class AdvancedFeatureEngine:
         if 'morning_odds' in perf_with_sire.columns:
             agg_dict['morning_odds'] = 'mean'
 
-        sire_stats = perf_with_sire.groupby('ancestor_id').agg(agg_dict).reset_index()
+        sire_stats = perf_with_sire.groupby('ancestor_id', observed=True).agg(agg_dict).reset_index()
 
         if 'morning_odds' in perf_with_sire.columns:
             sire_stats.columns = ['sire_id', 'sire_avg_finish', 'sire_std_finish',
@@ -204,7 +237,7 @@ class AdvancedFeatureEngine:
             df['running_style'] = df['passing_order'].apply(estimate_running_style)
             
             # レースごとの脚質構成比率
-            race_styles = df.groupby('race_id')['running_style'].value_counts(normalize=True).unstack(fill_value=0)
+            race_styles = df.groupby('race_id', observed=True)['running_style'].value_counts(normalize=True).unstack(fill_value=0)
             
             # 逃げ馬の割合（ペース予想の指標）
             if 'nige' in race_styles.columns:
@@ -259,7 +292,7 @@ class AdvancedFeatureEngine:
             if 'morning_odds' in perf_ped.columns:
                 agg_dict['morning_odds'] = 'mean'
 
-            nicks_stats = perf_ped.groupby(['sire_id', 'damsire_id']).agg(agg_dict).reset_index()
+            nicks_stats = perf_ped.groupby(['sire_id', 'damsire_id'], observed=True).agg(agg_dict).reset_index()
 
             if 'morning_odds' in perf_ped.columns:
                 nicks_stats.columns = ['sire_id', 'damsire_id', 'nicks_avg_finish', 'nicks_count', 'nicks_std_finish', 'nicks_avg_odds']
@@ -300,7 +333,7 @@ class AdvancedFeatureEngine:
             if 'morning_odds' in perf_ped.columns:
                 agg_dict['morning_odds'] = 'mean'
 
-            sire_course_stats = perf_ped.groupby(['sire_id', 'venue', 'distance_category', 'track_surface']).agg(agg_dict).reset_index()
+            sire_course_stats = perf_ped.groupby(['sire_id', 'venue', 'distance_category', 'track_surface'], observed=True).agg(agg_dict).reset_index()
 
             if 'morning_odds' in perf_ped.columns:
                 sire_course_stats.columns = ['sire_id', 'venue', 'distance_category', 'track_surface', 'sire_course_avg_finish', 'sire_course_avg_odds']
@@ -334,21 +367,41 @@ class AdvancedFeatureEngine:
         performance_df: pd.DataFrame
     ) -> pd.DataFrame:
         """コースバイアス（枠順など）"""
-        
+
+        # 必要なカラムの存在チェック
+        required_cols = ['venue', 'distance_m', 'track_surface', 'bracket_number', 'finish_position']
+        missing_cols = [col for col in required_cols if col not in performance_df.columns]
+        if missing_cols:
+            self.logger.warning(f"コースバイアス特徴量に必要なカラムがありません: {missing_cols}")
+            return df
+
+        # データが少なすぎる場合はスキップ
+        if len(performance_df) < 100:
+            self.logger.warning(f"コースバイアス特徴量: データ数が少なすぎます（{len(performance_df)}行）。スキップします。")
+            return df
+
+        self.logger.info(f"コースバイアス特徴量を生成中... (データ数: {len(performance_df):,}行)")
+
         # 枠順バイアス
         # コース（競馬場、距離、芝ダート）ごとの枠番別成績
-        
+
         performance_df['distance_category'] = pd.cut(
             performance_df['distance_m'],
             bins=[0, 1400, 1800, 2200, 3000, 4000],
             labels=['sprint', 'mile', 'intermediate', 'long', 'extreme_long']
         )
-        
-        bracket_stats = performance_df.groupby(['venue', 'distance_category', 'track_surface', 'bracket_number']).agg({
+
+        # observed=True でパフォーマンス改善
+        bracket_stats = performance_df.groupby(
+            ['venue', 'distance_category', 'track_surface', 'bracket_number'],
+            observed=True
+        ).agg({
             'finish_position': 'mean'
         }).reset_index()
         bracket_stats.columns = ['venue', 'distance_category', 'track_surface', 'bracket_number', 'bracket_avg_finish']
-        
+
+        self.logger.info(f"枠順バイアス統計を計算完了: {len(bracket_stats):,}パターン")
+
         # メインデータフレームに結合
         if 'distance_category' not in df.columns:
              df['distance_category'] = pd.cut(
@@ -356,9 +409,11 @@ class AdvancedFeatureEngine:
                 bins=[0, 1400, 1800, 2200, 3000, 4000],
                 labels=['sprint', 'mile', 'intermediate', 'long', 'extreme_long']
             )
-            
+
         df = df.merge(bracket_stats, on=['venue', 'distance_category', 'track_surface', 'bracket_number'], how='left')
-        
+
+        self.logger.info("コースバイアス特徴量のマージ完了")
+
         return df
     
     def generate_race_condition_features(
