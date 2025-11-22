@@ -1,0 +1,39 @@
+# predict.pyのLine 380付近を修正
+
+# 現在の状態（Line 368-380）:
+try:
+    # パーティション保存（race_idは含めない）
+    output_file = output_dir / args.output_filename
+    logging.info(f"保存先: {output_file}")
+    
+    # partition_colsではなく、単一ファイルで保存
+    predictions_df.to_parquet(
+        output_file,
+        engine='pyarrow',
+        compression='snappy',
+        index=False
+    )
+logging.info("=" * 60)  # <- この行がtryブロックの外にあるためエラー
+
+# 修正後の正しいコード:
+try:
+    # パーティション保存（race_idは含めない）
+    output_file = output_dir / args.output_filename
+    logging.info(f"保存先: {output_file}")
+    
+    # partition_colsではなく、単一ファイルで保存
+    predictions_df.to_parquet(
+        output_file,
+        engine='pyarrow',
+        compression='snappy',
+        index=False
+    )
+    logging.info(f"推論結果を {output_file} に保存しました")
+
+except Exception as e:
+    logging.error(f"推論結果の保存中にエラーが発生しました: {e}", exc_info=True)
+    sys.exit(1)
+
+logging.info("=" * 60)
+logging.info("Keiba AI モデル推論パイプライン完了")
+logging.info("=" * 60)

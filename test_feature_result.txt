@@ -1,0 +1,3 @@
+
+❌ FAILED. Interaction features NOT found.
+Sample columns: ['race_id', 'horse_id', 'age', 'age_zscore', 'basis_weight', 'basis_weight_zscore', 'bracket_is_inner', 'bracket_is_middle', 'bracket_is_outer', 'career_starts', 'career_wins', 'day_of_meeting', 'days_since_last_race', 'distance_m', 'final_corner_to_finish', 'finish_position', 'finish_time_seconds', 'horse_weight', 'horse_weight_change', 'horse_weight_deviation']

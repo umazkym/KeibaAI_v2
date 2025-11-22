@@ -69,7 +69,7 @@ feature_recipes:
   interaction_features:
     enabled: true
     interactions:
-      # 騎手 × 競馬場
+      # 騎手 × 競馬場 (venue -> race_course)
       - { name: jockey_venue, id_column: jockey_id, context_column: venue, target: is_win, agg: mean, feature_template: "jockey_{context}_win_rate" }
       # 騎手 × 距離カテゴリ
       - { name: jockey_distance, id_column: jockey_id, context_column: distance_category, target: is_win, agg: mean, feature_template: "jockey_{context}_win_rate" }
@@ -79,7 +79,7 @@ feature_recipes:
       - { name: sire_surface, id_column: sire_id, context_column: track_surface, target: finish_position, agg: mean, feature_template: "sire_{context}_avg_finish" }
       # 種牡馬 × 距離カテゴリ
       - { name: sire_distance, id_column: sire_id, context_column: distance_category, target: finish_position, agg: mean, feature_template: "sire_{context}_avg_finish" }
-      # 調教師 × 競馬場
+      # 調教師 × 競馬場 (venue -> race_course)
       - { name: trainer_venue, id_column: trainer_id, context_column: venue, target: is_win, agg: mean, feature_template: "trainer_{context}_win_rate" }
 
   # 7. レース内相対特徴量 (Within-Race Relative Features)

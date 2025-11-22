@@ -65,8 +65,19 @@ class MuEstimator:
         # 1. Regressor (基礎スコア) の学習
         logging.info(f"Regressor (LGBMRegressor) を '{target_regressor}' で学習中...")
         y_reg = features_df[target_regressor]
+        
+        # Detect categorical features (one-hot encoded)
+        categorical_features = [col for col in self.feature_names if 
+                               col.startswith('sex_') or 
+                               col.startswith('trainer_') or
+                               col.startswith('jockey_') or
+                               '_' in col and col.split('_')[0] in ['surface', 'weather', 'grade']]
+        
+        if categorical_features:
+            logging.info(f"カテゴリカル特徴量を検出: {len(categorical_features)}個")
+        
         self.model_regressor = lgb.LGBMRegressor(**self.regressor_params)
-        self.model_regressor.fit(X, y_reg)
+        self.model_regressor.fit(X, y_reg, categorical_feature=categorical_features if categorical_features else 'auto')
         logging.info("Regressor の学習完了")
         
         # 2. Ranker (順位) の学習
@@ -81,7 +92,8 @@ class MuEstimator:
         group_counts = features_df_sorted.groupby(group_col).size().values
         
         self.model_ranker = lgb.LGBMRanker(**self.ranker_params)
-        self.model_ranker.fit(X_rank, y_rank_sorted, group=group_counts)
+        self.model_ranker.fit(X_rank, y_rank_sorted, group=group_counts, 
+                             categorical_feature=categorical_features if categorical_features else 'auto')
         logging.info("Ranker の学習完了")
 
     def predict(

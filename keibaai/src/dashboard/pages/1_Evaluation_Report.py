@@ -1,12 +1,13 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from pathlib import Path
 import sys
 
 # プロジェクトルートをパスに追加
-project_root = Path(__file__).resolve().parent.parent.parent.parent.parent
+project_root = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.append(str(project_root))
 
 from src.utils.data_utils import load_parquet_data_by_date

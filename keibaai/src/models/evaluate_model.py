@@ -1,22 +1,7 @@
-import argparse
-import logging
-import sys
-from datetime import datetime
-from pathlib import Path
-import yaml
-import pandas as pd
-import numpy as np
-from scipy.stats import spearmanr
-from sklearn.metrics import mean_squared_error
-
-# プロジェクトルートをパスに追加
-project_root = Path(__file__).resolve().parent.parent.parent.parent
-sys.path.append(str(project_root))
-
 try:
     from keibaai.src.pipeline_core import setup_logging
     from keibaai.src.utils.data_utils import load_parquet_data_by_date
-    from keibaai.src.modules.models.model_train import MuEstimator
+    from keibaai.src.models.model_train import MuEstimator
 except ImportError as e:
     print(f"エラー: 必要なモジュールのインポートに失敗しました: {e}")
     sys.exit(1)
@@ -70,19 +55,47 @@ def main():
     try:
         import joblib
         estimator = joblib.load(model_path)
-        feature_names = estimator.feature_names_
+        # 特徴量リストの取得
+        if hasattr(estimator, 'feature_names'):
+            feature_names = estimator.feature_names
+        elif hasattr(estimator, 'feature_names_'):
+            feature_names = estimator.feature_names_
+        else:
+            logging.error("モデルに特徴量リストが含まれていません")
+            sys.exit(1)
         logging.info(f"{len(feature_names)}個の特徴量を持つモデルをロードしました")
     except FileNotFoundError:
         logging.error(f"モデルファイルが見つかりません: {model_path}")
         sys.exit(1)
-
     # --- 2. 評価用データのロードと前処理 ---
     features_path_str = config['features_path']
     parquet_dir = Path(features_path_str) / 'parquet'
-    features_df = load_parquet_data_by_date(parquet_dir, start_dt, end_dt, date_col='race_date')
+    
+    # 日付範囲からパーティションディレクトリを構築
+    year = start_dt.year
+    month = start_dt.month
+    partition_path = parquet_dir / f'year={year}' / f'month={month}'
+    
+    if not partition_path.exists():
+        logging.error(f"特徴量パーティションが見つかりません: {partition_path}")
+        sys.exit(1)
+    
+    logging.info(f"特徴量をロードしています: {partition_path}")
+    features_df = pd.read_parquet(partition_path)
+    
+    # 日付フィルタリング
+    if 'race_date' in features_df.columns:
+        features_df['race_date'] = pd.to_datetime(features_df['race_date'])
+        features_df = features_df[
+            (features_df['race_date'] >= start_dt) &
+            (features_df['race_date'] <= end_dt)
+        ]
+    
     if features_df.empty:
         logging.error(f"期間 {args.start_date} - {args.end_date} の特徴量データが見つかりません。")
         sys.exit(1)
+    
+    logging.info(f"特徴量をロードしました: {len(features_df)}行, {len(features_df.columns)}列")
 
     # features_dfにターゲットが含まれていることを前提とする
     target_cols = ['finish_position', 'finish_time_seconds']
@@ -183,8 +196,13 @@ def main():
 
     # --- 3. 予測の実行 ---
     try:
-        # モデルが期待する特徴量を確認
-        expected_features = estimator.ranker.n_features_
+        # モデルが期待する特徴量を確認（新旧実装に対応）
+        if hasattr(estimator, 'model_ranker') and estimator.model_ranker is not None:
+            expected_features = estimator.model_ranker.n_features_
+        elif hasattr(estimator, 'ranker') and estimator.ranker is not None:
+            expected_features = len(estimator.feature_names_) if hasattr(estimator, 'feature_names_') else len(feature_names)
+        else:
+            expected_features = len(feature_names)
         logging.info(f"モデルが期待する特徴量数: {expected_features}")
         logging.info(f"モデルの特徴量リスト: {len(feature_names)}個")
 
@@ -209,11 +227,28 @@ def main():
         X_eval = final_df[eval_feature_names]
 
         logging.info(f"予測入力データ形状: {X_eval.shape}")
-        logging.info(f"モデル期待特徴量数 (Ranker): {estimator.ranker.n_features_}")
-        if hasattr(estimator.regressor, 'n_features_'):
-             logging.info(f"モデル期待特徴量数 (Regressor): {estimator.regressor.n_features_}")
+        # モデル情報のログ（新旧実装に対応）
+        if hasattr(estimator, 'model_ranker') and hasattr(estimator.model_ranker, 'n_features_'):
+            logging.info(f"モデル期待特徴量数 (Ranker): {estimator.model_ranker.n_features_}")
+        if hasattr(estimator, 'model_regressor') and hasattr(estimator.model_regressor, 'n_features_'):
+            logging.info(f"モデル期待特徴量数 (Regressor): {estimator.model_regressor.n_features_}")
+        
+        # Check if rank_score is in X_eval
+        if 'rank_score' in X_eval.columns:
+            logging.warning("rank_score is already in X_eval!")
 
-        predictions = estimator.predict(X_eval)
+        # MuEstimatorの実装に応じて渡すデータを切り替える
+        if hasattr(estimator, 'model_ranker') and estimator.model_ranker is not None:
+            # 新しい実装: race_idが必要なので final_df を渡す
+            # (内部で feature_names によるフィルタリングが行われる)
+            logging.info("新しいMuEstimator実装を検出: final_dfを渡します")
+            predictions = estimator.predict(final_df)
+        else:
+            # 古い実装: 特徴量のみが必要なので X_eval を渡す
+            # (内部でフィルタリングされないため、余計な列があるとエラーになる)
+            logging.info("古いMuEstimator実装を検出: X_eval（特徴量のみ）を渡します")
+            predictions = estimator.predict(X_eval)
+            
         final_df['predicted_score'] = predictions
         logging.info("予測スコアの計算が完了しました。")
     except Exception as e:
@@ -230,7 +265,10 @@ def main():
         metrics = {'date': date}
 
         # 4.1 RMSE (Regressor)
-        if estimator.regressor is not None:
+        has_regressor = (hasattr(estimator, 'model_regressor') and estimator.model_regressor is not None) or \
+                        (hasattr(estimator, 'regressor') and estimator.regressor is not None)
+        
+        if has_regressor:
             pred_reg = date_df['predicted_score']
             true_time = date_df['finish_time_seconds']
             metrics['rmse'] = np.sqrt(mean_squared_error(true_time, pred_reg))

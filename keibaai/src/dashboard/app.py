@@ -4,7 +4,8 @@ import sys
 import yaml
 
 # プロジェクトルートをパスに追加
-project_root = Path(__file__).resolve().parent.parent.parent
+# app.py -> dashboard -> src -> keibaai -> Keiba_AI_v2 (4階層上)
+project_root = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.append(str(project_root))
 
 st.set_page_config(
@@ -39,7 +40,7 @@ st.markdown("""
 
 # 設定ファイルの読み込み確認
 try:
-    config_path = project_root / "keibaai/configs/default.yaml"
+    config_path = project_root / "keibaai" / "configs" / "default.yaml"
     with open(config_path, "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
     st.success(f"✅ 設定ファイルを読み込みました: {config_path}")
@@ -49,7 +50,7 @@ except Exception as e:
 # 最新のログを表示（オプション）
 st.subheader("📝 最新のシステムログ")
 try:
-    log_dir = project_root / "keibaai/data/logs"
+    log_dir = project_root / "keibaai" / "data" / "logs"
     # 最新のログファイルを探す (YYYY/MM/DD/*.log)
     log_files = sorted(log_dir.glob("**/*.log"), key=lambda x: x.stat().st_mtime, reverse=True)
     

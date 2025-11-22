@@ -1,33 +1,34 @@
 #!/usr/bin/env python3
-# src/models/train_sigma_nu_models.py
+# -*- coding: utf-8 -*-
 """
-σ/ν モデル再学習スクリプト
-仕様書 13.4章 に基づく完全実装
+σ (sigma) モデルとν (nu) モデルの訓練スクリプト
 
-- 入力: parsed/results, features, mu_predictions
-- 出力: sigma_model.pkl, nu_model.pkl を output_dir に保存
-- 引数:
-    --training_window_months: 過去何ヶ月分のデータで学習するか
-    --output_dir: 保存先
-    --mu_predictions_path: 事前に計算したμモデルの推論結果パス
+Usage:
+    python train_sigma_nu_models.py \
+        --training_window_months 48 \
+        --output_dir ../data/models \
+        --mu_predictions_path ../data/predictions/parquet/mu_predictions.parquet
 """
 
 import argparse
 import logging
-import os
-import pickle
-import sys
-from datetime import datetime, timedelta
 from pathlib import Path
+import sys
+import json
+import pickle  # Added: pickleモジュールのインポート
+
+# プロジェクトルートをPYTHONPATHに追加（predict.pyと同様の修正）
+project_root = Path(__file__).resolve().parent.parent.parent  # keibaaiディレクトリ
+sys.path.insert(0, str(project_root / 'src'))
 
 import pandas as pd
 import numpy as np
+from datetime import datetime, timedelta
 import lightgbm as lgb
+import joblib
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error
 
-# プロジェクトルートをパスに追加
-project_root = Path(__file__).resolve().parent.parent
 sys.path.append(str(project_root))
 
 try:
@@ -188,17 +189,17 @@ def main():
         
         logging.info(f"μ推論結果をロード中: {mu_preds_path}")
         mu_preds_df = pd.read_parquet(mu_preds_path)
+        logging.info(f"{len(mu_preds_df)} 行のμ推論結果をロードしました。")
         
         # Series (index=horse_id, value=mu) を作成
         if 'horse_id' not in mu_preds_df.columns or 'mu' not in mu_preds_df.columns:
              logging.error("μ推論ファイルには 'horse_id' と 'mu' カラムが必要です。")
              sys.exit(1)
              
-        mu_series = pd.Series(
-            mu_preds_df['mu'].values, 
-            index=mu_preds_df['horse_id'].astype(str)
-        ).drop_duplicates()
-        logging.info(f"{len(mu_series)} 件のμ推論結果（馬ユニーク）をロードしました。")
+        # horse_idの重複に対応：同じ馬の複数レースのmuを平均
+        # (同じ馬は同じmuを持つべきだが、安全のため平均を取る)
+        mu_series = mu_preds_df.groupby('horse_id')['mu'].mean()
+        logging.info(f"{len(mu_series)} 頭分のμ値を準備しました。")
 
         # --- 2. 学習データのロード ---
         results_df = load_training_data(args.training_window_months)

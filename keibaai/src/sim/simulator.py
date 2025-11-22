@@ -26,7 +26,14 @@ class RaceSimulator:
         Args:
             config: シミュレーション設定辞書 (configs/default.yaml や optimization.yaml)
         """
-        self.config = config
+        self.config = config if config else {}
+        self.K = self.config.get('K', 1000)
+        self.seed = self.config.get('seed', 42)
+        
+        # ログパスの設定（configから取得、なければデフォルト）
+        # logs_pathキーがない場合のエラーを防ぐ
+        self.logs_dir = Path(self.config.get('logs_path', 'data/logs'))
+        self.logs_dir.mkdir(parents=True, exist_ok=True)
     
     def simulate_race(
         self,
@@ -104,9 +111,35 @@ class RaceSimulator:
         # 1. 単勝確率（1着確率）
         win_probs = {}
         # (np.bincount を使って高速化)
-        win_counts = np.bincount(rankings[:, 0], minlength=n_horses)
+        # rankings[:, 0] は1着のインデックス
+        first_place_indices = rankings[:, 0]
+        win_counts = np.bincount(first_place_indices, minlength=n_horses)
+        
+        # デバッグ出力
+        logging.debug(f"n_horses: {n_horses}")
+        logging.debug(f"rankings min/max: {first_place_indices.min()}/{first_place_indices.max()}")
+        logging.debug(f"win_counts sum: {win_counts.sum()}")
+        logging.debug(f"win_counts len: {len(win_counts)}")
+        logging.debug(f"horse_numbers: {horse_numbers}")
+        
+        if len(set(horse_numbers)) != len(horse_numbers):
+            logging.error(f"Duplicate horse_numbers detected! {horse_numbers}")
+        
         for i, horse_num in enumerate(horse_numbers):
-            win_probs[str(horse_num)] = float(win_counts[i] / K)
+            # win_countsのインデックスiが範囲外でないか確認
+            if i < len(win_counts):
+                # キーが既に存在する場合は加算する（重複馬番対策）
+                key = str(horse_num)
+                if key in win_probs:
+                    logging.warning(f"Overwriting/Adding to existing key {key} in win_probs")
+                    win_probs[key] += float(win_counts[i] / K)
+                else:
+                    win_probs[key] = float(win_counts[i] / K)
+            else:
+                logging.error(f"Index {i} is out of bounds for win_counts (len={len(win_counts)})")
+                # キーがなければ0で初期化
+                if str(horse_num) not in win_probs:
+                    win_probs[str(horse_num)] = 0.0
         
         # 2. 複勝確率（3着以内確率）
         place_probs = {}

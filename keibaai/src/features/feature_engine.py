@@ -119,6 +119,17 @@ class FeatureEngine:
         df = self._handle_missing_values(df)
         self.feature_names_ = self._select_features(df)
         
+        # ⚠️ データリーク防止: ターゲット変数を明示的に除外
+        target_variables = [
+            'finish_position', 'finish_time_seconds', 'is_win',
+            'prize_money', 'odds', 'win_odds', 'popularity',
+            'margin_seconds', 'finish_time_str', 'margin_str'
+        ]
+        
+        # self.feature_names_からターゲット変数を除外
+        self.feature_names_ = [col for col in self.feature_names_ if col not in target_variables]
+        logging.info(f"ターゲット変数を除外しました: {[v for v in target_variables if v in df.columns]}")
+        
         final_cols = ['race_id', 'horse_id'] + self.feature_names_
         final_cols_exist = [col for col in final_cols if col in df.columns]
         

@@ -1,0 +1,27 @@
+# 2024年データで完全推論実行
+
+2024年の実在する日付で、μ/σ/ν全パラメータの予測を実行します。
+
+## 実行コマンド
+
+```bash
+cd c:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai
+
+# 最も簡単な方法：既知の2024年1月の土曜日（2024-01-06）で実行
+python src\models\predict.py --date 2024-01-06 --model_dir data\models --output_filename predictions_2024_01_06.parquet
+
+# または、最新の2024年データで実行
+python src\models\predict.py --date 2024-10-06 --model_dir data\models --output_filename predictions_2024_10_06.parquet
+```
+
+## 期待される結果
+
+- 出力ファイル: `data/predictions/parquet/predictions_2024_XX_XX.parquet`
+- カラム: race_id, horse_id, mu, sigma, nu, race_date, year, month
+- σ/νの値: 1.0ではなく、モデルによる予測値
+
+## 次のステップ（予測完了後）
+
+1. シミュレーション実行
+2. 結果検証
+3. 知識記録

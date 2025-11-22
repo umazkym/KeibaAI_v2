@@ -1,0 +1,42 @@
+=== 賞金関連のテキスト検索 ===
+
+'賞金'を含む要素: 1個
+
+要素 1:
+  テキスト: 賞金
+  親タグ: th
+  親のclass: None
+  親のHTML:
+<th nowrap="nowrap">賞金<br/>(万円)</th>
+
+
+=== RaceData02 ===
+見つかりません
+
+
+=== dl.racedata ===
+HTML:
+<dl class="racedata fc">
+<dt>
+1 R
+</dt>
+<dd>
+<h1>2歳未勝利<!--img src="style/netkeiba.ja/image/race_grade_g2_01.png" alt=""--></h1>
+<p>
+<diary_snap_cut>
+<span>
+芝右1800m / 
+天候 : 曇 / 
+芝 : 良  / 
+発走 : 09:55
+</span><br/>
+<diary_snap_cut>
+</diary_snap_cut>
+</diary_snap_cut></p>
+</dd>
+</dl>
+
+dd[0]: 2歳未勝利芝右1800m / 
+天候 : 曇 / 
+芝 : 良  / 
+発走 : 09:55

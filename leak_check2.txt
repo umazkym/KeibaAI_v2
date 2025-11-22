@@ -1,0 +1,26 @@
+﻿============================================================
+データリーク調査
+============================================================
+
+【特徴量データ】
+行数: 20,764
+列数: 162
+
+【ターゲット変数の存在確認】
+python : Traceback (most recent call last):
+発生場所 行:1 文字:1
++ python investigate_data_leak.py 2>&1 | Out-File
+ -Encoding utf8 -FileP ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Tra 
+   ceback (most recent call last)::String) [],   
+  RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  File "C:\Users\zk-ht\Keiba\Keiba_AI_v2\investig
+ate_data_leak.py", line 31, in <module>
+    print(f"  \u26a0\ufe0f  {col}: 存在 ({non_null:
+,} non-null)")
+UnicodeEncodeError: 'cp932' codec can't encode ch
+aracter '\u26a0' in position 2: illegal multibyte
+ sequence

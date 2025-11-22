@@ -1,0 +1,67 @@
+Total columns: 58
+Total rows: 277,826
+
+All columns:
+  1. race_id
+  2. race_date
+  3. distance_m
+  4. track_surface
+  5. weather
+  6. track_condition
+  7. post_time
+  8. race_name
+  9. prize_1st
+ 10. prize_2nd
+ 11. prize_3rd
+ 12. prize_4th
+ 13. prize_5th
+ 14. venue
+ 15. day_of_meeting
+ 16. round_of_year
+ 17. race_class
+ 18. age_restriction
+ 19. finish_position
+ 20. bracket_number
+ 21. horse_number
+ 22. horse_id
+ 23. horse_name
+ 24. sex_age
+ 25. sex
+ 26. age
+ 27. basis_weight
+ 28. jockey_id
+ 29. jockey_name
+ 30. finish_time_str
+ 31. finish_time_seconds
+ 32. margin_str
+ 33. margin_seconds
+ 34. passing_order_1
+ 35. passing_order_2
+ 36. passing_order_3
+ 37. passing_order_4
+ 38. last_3f_time
+ 39. time_except_last3f
+ 40. win_odds
+ 41. popularity
+ 42. horse_weight
+ 43. horse_weight_change
+ 44. trainer_name
+ 45. pace_index
+ 46. last3f_rank
+ 47. position_change_1_2
+ 48. position_change_2_3
+ 49. position_change_3_4
+ 50. final_corner_to_finish
+ 51. horse_weight_deviation
+ 52. popularity_finish_diff
+ 53. win_probability
+ 54. relative_odds
+ 55. distance_category
+ 56. trainer_id
+ 57. owner_name
+ 58. prize_money
+
+
+Checking for 'course' or 'venue':
+'course' columns: NONE
+'venue' columns: ['venue']

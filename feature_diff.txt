@@ -1,0 +1,43 @@
+
+⚠️ 19 features expected by model are MISSING in generated data:
+  - sire_avg_prize
+  - sire_extreme_long_avg_finish
+  - sire_intermediate_avg_finish
+  - sire_long_avg_finish
+  - sire_mile_avg_finish
+  - sire_sprint_avg_finish
+  - sire_ダート_avg_finish
+  - sire_芝_avg_finish
+  - popularity
+  - win_odds
+  - career_starts_y
+  - career_win_rate
+  - career_wins_y
+  - is_jockey_changed
+  - is_trainer_changed
+  - past_1_finish_time_seconds_mean
+  - past_3_finish_time_seconds_mean
+  - past_5_finish_time_seconds_mean
+  - prize_total_y
+
+ℹ️ 20 columns in generated data are NOT in model features (meta info etc.):
+  - race_id
+  - horse_id
+  - career_starts
+  - career_wins
+  - finish_position
+  - finish_time_seconds
+  - prize_total
+  - prize_total_zscore
+  - trainer_中京_win_rate
+  - trainer_中山_win_rate
+  - trainer_京都_win_rate
+  - trainer_函館_win_rate
+  - trainer_小倉_win_rate
+  - trainer_新潟_win_rate
+  - trainer_札幌_win_rate
+  - trainer_東京_win_rate
+  - trainer_福島_win_rate
+  - trainer_阪神_win_rate
+  - race_date_str
+  - race_date

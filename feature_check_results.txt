@@ -1,0 +1,180 @@
+Loaded: 10382 rows, 162 columns
+
+Numeric columns: 158
+Non-zero features: 48
+All-zero features: 110
+
+All columns:
+  1. race_id 
+  2. horse_id 
+  3. age 
+  4. age_zscore 
+  5. basis_weight 
+  6. basis_weight_zscore 
+  7. bracket_is_inner 
+  8. bracket_is_middle 
+  9. bracket_is_outer 
+  10. career_starts 
+  11. career_wins 
+  12. day_of_meeting ZERO
+  13. days_since_last_race 
+  14. distance_m ZERO
+  15. final_corner_to_finish ZERO
+  16. finish_position ZERO
+  17. finish_time_seconds ZERO
+  18. horse_weight 
+  19. horse_weight_change 
+  20. horse_weight_deviation ZERO
+  21. horse_weight_zscore 
+  22. is_jockey_id_changed 
+  23. is_trainer_id_changed 
+  24. jockey_extreme_long_win_rate 
+  25. jockey_intermediate_win_rate 
+  26. jockey_long_win_rate 
+  27. jockey_mile_win_rate 
+  28. jockey_sprint_win_rate 
+  29. jockey_win_rate 
+  30. jockey_ダート_win_rate 
+  31. jockey_中京_win_rate 
+  32. jockey_中山_win_rate 
+  33. jockey_京都_win_rate 
+  34. jockey_函館_win_rate 
+  35. jockey_小倉_win_rate 
+  36. jockey_新潟_win_rate 
+  37. jockey_札幌_win_rate 
+  38. jockey_東京_win_rate 
+  39. jockey_福島_win_rate 
+  40. jockey_芝_win_rate 
+  41. jockey_阪神_win_rate 
+  42. last3f_rank ZERO
+  43. last_3f_time ZERO
+  44. margin_seconds ZERO
+  45. pace_index ZERO
+  46. passing_order_1 ZERO
+  47. passing_order_2 ZERO
+  48. passing_order_3 ZERO
+  49. passing_order_4 ZERO
+  50. past_10_finish_position_max ZERO
+  51. past_10_finish_position_mean ZERO
+  52. past_10_finish_position_median ZERO
+  53. past_10_finish_position_std ZERO
+  54. past_10_last_3f_time_max ZERO
+  55. past_10_last_3f_time_mean ZERO
+  56. past_10_last_3f_time_median ZERO
+  57. past_10_last_3f_time_std ZERO
+  58. past_10_margin_seconds_max ZERO
+  59. past_10_margin_seconds_mean ZERO
+  60. past_10_margin_seconds_median ZERO
+  61. past_10_margin_seconds_std ZERO
+  62. past_10_passing_order_1_max ZERO
+  63. past_10_passing_order_1_mean ZERO
+  64. past_10_passing_order_1_median ZERO
+  65. past_10_passing_order_1_std ZERO
+  66. past_10_passing_order_4_max ZERO
+  67. past_10_passing_order_4_mean ZERO
+  68. past_10_passing_order_4_median ZERO
+  69. past_10_passing_order_4_std ZERO
+  70. past_1_finish_position_max ZERO
+  71. past_1_finish_position_mean ZERO
+  72. past_1_finish_position_median ZERO
+  73. past_1_finish_position_std ZERO
+  74. past_1_last_3f_time_max ZERO
+  75. past_1_last_3f_time_mean ZERO
+  76. past_1_last_3f_time_median ZERO
+  77. past_1_last_3f_time_std ZERO
+  78. past_1_margin_seconds_max ZERO
+  79. past_1_margin_seconds_mean ZERO
+  80. past_1_margin_seconds_median ZERO
+  81. past_1_margin_seconds_std ZERO
+  82. past_1_passing_order_1_max ZERO
+  83. past_1_passing_order_1_mean ZERO
+  84. past_1_passing_order_1_median ZERO
+  85. past_1_passing_order_1_std ZERO
+  86. past_1_passing_order_4_max ZERO
+  87. past_1_passing_order_4_mean ZERO
+  88. past_1_passing_order_4_median ZERO
+  89. past_1_passing_order_4_std ZERO
+  90. past_3_finish_position_max ZERO
+  91. past_3_finish_position_mean ZERO
+  92. past_3_finish_position_median ZERO
+  93. past_3_finish_position_std ZERO
+  94. past_3_last_3f_time_max ZERO
+  95. past_3_last_3f_time_mean ZERO
+  96. past_3_last_3f_time_median ZERO
+  97. past_3_last_3f_time_std ZERO
+  98. past_3_margin_seconds_max ZERO
+  99. past_3_margin_seconds_mean ZERO
+  100. past_3_margin_seconds_median ZERO
+  101. past_3_margin_seconds_std ZERO
+  102. past_3_passing_order_1_max ZERO
+  103. past_3_passing_order_1_mean ZERO
+  104. past_3_passing_order_1_median ZERO
+  105. past_3_passing_order_1_std ZERO
+  106. past_3_passing_order_4_max ZERO
+  107. past_3_passing_order_4_mean ZERO
+  108. past_3_passing_order_4_median ZERO
+  109. past_3_passing_order_4_std ZERO
+  110. past_5_finish_position_max ZERO
+  111. past_5_finish_position_mean ZERO
+  112. past_5_finish_position_median ZERO
+  113. past_5_finish_position_std ZERO
+  114. past_5_last_3f_time_max ZERO
+  115. past_5_last_3f_time_mean ZERO
+  116. past_5_last_3f_time_median ZERO
+  117. past_5_last_3f_time_std ZERO
+  118. past_5_margin_seconds_max ZERO
+  119. past_5_margin_seconds_mean ZERO
+  120. past_5_margin_seconds_median ZERO
+  121. past_5_margin_seconds_std ZERO
+  122. past_5_passing_order_1_max ZERO
+  123. past_5_passing_order_1_mean ZERO
+  124. past_5_passing_order_1_median ZERO
+  125. past_5_passing_order_1_std ZERO
+  126. past_5_passing_order_4_max ZERO
+  127. past_5_passing_order_4_mean ZERO
+  128. past_5_passing_order_4_median ZERO
+  129. past_5_passing_order_4_std ZERO
+  130. popularity_finish_diff ZERO
+  131. position_change_1_2 ZERO
+  132. position_change_2_3 ZERO
+  133. position_change_3_4 ZERO
+  134. prize_1st ZERO
+  135. prize_2nd ZERO
+  136. prize_3rd ZERO
+  137. prize_4th ZERO
+  138. prize_5th ZERO
+  139. prize_money ZERO
+  140. prize_total ZERO
+  141. prize_total_zscore ZERO
+  142. relative_odds ZERO
+  143. round_of_year ZERO
+  144. sex_セ 
+  145. sex_牝 
+  146. sex_牡 
+  147. time_except_last3f ZERO
+  148. trainer_win_rate 
+  149. trainer_中京_win_rate 
+  150. trainer_中山_win_rate 
+  151. trainer_京都_win_rate 
+  152. trainer_函館_win_rate 
+  153. trainer_小倉_win_rate 
+  154. trainer_新潟_win_rate 
+  155. trainer_札幌_win_rate 
+  156. trainer_東京_win_rate 
+  157. trainer_福島_win_rate 
+  158. trainer_阪神_win_rate 
+  159. win_probability ZERO
+  160. race_date_str 
+  161. race_date 
+  162. day 
+
+
+Important features:
+  age: Non-zero=10382/10382, Mean=3.676
+  horse_weight_kg: MISSING
+  career_starts: Non-zero=10060/10382, Mean=11.103
+  career_wins: Non-zero=286/10382, Mean=0.028
+  past_3_finish_position_mean: Non-zero=0/10382, Mean=0.000
+  past_10_finish_time_seconds_mean: MISSING
+  jockey_id_win_rate: MISSING
+  trainer_id_win_rate: MISSING
