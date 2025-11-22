@@ -2,7 +2,7 @@
 
 # 特徴量生成全般の設定
 feature_engine:
-  version: "v2.0" # 生成する特徴量のバージョン管理
+  version: "v2.1" # Phase D: コース適性・レース条件・相対指標を追加
 
 # --- レシピベースの特徴量生成 ---
 feature_recipes:

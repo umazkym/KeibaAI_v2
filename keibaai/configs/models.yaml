@@ -80,7 +80,7 @@ mu_estimator:
     reg_lambda: 0.0003667608064912241
     subsample: 0.876098829427658
 training:
-  feature_version: v1.0
+  feature_version: v2.1  # Phase D: 高度な特徴量 (コース適性・レース条件・相対指標) を使用
   random_seed: 42
   train_period:
     end: '2023-12-31'
