@@ -106,7 +106,7 @@ feature_selection:
     - '.*_name$'
     - '.*_id$'
     - '^race_id$'
-    - '^horse_number$'
+    # - '^horse_number$'  # ★ コメントアウト: horse_numberはモデル予測・シミュレーションに必須
     - '^sex$'
     - '^track_surface$'
     - '^bracket_number$'
