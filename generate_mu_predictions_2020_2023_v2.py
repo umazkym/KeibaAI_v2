@@ -55,9 +55,7 @@ def main():
         logging.error(f"予測スクリプトが見つかりません: {predict_script}")
         return
 
-    if not model_dir.exists():
-        logging.error(f"μモデルが見つかりません: {model_dir}")
-        return
+    # model_dirは相対パス文字列なので、exists()チェックは predict.py に任せる
 
     if not races_path.exists():
         logging.error(f"races.parquetが見つかりません: {races_path}")
