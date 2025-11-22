@@ -130,7 +130,13 @@ class FeatureEngine:
         self.feature_names_ = [col for col in self.feature_names_ if col not in target_variables]
         logging.info(f"ターゲット変数を除外しました: {[v for v in target_variables if v in df.columns]}")
         
-        final_cols = ['race_id', 'horse_id'] + self.feature_names_
+        # ★ race_dateを明示的に保持（パーティション化に必要）★
+        # _select_features()は数値型のみを選択するため、datetime型のrace_dateは除外される
+        # しかし、race_dateはパーティション化（year, month分割）に必須なので明示的に追加
+        final_cols = ['race_id', 'horse_id']
+        if 'race_date' in df.columns:
+            final_cols.append('race_date')
+        final_cols.extend(self.feature_names_)
         final_cols_exist = [col for col in final_cols if col in df.columns]
 
         # ★ 最終的な重複排除（安全対策）★
