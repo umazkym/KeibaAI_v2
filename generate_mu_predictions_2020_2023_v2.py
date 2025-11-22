@@ -13,6 +13,7 @@ import logging
 import pandas as pd
 from pathlib import Path
 from datetime import datetime
+from tqdm import tqdm
 
 # ロギング設定
 logging.basicConfig(
@@ -77,14 +78,14 @@ def main():
     failed_dates = []
     prediction_files = []
 
-    # 開催日ごとに予測を生成
-    for i, race_date in enumerate(race_dates, 1):
+    # 開催日ごとに予測を生成（tqdmでプログレス表示）
+    pbar = tqdm(race_dates, desc="μ予測生成", unit="日")
+
+    for race_date in pbar:
         date_str = race_date.strftime('%Y-%m-%d')
-
-        if i % 50 == 0 or i == 1 or i == total_dates:
-            logging.info(f"\n[{i}/{total_dates}] 処理中: {date_str}")
-
         output_filename = f"mu_predictions_{race_date.strftime('%Y%m%d')}.parquet"
+
+        pbar.set_postfix_str(f"{date_str} | 成功: {success_count}/{len(prediction_files) + len(failed_dates)}")
 
         cmd = [
             sys.executable,
@@ -109,24 +110,26 @@ def main():
                 if prediction_file.exists():
                     success_count += 1
                     prediction_files.append(prediction_file)
-
-                    if i % 50 == 0 or i == total_dates:
-                        logging.info(f"  ✅ 成功 (累計: {success_count}/{i})")
                 else:
-                    if i % 50 == 0:
-                        logging.warning(f"  ⚠️  出力ファイルなし: {date_str}")
+                    tqdm.write(f"⚠️  出力ファイルなし: {date_str}")
+                    failed_dates.append(date_str)
             else:
-                logging.error(f"  ❌ 失敗: {date_str}")
+                tqdm.write(f"❌ 失敗: {date_str}")
                 if result.stderr:
-                    logging.error(f"     STDERR: {result.stderr[:200]}")
+                    # エラーメッセージの重要部分を抽出（最後の5行程度）
+                    stderr_lines = result.stderr.strip().split('\n')
+                    important_lines = stderr_lines[-5:] if len(stderr_lines) > 5 else stderr_lines
+                    tqdm.write(f"   STDERR: {chr(10).join(important_lines)}")
                 failed_dates.append(date_str)
 
         except subprocess.TimeoutExpired:
-            logging.error(f"  ❌ タイムアウト: {date_str}")
+            tqdm.write(f"❌ タイムアウト: {date_str}")
             failed_dates.append(f"{date_str}（タイムアウト）")
         except Exception as e:
-            logging.error(f"  ❌ エラー: {date_str} - {e}")
+            tqdm.write(f"❌ エラー: {date_str} - {e}")
             failed_dates.append(f"{date_str}（エラー）")
+
+    pbar.close()
 
     # 全ての予測ファイルを統合
     logging.info("\n" + "=" * 70)
