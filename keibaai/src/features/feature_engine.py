@@ -132,7 +132,21 @@ class FeatureEngine:
         
         final_cols = ['race_id', 'horse_id'] + self.feature_names_
         final_cols_exist = [col for col in final_cols if col in df.columns]
-        
+
+        # ★ 最終的な重複排除（安全対策）★
+        # 特徴量生成過程でのマージ操作により意図しない重複が発生する可能性があるため、
+        # 最終段階で(race_id, horse_id)の組み合わせが一意になるよう保証する
+        initial_rows = len(df)
+        df = df.drop_duplicates(subset=['race_id', 'horse_id'], keep='first')
+        final_rows = len(df)
+
+        if initial_rows > final_rows:
+            duplicates_removed = initial_rows - final_rows
+            logging.warning(f"重複行を検出し削除しました: {duplicates_removed}行 ({duplicates_removed/initial_rows*100:.2f}%)")
+            logging.warning(f"  重複前: {initial_rows:,}行 → 重複後: {final_rows:,}行")
+        else:
+            logging.debug(f"重複チェック完了: 重複なし（{final_rows:,}行）")
+
         logging.info(f"特徴量生成完了。{len(self.feature_names_)}個の特徴量を生成しました。")
         return df[final_cols_exist]
 
