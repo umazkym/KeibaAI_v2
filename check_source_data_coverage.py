@@ -78,14 +78,14 @@ def main():
             for month in range(1, 13):
                 month_data = year_data[year_data['month'] == month]
                 if len(month_data) > 0:
-                    count = month_data.iloc[0]['entry_count']
+                    count = int(month_data.iloc[0]['entry_count'])
                     total_entries += count
                     print(f'  {month:2d}月: {count:5d}エントリ')
                 else:
                     print(f'  {month:2d}月: データなし ❌')
                     missing_months.append(month)
 
-            print(f'\n  📈 {year}年合計: {total_entries}エントリ')
+            print(f'\n  📈 {year}年合計: {int(total_entries)}エントリ')
             if missing_months:
                 print(f'  ⚠️  欠損月: {missing_months}')
     else:
