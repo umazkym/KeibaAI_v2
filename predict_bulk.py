@@ -91,16 +91,18 @@ def load_features_for_period(start_date: str, end_date: str):
 def predict_mu(model, features_df: pd.DataFrame):
     """μモデルで予測"""
 
-    # 識別子カラムを保存
+    # 識別子カラムを保存（horse_numberは特徴量としても使用）
     id_cols = ['race_id', 'horse_id']
-    if 'horse_number' in features_df.columns:
-        id_cols.append('horse_number')
-
     ids_df = features_df[id_cols].copy()
 
+    # horse_numberを結果用に保存（特徴量からは除外しない）
+    if 'horse_number' in features_df.columns:
+        ids_df['horse_number'] = features_df['horse_number']
+
     # 特徴量カラムを選択（数値型のみ）
+    # race_id, horse_id は除外するが、horse_numberは含める
     feature_cols = [c for c in features_df.columns
-                   if c not in id_cols + ['race_date', 'race_date_str', 'year', 'month', 'day']]
+                   if c not in ['race_id', 'horse_id', 'race_date', 'race_date_str', 'year', 'month', 'day']]
 
     # 数値型でないカラムを除外
     numeric_feature_cols = []
