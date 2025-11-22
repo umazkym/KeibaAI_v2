@@ -76,9 +76,14 @@ def check_feature_quality():
         unique_rows = len(df.drop_duplicates(subset=['race_id', 'horse_id']))
         dup_rate = (duplicates / total_rows * 100) if total_rows > 0 else 0
 
-        # horse_number の異常チェック
-        horse_num_zero = (df['horse_number'] == 0).sum()
-        horse_num_zero_rate = (horse_num_zero / total_rows * 100) if total_rows > 0 else 0
+        # horse_number の異常チェック（カラムが存在する場合のみ）
+        if 'horse_number' in df.columns:
+            horse_num_zero = (df['horse_number'] == 0).sum()
+            horse_num_zero_rate = (horse_num_zero / total_rows * 100) if total_rows > 0 else 0
+        else:
+            horse_num_zero = 0
+            horse_num_zero_rate = 0.0
+            print(f"  ⚠️  注意: horse_number カラムが存在しません")
 
         print(f"  総行数: {total_rows:,}行")
         print(f"  重複行: {duplicates:,}行 ({dup_rate:.2f}%)")
