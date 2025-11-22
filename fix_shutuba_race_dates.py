@@ -52,6 +52,11 @@ def main():
     logging.info(f"   修正されたエントリ: {fixed_count:,}行")
     logging.info(f"   残りのNull: {updated_null_count:,}行")
 
+    # race_date列を統一した型に変換（datetime64）
+    logging.info("\nrace_date列をdatetime型に統一中...")
+    shutuba['race_date'] = pd.to_datetime(shutuba['race_date'])
+    logging.info("✅ 型変換完了")
+
     # 保存
     logging.info(f"\n保存中: {shutuba_path}")
     shutuba.to_parquet(shutuba_path, index=False)
