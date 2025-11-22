@@ -56,25 +56,29 @@ models:
       subsample: 0.8
 mu_estimator:
   ranker_params:
-    colsample_bytree: 0.9803217545310665
-    learning_rate: 0.02365358473832376
-    max_depth: 3
+    colsample_bytree: 0.6060576948411027
+    learning_rate: 0.020309265235830157
+    max_depth: 10
     metric: ndcg
-    min_child_samples: 10
-    n_estimators: 968
-    num_leaves: 140
+    min_child_samples: 57
+    n_estimators: 1000
+    num_leaves: 96
     objective: lambdarank
-    subsample: 0.6476313083536415
+    reg_alpha: 0.0009705371168540475
+    reg_lambda: 0.0003667608064912241
+    subsample: 0.876098829427658
   regressor_params:
-    colsample_bytree: 0.9803217545310665
-    learning_rate: 0.02365358473832376
-    max_depth: 3
-    min_child_samples: 10
-    n_estimators: 968
-    num_leaves: 140
-    reg_alpha: 9.78408463373145e-07
-    reg_lambda: 0.0004777583865145214
-    subsample: 0.6476313083536415
+    colsample_bytree: 0.6060576948411027
+    learning_rate: 0.020309265235830157
+    max_depth: 10
+    metric: rmse
+    min_child_samples: 57
+    n_estimators: 1000
+    num_leaves: 96
+    objective: regression
+    reg_alpha: 0.0009705371168540475
+    reg_lambda: 0.0003667608064912241
+    subsample: 0.876098829427658
 training:
   feature_version: v1.0
   random_seed: 42

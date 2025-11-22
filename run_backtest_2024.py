@@ -63,7 +63,7 @@ def main():
                 sys.executable,
                 str(project_root / 'keibaai/src/models/predict.py'),
                 '--date', target_date,
-                '--model_dir', 'data/models/complete_model_2024',
+                '--model_dir', 'data/models/complete_model_optimized_2024',
                 '--config', 'keibaai/configs/default.yaml'
             ]
             

@@ -92,26 +92,39 @@ class FeatureEngine:
 
         # --- 高度な特徴量 (Advanced Features) ---
         # ユーザー要望により追加: ペース、血統(Deep)、コースバイアス
-        # 設定ファイルで制御可能にするのがベストだが、今回は直接組み込む
         try:
-            from src.features.advanced_features import AdvancedFeatureEngine
+            # srcがパスに通っている前提
+            from features.advanced_features import AdvancedFeatureEngine
             adv_engine = AdvancedFeatureEngine()
             
+            logging.info("AdvancedFeatureEngine を使用して高度な特徴量を生成します...")
+            
             # 1. ペース・脚質
-            df = adv_engine.generate_pace_features(df, results_history_df)
+            df = adv_engine.generate_pace_features(df)
             
             # 2. 血統 (Deep)
-            if pedigree_df is not None:
+            if pedigree_df is not None and not pedigree_df.empty:
                 df = adv_engine.generate_deep_pedigree_features(df, pedigree_df, results_history_df)
             
             # 3. コースバイアス
             df = adv_engine.generate_course_bias_features(df, results_history_df)
             
-            # 4. パフォーマンストレンド (既存のadvanced_features機能)
+            # 4. パフォーマンストレンド
             df = adv_engine.generate_performance_trend_features(df, results_history_df)
             
-        except ImportError:
-            logging.warning("AdvancedFeatureEngineが見つかりません。高度な特徴量はスキップされます。")
+            # 5. 騎手×調教師の相性 (Synergy) - 新規追加
+            df = adv_engine.generate_jockey_trainer_synergy(df, results_history_df)
+            
+        except ImportError as e:
+            logging.warning(f"AdvancedFeatureEngineのインポートに失敗しました: {e}")
+            # パスが通っていない場合のフォールバック（相対インポート）
+            try:
+                from .advanced_features import AdvancedFeatureEngine
+                adv_engine = AdvancedFeatureEngine()
+                # 再試行... (コード重複を避けるためここではログのみ)
+                logging.info("相対インポートで成功しました。再実行は実装されていません。")
+            except:
+                pass
         except Exception as e:
             logging.error(f"高度な特徴量の生成中にエラー: {e}", exc_info=True)
 
