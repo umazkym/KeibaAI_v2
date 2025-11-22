@@ -91,30 +91,46 @@ class FeatureEngine:
             df = self._add_relative_features(df)
 
         # --- 高度な特徴量 (Advanced Features) ---
-        # ユーザー要望により追加: ペース、血統(Deep)、コースバイアス
+        # Phase D: ROI向上のため、未使用の高度な特徴量を追加
         try:
             # srcがパスに通っている前提
             from features.advanced_features import AdvancedFeatureEngine
             adv_engine = AdvancedFeatureEngine()
-            
+
             logging.info("AdvancedFeatureEngine を使用して高度な特徴量を生成します...")
-            
+
             # 1. ペース・脚質
             df = adv_engine.generate_pace_features(df)
-            
+
             # 2. 血統 (Deep)
             if pedigree_df is not None and not pedigree_df.empty:
                 df = adv_engine.generate_deep_pedigree_features(df, pedigree_df, results_history_df)
-            
+
             # 3. コースバイアス
             df = adv_engine.generate_course_bias_features(df, results_history_df)
-            
+
             # 4. パフォーマンストレンド
             df = adv_engine.generate_performance_trend_features(df, results_history_df)
-            
-            # 5. 騎手×調教師の相性 (Synergy) - 新規追加
+
+            # 5. 騎手×調教師の相性 (Synergy)
             df = adv_engine.generate_jockey_trainer_synergy(df, results_history_df)
-            
+
+            # 🆕 Phase D: 以下3つの特徴量を新規追加 (ROI向上のため)
+
+            # 6. コース適性特徴量 (競馬場別・距離別・馬場別成績)
+            logging.info("コース適性特徴量を生成中...")
+            df = adv_engine.generate_course_affinity_features(df, results_history_df)
+
+            # 7. レース条件特徴量 (フィールドサイズ・季節性・レース重要度)
+            logging.info("レース条件特徴量を生成中...")
+            df = adv_engine.generate_race_condition_features(df)
+
+            # 8. 相対指標 (タイム偏差値・上がり3F相対値・オッズ順位)
+            logging.info("レース内相対指標を生成中...")
+            df = adv_engine.calculate_relative_metrics(df)
+
+            logging.info("✓ Phase D: 新規特徴量 3カテゴリを追加完了")
+
         except ImportError as e:
             logging.warning(f"AdvancedFeatureEngineのインポートに失敗しました: {e}")
             # パスが通っていない場合のフォールバック（相対インポート）
