@@ -91,31 +91,32 @@ def load_features_for_period(start_date: str, end_date: str):
 def predict_mu(model, features_df: pd.DataFrame):
     """μモデルで予測"""
 
-    # 識別子カラムを保存（horse_numberは特徴量としても使用）
+    # 識別子カラムを保存
     id_cols = ['race_id', 'horse_id']
     ids_df = features_df[id_cols].copy()
 
-    # horse_numberを結果用に保存（特徴量からは除外しない）
+    # horse_numberを結果用に保存
     if 'horse_number' in features_df.columns:
         ids_df['horse_number'] = features_df['horse_number']
 
-    # 特徴量カラムを選択（数値型のみ）
-    # race_id, horse_id は除外するが、horse_numberは含める
+    # モデルの予測にはrace_idが必要（レースごとの正規化用）
+    # race_id, horse_id, horse_number を含め、race_date系のみ除外
     feature_cols = [c for c in features_df.columns
-                   if c not in ['race_id', 'horse_id', 'race_date', 'race_date_str', 'year', 'month', 'day']]
+                   if c not in ['race_date', 'race_date_str', 'year', 'month', 'day']]
 
-    # 数値型でないカラムを除外
-    numeric_feature_cols = []
+    # 数値型 or race_id/horse_idのみ
+    prediction_cols = []
     for col in feature_cols:
-        if pd.api.types.is_numeric_dtype(features_df[col]):
-            numeric_feature_cols.append(col)
+        if col in ['race_id', 'horse_id'] or pd.api.types.is_numeric_dtype(features_df[col]):
+            prediction_cols.append(col)
 
-    logging.info(f"予測に使用する特徴量: {len(numeric_feature_cols)}個")
+    logging.info(f"予測に使用するカラム: {len(prediction_cols)}個（race_id, horse_id含む）")
 
-    X = features_df[numeric_feature_cols]
+    X = features_df[prediction_cols].copy()
 
-    # 欠損値を0で埋める（必要に応じて調整）
-    X = X.fillna(0)
+    # 欠損値を0で埋める（race_id, horse_id以外）
+    numeric_cols = [c for c in X.columns if c not in ['race_id', 'horse_id']]
+    X[numeric_cols] = X[numeric_cols].fillna(0)
 
     logging.info("μ予測を実行中...")
     mu_predictions = model.predict(X)
