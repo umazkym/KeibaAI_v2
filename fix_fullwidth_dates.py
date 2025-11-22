@@ -74,10 +74,17 @@ def main():
         null_race_ids = shutuba[shutuba['race_date'].isna()]['race_id'].unique()
         logging.warning(f"Null race_idの例: {null_race_ids[:10].tolist()}")
 
-    # 保存
-    logging.info(f"\n保存中: {shutuba_path}")
-    shutuba.to_parquet(shutuba_path, index=False)
-    logging.info("✅ 保存完了")
+    # 保存（メタデータもクリーンに再構築）
+    logging.info(f"\n保存中（メタデータ再構築）: {shutuba_path}")
+    # 一時ファイルに保存
+    temp_path = shutuba_path.parent / f"{shutuba_path.stem}_temp.parquet"
+    shutuba.to_parquet(temp_path, index=False, engine='pyarrow', compression='snappy')
+
+    # 元ファイルを削除して置き換え
+    if shutuba_path.exists():
+        shutuba_path.unlink()
+    temp_path.rename(shutuba_path)
+    logging.info("✅ 保存完了（クリーンなメタデータで再構築）")
 
     # 確認
     logging.info("\n最終確認:")
