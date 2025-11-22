@@ -487,7 +487,7 @@ class FeatureEngine:
                     engine='pyarrow',
                     compression='snappy',
                     partition_cols=valid_partition_cols,
-                    existing_data_behavior='overwrite_or_ignore'
+                    existing_data_behavior='delete_matching'
                 )
             else:
                  logging.warning(f"パーティションカラム {partition_cols} がDFにないため、単一ファイルで保存します")
