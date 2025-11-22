@@ -177,13 +177,22 @@ def load_parquet_data_by_date(
                     # (features.parquetはTimestamp型なので、メモリ問題は回避できるはず)
                     logging.info(f"カラム '{date_col}' はTimestamp型ではありません ({field_type})。Pandasロード後にフィルタリングします。")
 
-        # データをロード (フィルタ適用)
-        if filter_expr is not None:
-            table = dataset.to_table(filter=filter_expr)
-        else:
-            table = dataset.to_table()
+        # # データをロード (フィルタ適用)
+        # if filter_expr is not None:
+        #     table = dataset.to_table(filter=filter_expr)
+        # else:
+        #     table = dataset.to_table()
+
+        # 新しいコード:
+        table = None  # PyArrowは使わない
             
-        df = table.to_pandas()
+        # Pandasで直接全ファイル読み込み
+        dfs = []
+        for f in target_files:
+            try:
+                dfs.append(pd.read_parquet(f))
+            except: pass
+        df = pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame()
         
         # PyArrowでフィルタできなかった場合 (文字列型など) のために、Pandasで再度フィルタリング
         # (PyArrowでフィルタ済みの場合も、念のため実行してもコストは低い)

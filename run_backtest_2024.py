@@ -58,12 +58,12 @@ def main():
             logging.info(f"[{i+1}/{len(dates_2024)}] 処理中: {target_date}")
             
             # 1. 予測生成 (predict.py)
-            # パス指定に注意: --model_dir data/models
+            # 統合モデル（μ/σ/ν）を使用
             cmd_predict = [
                 sys.executable,
                 str(project_root / 'keibaai/src/models/predict.py'),
                 '--date', target_date,
-                '--model_dir', 'data/models',
+                '--model_dir', 'data/models/complete_model_2024',
                 '--config', 'keibaai/configs/default.yaml'
             ]
             

@@ -100,7 +100,7 @@ def main():
                 cmd,
                 capture_output=True,
                 text=True,
-                encoding='utf-8',
+                encoding='cp932',  # Windows環境用
                 errors='replace',
                 timeout=300  # 5分タイムアウト
             )
