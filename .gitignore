@@ -154,6 +154,10 @@ keibaai/data/parsed/parquet/
 keibaai/data/features/parquet/
 keibaai/data/models/
 keibaai/data/simulations/
+# Exclude top-level simulations folder
+data/simulations/
+# Exclude test simulation folder
+/data/simulations/test/
 keibaai/data/orders/
 keibaai/data/logs/
 
@@ -299,3 +303,5 @@ node_modules/
 *.7z
 
 keibaai/archives
+# Exclude parse failures results_parser
+data/errors/parse_failures/results_parser/
