@@ -45,7 +45,7 @@ def main():
     project_root = Path(__file__).resolve().parent
     predict_script = project_root / 'keibaai/src/models/predict.py'
     # predict.pyはkeibaai/を基準とするため、相対パスから'keibaai/'を除く
-    model_dir = 'data/models/mu_model_20241122_fixed'
+    model_dir = 'data/models/mu_model_20241122_final'
     predictions_dir = project_root / 'keibaai/data/predictions/parquet'
     races_path = project_root / 'keibaai/data/parsed/parquet/races/races.parquet'
 
