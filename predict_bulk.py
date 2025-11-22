@@ -51,20 +51,35 @@ def load_features_for_period(start_date: str, end_date: str):
 
     logging.info(f"特徴量データをロード中: {start_date} 〜 {end_date}")
 
-    # パーティション化されたParquetを読み込み（フィルタリング）
     start_dt = pd.to_datetime(start_date)
     end_dt = pd.to_datetime(end_date)
 
-    # 年・月でフィルタリング
-    filters = [
-        ('year', '>=', start_dt.year),
-        ('year', '<=', end_dt.year)
-    ]
+    # 年・月ごとにparquetファイルを個別に読み込み（YAMLファイルを除外）
+    all_dfs = []
 
-    table = pq.read_table(str(features_base_path), filters=filters)
-    df = table.to_pandas()
+    for year in range(start_dt.year, end_dt.year + 1):
+        year_path = features_base_path / f"year={year}"
+        if not year_path.exists():
+            continue
 
-    # race_dateでさらにフィルタリング
+        for month in range(1, 13):
+            month_path = year_path / f"month={month}"
+            if not month_path.exists():
+                continue
+
+            # .parquetファイルのみを読み込み
+            parquet_files = list(month_path.glob("*.parquet"))
+            for pq_file in parquet_files:
+                df_part = pd.read_parquet(pq_file)
+                all_dfs.append(df_part)
+
+    if not all_dfs:
+        raise RuntimeError(f"期間 {start_date} - {end_date} の特徴量データが見つかりません")
+
+    # 全データを結合
+    df = pd.concat(all_dfs, ignore_index=True)
+
+    # race_dateでフィルタリング
     if 'race_date' in df.columns:
         df['race_date'] = pd.to_datetime(df['race_date'])
         df = df[(df['race_date'] >= start_dt) & (df['race_date'] <= end_dt)]
