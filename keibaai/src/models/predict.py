@@ -317,23 +317,32 @@ def main():
         logging.info("μモデルをロード中...")
         mu_model_config = models_config.get('mu_estimator', {})
         
-        # mu_model.pklが直接存在する場合はそれをロード
+        # μモデルのロード（3つの形式に対応）
         mu_model_pkl = model_dir_path / 'mu_model.pkl'
         mu_model_dir = model_dir_path / 'mu_model'
-        
-        if mu_model_pkl.exists():
+        regressor_pkl = model_dir_path / 'regressor.pkl'
+        ranker_pkl = model_dir_path / 'ranker.pkl'
+
+        if regressor_pkl.exists() and ranker_pkl.exists():
+            # 新形式: regressor.pkl と ranker.pkl が直接存在
+            logging.info(f"μモデル（新形式）をロード: {model_dir_path}")
+            mu_model = MuEstimator(mu_model_config)
+            mu_model.load_model(str(model_dir_path))
+        elif mu_model_pkl.exists():
+            # 旧形式1: mu_model.pkl が直接存在
             logging.info(f"μモデルファイルを直接ロード: {mu_model_pkl}")
             mu_model = MuEstimator(mu_model_config)
-            mu_model.load_model(str(mu_model_pkl.parent))  # 親ディレクトリを渡す
+            mu_model.load_model(str(mu_model_pkl.parent))
         elif mu_model_dir.exists():
+            # 旧形式2: mu_model ディレクトリ
             logging.info(f"μモデルディレクトリからロード: {mu_model_dir}")
             mu_model = load_model_safely(
-                MuEstimator, 
-                mu_model_config, 
+                MuEstimator,
+                mu_model_config,
                 str(mu_model_dir)
             )
         else:
-            raise FileNotFoundError(f"μモデルが見つかりません: {mu_model_pkl} または {mu_model_dir}")
+            raise FileNotFoundError(f"μモデルが見つかりません: {regressor_pkl}, {ranker_pkl}, {mu_model_pkl}, または {mu_model_dir}")
 
         # 3.2 σ (sigma) モデル (プレーンなLGBMモデルをロード)
         sigma_model = None
