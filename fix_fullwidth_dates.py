@@ -74,17 +74,32 @@ def main():
         null_race_ids = shutuba[shutuba['race_date'].isna()]['race_id'].unique()
         logging.warning(f"Null race_idの例: {null_race_ids[:10].tolist()}")
 
-    # 保存（メタデータもクリーンに再構築）
-    logging.info(f"\n保存中（メタデータ再構築）: {shutuba_path}")
-    # 一時ファイルに保存
+    # 保存（統計情報を無効化してメタデータをクリーンに再構築）
+    logging.info(f"\n保存中（統計情報無効化・メタデータ再構築）: {shutuba_path}")
+    # 一時ファイルに保存（統計情報を書き込まない）
     temp_path = shutuba_path.parent / f"{shutuba_path.stem}_temp.parquet"
-    shutuba.to_parquet(temp_path, index=False, engine='pyarrow', compression='snappy')
+
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    # DataFrameをArrow Tableに変換
+    table = pa.Table.from_pandas(shutuba, preserve_index=False)
+
+    # 統計情報なしで書き込み
+    pq.write_table(
+        table,
+        temp_path,
+        compression='snappy',
+        write_statistics=False,  # 統計情報を無効化
+        use_dictionary=True,
+        version='2.6'
+    )
 
     # 元ファイルを削除して置き換え
     if shutuba_path.exists():
         shutuba_path.unlink()
     temp_path.rename(shutuba_path)
-    logging.info("✅ 保存完了（クリーンなメタデータで再構築）")
+    logging.info("✅ 保存完了（統計情報なし・クリーンなメタデータ）")
 
     # 確認
     logging.info("\n最終確認:")
