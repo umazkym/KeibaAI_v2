@@ -178,6 +178,15 @@ class FeatureEngine:
         final_cols = ['race_id', 'horse_id']
         if 'race_date' in df.columns:
             final_cols.append('race_date')
+        
+        # ★ ターゲット変数を追加（評価時に必要）★
+        # feature_names_ からは除外されているが、保存時には評価のために必要
+        target_cols_to_save = ['finish_position', 'finish_time_seconds']
+        for target_col in target_cols_to_save:
+            if target_col in df.columns:
+                final_cols.append(target_col)
+                logging.debug(f"ターゲット列 '{target_col}' を保存対象に追加しました")
+        
         final_cols.extend(self.feature_names_)
         final_cols_exist = [col for col in final_cols if col in df.columns]
 

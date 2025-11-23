@@ -123,4 +123,6 @@ feature_selection:
     - '^morning_popularity$'  # 出馬表の前日人気
     - '^win_odds$'            # レース結果の確定単勝オッズ
     - '^popularity$'          # レース結果の確定人気
+    - '^popularity_finish_diff$'  # ← これを追加
+    - '^relative_odds$'       # ← これを追加
     # ▲▲▲ オッズ除外設定終了 ▲▲▲

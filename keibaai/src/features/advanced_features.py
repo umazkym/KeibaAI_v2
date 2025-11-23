@@ -14,42 +14,50 @@ class AdvancedFeatureEngine:
         df: pd.DataFrame,
         performance_df: pd.DataFrame
     ) -> pd.DataFrame:
-        """パフォーマンストレンド特徴量の生成"""
+        """パフォーマンストレンド特徴量の生成（groupby最適化版）"""
         
-        # 1. 直近N走の成績トレンド
+        self.logger.info(f"パフォーマンストレンド特徴量を生成中... (馬数: {df['horse_id'].nunique():,}頭)")
+        
+        # 直近N走の成績トレンド（groupby + apply で最適化）
         windows = [3, 5, 10]
+        performance_sorted = performance_df.sort_values('race_date')
         
-        for horse_id in df['horse_id'].unique():
-            horse_perf = performance_df[
-                performance_df['horse_id'] == horse_id
-            ].sort_values('race_date')
+        for w in windows:
+            self.logger.info(f"  → 直近{w}走の統計を計算中...")
             
-            if len(horse_perf) == 0:
-                continue
+            def calc_stats(group):
+                recent = group.tail(w)
+                if len(recent) == 0:
+                    return pd.Series({
+                        f'avg_finish_last{w}': np.nan,
+                        f'win_rate_last{w}': np.nan,
+                        f'place_rate_last{w}': np.nan,
+                        f'improvement_rate_{w}': np.nan
+                    })
+                
+                avg_finish = recent['finish_position'].mean()
+                win_rate = (recent['finish_position'] == 1).mean()
+                place_rate = (recent['finish_position'] <= 2).mean()
+                
+                if len(recent) >= 2:
+                    half = len(recent) // 2
+                    first_avg = recent.iloc[:half]['finish_position'].mean()
+                    second_avg = recent.iloc[half:]['finish_position'].mean()
+                    improvement = (first_avg - second_avg) / first_avg if first_avg > 0 else 0
+                else:
+                    improvement = 0
+                
+                return pd.Series({
+                    f'avg_finish_last{w}': avg_finish,
+                    f'win_rate_last{w}': win_rate,
+                    f'place_rate_last{w}': place_rate,
+                    f'improvement_rate_{w}': improvement
+                })
             
-            # 各ウィンドウでの集計
-            for w in windows:
-                recent_races = horse_perf.tail(w)
-                
-                # 平均着順のトレンド
-                df.loc[df['horse_id'] == horse_id, f'avg_finish_last{w}'] = \
-                    recent_races['finish_position'].mean()
-                
-                # 着順の改善率
-                if len(recent_races) >= 2:
-                    first_half = recent_races.head(w//2)['finish_position'].mean()
-                    second_half = recent_races.tail(w//2)['finish_position'].mean()
-                    improvement = (first_half - second_half) / first_half
-                    df.loc[df['horse_id'] == horse_id, f'improvement_rate_{w}'] = improvement
-                
-                # 勝率
-                win_rate = (recent_races['finish_position'] == 1).mean()
-                df.loc[df['horse_id'] == horse_id, f'win_rate_last{w}'] = win_rate
-                
-                # 連対率（2着以内）
-                place_rate = (recent_races['finish_position'] <= 2).mean()
-                df.loc[df['horse_id'] == horse_id, f'place_rate_last{w}'] = place_rate
+            trend_stats = performance_sorted.groupby('horse_id', observed=True).apply(calc_stats).reset_index()
+            df = df.merge(trend_stats, on='horse_id', how='left')
         
+        self.logger.info("✓ パフォーマンストレンド特徴量の生成完了")
         return df
     
     def generate_course_affinity_features(
@@ -461,42 +469,32 @@ class AdvancedFeatureEngine:
         self,
         df: pd.DataFrame
     ) -> pd.DataFrame:
-        """レース内での相対的な指標"""
+        """レース内での相対的な指標（オッズ除外版）"""
         
-        # グループごとの処理
-        for race_id in df['race_id'].unique():
-            race_df = df[df['race_id'] == race_id]
-            race_indices = race_df.index
-            
-            # 1. タイムの偏差値
-            if 'finish_time_seconds' in df.columns:
-                mean_time = race_df['finish_time_seconds'].mean()
-                std_time = race_df['finish_time_seconds'].std()
-                if std_time > 0:
-                    df.loc[race_indices, 'time_deviation'] = \
-                        50 + 10 * (race_df['finish_time_seconds'] - mean_time) / std_time
-            
-            # 2. 上がり3Fの相対値
-            if 'last_3f_time' in df.columns:
-                min_last3f = race_df['last_3f_time'].min()
-                df.loc[race_indices, 'last3f_diff_from_best'] = \
-                    race_df['last_3f_time'] - min_last3f
-            
-            # 3. オッズの順位
-            # Note: morning_oddsを使用（win_oddsはデータリークを引き起こす）
-            if 'morning_odds' in df.columns:
-                df.loc[race_indices, 'odds_rank'] = \
-                    race_df['morning_odds'].rank(method='min')
-            elif 'win_odds' in df.columns:
-                # フォールバック（警告を出すべき）
-                self.logger.warning("win_oddsを使用しています。morning_oddsの使用を推奨します（データリーク防止）")
-                df.loc[race_indices, 'odds_rank'] = \
-                    race_df['win_odds'].rank(method='min')
-            
-            # 4. 斤量の相対値
-            if 'basis_weight' in df.columns:
-                avg_weight = race_df['basis_weight'].mean()
-                df.loc[race_indices, 'weight_diff_from_avg'] = \
-                    race_df['basis_weight'] - avg_weight
+        self.logger.info(f"レース内相対指標を生成中... (レース数: {df['race_id'].nunique():,})")
         
+        # ⚠️ データリーク防止: オッズと結果データは除外
+        # × finish_time_seconds → レース後にしか判明しない
+        # × last_3f_time → レース後にしか判明しない
+        # × オッズ (morning_odds / win_odds) → 学習には使わない（評価時のROI計算のみ使用）
+        # ○ basis_weight → レース前に確定
+        # ○ horse_weight → レース前に計測（当日朝）
+        
+        # groupby + transform で最適化（ループ不要）
+        
+        # 1. 斤量の相対値（レース内平均との差）
+        if 'basis_weight' in df.columns:
+            race_avg_weight = df.groupby('race_id', observed=True)['basis_weight'].transform('mean')
+            df['weight_diff_from_avg'] = df['basis_weight'] - race_avg_weight
+            self.logger.info("  ✓ 斤量の相対値を計算完了")
+        else:
+            self.logger.warning("basis_weightカラムがないため、weight_diff_from_avgをスキップします")
+        
+        # 2. 馬体重の相対値（レース内平均との差）
+        if 'horse_weight' in df.columns:
+            race_avg_hw = df.groupby('race_id', observed=True)['horse_weight'].transform('mean')
+            df['horse_weight_diff_from_avg'] = df['horse_weight'] - race_avg_hw
+            self.logger.info("  ✓ 馬体重の相対値を計算完了")
+        
+        self.logger.info("✓ レース内相対指標の生成完了（オッズ除外）")
         return df

@@ -211,9 +211,7 @@ def main():
         if 'horse_id' in cols_to_merge and len(cols_to_merge) > 1:
             logging.info(f"results_history_df に血統情報 {cols_to_merge} をマージします。")
             ped_info = data["horse_profiles_df"][cols_to_merge]
-            data["results_history_df"] = data["results_history_df"].merge(ped_info, on='horse_id', how='left')
-        else:
-            logging.warning("horse_profiles_df に十分な血統情報（sire_idなど）が見つかりませんでした。")
+    logging.info("=" * 60)
 
     # --- 4. 特徴量生成 ---
     features_df = engine.generate_features(
@@ -222,6 +220,64 @@ def main():
         horse_profiles_df=data["horse_profiles_df"],
         pedigree_df=data["pedigree_df"]
     )
+
+    # ★ ターゲット変数のマージ (Phase D 修正) ★
+    # shutuba_dfには結果が含まれていないため、results_history_dfからマージする
+    logging.info("ターゲット変数(finish_position, finish_time_seconds)をマージしています...")
+    if "results_history_df" in data and not data["results_history_df"].empty:
+        # デバッグ: results_history_dfの状態確認
+        if 'finish_position' in data["results_history_df"].columns:
+            fp_stats = data["results_history_df"]['finish_position'].describe()
+            logging.info(f"results_history_df finish_position stats:\n{fp_stats}")
+            
+            # 0の数を確認
+            zeros = (data["results_history_df"]['finish_position'] == 0).sum()
+            logging.info(f"results_history_df finish_position 0 count: {zeros}")
+        else:
+            logging.warning("results_history_df has NO finish_position column!")
+
+        # 必要なカラムのみ抽出
+        target_cols = ['race_id', 'horse_id']
+        if 'finish_position' in data["results_history_df"].columns:
+            target_cols.append('finish_position')
+        if 'finish_time_seconds' in data["results_history_df"].columns:
+            target_cols.append('finish_time_seconds')
+            
+        if len(target_cols) > 2:
+            targets = data["results_history_df"][target_cols].copy()
+            
+            # デバッグ: targetsの状態確認
+            logging.info(f"targets sample:\n{targets.head()}")
+            
+            # 型変換 (念のため)
+            targets['race_id'] = targets['race_id'].astype(str).str.strip()
+            features_df['race_id'] = features_df['race_id'].astype(str).str.strip()
+            
+            if 'horse_id' in targets.columns:
+                targets['horse_id'] = targets['horse_id'].astype(str).str.strip()
+            if 'horse_id' in features_df.columns:
+                features_df['horse_id'] = features_df['horse_id'].astype(str).str.strip()
+
+            # マージ前にfeatures_dfから既存のターゲット列を削除（重複回避）
+            cols_to_drop = [c for c in ['finish_position', 'finish_time_seconds'] if c in features_df.columns]
+            if cols_to_drop:
+                logging.info(f"features_dfから既存のターゲット列を削除します: {cols_to_drop}")
+                features_df = features_df.drop(columns=cols_to_drop)
+
+            # 左外部結合でマージ
+            features_df = features_df.merge(targets, on=['race_id', 'horse_id'], how='left')
+            
+            logging.info(f"ターゲット変数のマージ完了: {len(features_df)}行")
+            
+            # マージ後の確認
+            if 'finish_position' in features_df.columns:
+                merged_zeros = (features_df['finish_position'] == 0).sum()
+                merged_nas = features_df['finish_position'].isna().sum()
+                logging.info(f"マージ後の finish_position: 0の数={merged_zeros}, NaNの数={merged_nas}")
+        else:
+            logging.warning("results_history_dfにターゲット列(finish_position, finish_time_seconds)が見つかりません。")
+    else:
+        logging.warning("results_history_dfがないため、ターゲット変数をマージできませんでした。")
 
     if features_df.empty:
         logging.warning("特徴量生成の結果が空です。")

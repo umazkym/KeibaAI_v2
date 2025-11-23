@@ -1,3 +1,14 @@
+import sys
+import argparse
+import logging
+import pandas as pd
+import numpy as np
+from pathlib import Path
+from datetime import datetime
+from scipy.stats import spearmanr
+from sklearn.metrics import mean_squared_error
+import yaml
+
 try:
     from keibaai.src.pipeline_core import setup_logging
     from keibaai.src.utils.data_utils import load_parquet_data_by_date
@@ -51,37 +62,46 @@ def main():
     end_dt = datetime.strptime(args.end_date, '%Y-%m-%d')
 
     # --- 1. モデルと特徴量リストのロード ---
-    model_path = Path(args.model_dir) / 'mu_model.pkl'
+    model_dir_path = Path(args.model_dir)
+    
     try:
         import joblib
-        estimator = joblib.load(model_path)
-        # 特徴量リストの取得
-        if hasattr(estimator, 'feature_names'):
-            feature_names = estimator.feature_names
-        elif hasattr(estimator, 'feature_names_'):
-            feature_names = estimator.feature_names_
-        else:
-            logging.error("モデルに特徴量リストが含まれていません")
-            sys.exit(1)
-        logging.info(f"{len(feature_names)}個の特徴量を持つモデルをロードしました")
-    except FileNotFoundError:
-        logging.error(f"モデルファイルが見つかりません: {model_path}")
+        import json
+        
+        # MuEstimatorのインスタンスを作成（config不要）してload_modelを呼び出す
+        # 最小限のconfigで初期化
+        minimal_config = {}
+        estimator = MuEstimator(config=minimal_config)
+        estimator.load_model(str(model_dir_path))
+        
+        feature_names = estimator.feature_names
+        logging.info(f"{len(feature_names)}個の特徴量を持つμEstimatorをロードしました")
+    except FileNotFoundError as e:
+        logging.error(f"モデルファイルが見つかりません: {e}")
         sys.exit(1)
     # --- 2. 評価用データのロードと前処理 ---
     features_path_str = config['features_path']
     parquet_dir = Path(features_path_str) / 'parquet'
     
-    # 日付範囲からパーティションディレクトリを構築
-    year = start_dt.year
-    month = start_dt.month
-    partition_path = parquet_dir / f'year={year}' / f'month={month}'
+    # 全年月のパーティションをロード
+    logging.info(f"特徴量を{start_dt.strftime('%Y-%m-%d')}から{end_dt.strftime('%Y-%m-%d')}までロードしています...")
     
-    if not partition_path.exists():
-        logging.error(f"特徴量パーティションが見つかりません: {partition_path}")
+    # 年月範囲を抽出
+    date_range = pd.date_range(start=start_dt, end=end_dt, freq='MS')  # Month Start
+    partitions_to_load = []
+    
+    for date in date_range:
+        partition_path = parquet_dir / f'year={date.year}' / f'month={date.month}'
+        if partition_path.exists():
+            partitions_to_load.append(partition_path)
+            logging.debug(f"  パーティション追加: {partition_path}")
+    
+    if not partitions_to_load:
+        logging.error(f"指定期間の特徴量パーティションが見つかりません: {start_dt} - {end_dt}")
         sys.exit(1)
-    
-    logging.info(f"特徴量をロードしています: {partition_path}")
-    features_df = pd.read_parquet(partition_path)
+   
+    logging.info(f"{len(partitions_to_load)}個のパーティションを読み込みます")
+    features_df = pd.concat([pd.read_parquet(p) for p in partitions_to_load], ignore_index=True)
     
     # 日付フィルタリング
     if 'race_date' in features_df.columns:
@@ -127,10 +147,14 @@ def main():
     else:
         perf_path = Path(config.get('data_path', 'data')) / 'parsed' / 'parquet' / 'horses_performance' / 'horses_performance.parquet'
 
+    print(f"DEBUG: perf_path resolved to: {perf_path}")
+    print(f"DEBUG: perf_path exists: {perf_path.exists()}")
+
     if perf_path.exists():
         try:
             perf_df = pd.read_parquet(perf_path)
             logging.info(f"horses_performance.parquet読み込み完了: {len(perf_df):,}行")
+            print(f"DEBUG: perf_df loaded, rows: {len(perf_df)}")
 
             # race_dateをdatetime型に変換（フィルタリング用）
             if 'race_date' in perf_df.columns:
@@ -175,16 +199,17 @@ def main():
                 if 'win_odds' in final_df.columns:
                     odds_available = final_df['win_odds'].notna().sum()
                     logging.info(f"オッズデータのマージ完了: {odds_available}/{len(final_df)}行 ({odds_available/len(final_df)*100:.1f}%) でオッズ取得")
-
+                    print(f"DEBUG: Odds merge success. Available: {odds_available}/{len(final_df)}")
+                    
                     if rows_before != len(final_df):
                         logging.warning(f"マージ後に行数が変化しました: {rows_before} → {len(final_df)}")
                 else:
                     logging.warning("マージ後にwin_oddsカラムが見つかりません")
+                    print("DEBUG: win_odds column missing after merge")
                     final_df['win_odds'] = pd.NA
             else:
                 logging.warning("horses_performance.parquetにwin_oddsカラムが存在しません")
                 final_df['win_odds'] = pd.NA
-
         except Exception as e:
             logging.error(f"オッズデータの読み込みに失敗しました: {e}", exc_info=True)
             logging.warning("オッズデータなしで評価を続行します")
@@ -195,62 +220,30 @@ def main():
         final_df['win_odds'] = pd.NA
 
     # --- 3. 予測の実行 ---
+    # 特徴量の整合性チェックと欠損補完
+    missing_cols = [col for col in feature_names if col not in final_df.columns]
+    if missing_cols:
+        logging.warning(f"以下の特徴量がデータに存在しないため、0.0で補完します: {missing_cols[:10]} ... (全{len(missing_cols)}個)")
+        for col in missing_cols:
+            final_df[col] = 0.0
+
+    logging.info("予測を実行中...")
     try:
-        # モデルが期待する特徴量を確認（新旧実装に対応）
-        if hasattr(estimator, 'model_ranker') and estimator.model_ranker is not None:
-            expected_features = estimator.model_ranker.n_features_
-        elif hasattr(estimator, 'ranker') and estimator.ranker is not None:
-            expected_features = len(estimator.feature_names_) if hasattr(estimator, 'feature_names_') else len(feature_names)
+        # MuEstimatorのインターフェースに合わせて予測
+        if hasattr(estimator, 'predict_score'):
+            predictions = estimator.predict_score(final_df)
+        elif hasattr(estimator, 'predict'):
+             predictions = estimator.predict(final_df)
         else:
-            expected_features = len(feature_names)
-        logging.info(f"モデルが期待する特徴量数: {expected_features}")
-        logging.info(f"モデルの特徴量リスト: {len(feature_names)}個")
-
-        # win_oddsがモデルの特徴量に含まれているか確認
-        if 'win_odds' in feature_names:
-            logging.warning("⚠️ win_oddsがモデルの特徴量に含まれています（データリークの可能性）")
-            logging.info("win_oddsをそのまま使用して予測を実行します（評価用）")
-            # モデルがwin_oddsを期待している場合は、そのまま使用
-            eval_feature_names = feature_names
-        else:
-            logging.info("✓ モデルの特徴量にwin_oddsは含まれていません（正常）")
-            eval_feature_names = feature_names
-
-        # 特徴量の存在確認
-        missing_features = [f for f in eval_feature_names if f not in final_df.columns]
-        if missing_features:
-            logging.error(f"必要な特徴量が見つかりません ({len(missing_features)}個): {missing_features[:10]}...")
-            logging.error("不足している特徴量をNaNで埋めて続行します")
-            for feat in missing_features:
-                final_df[feat] = 0
-
-        X_eval = final_df[eval_feature_names]
-
-        logging.info(f"予測入力データ形状: {X_eval.shape}")
-        # モデル情報のログ（新旧実装に対応）
-        if hasattr(estimator, 'model_ranker') and hasattr(estimator.model_ranker, 'n_features_'):
-            logging.info(f"モデル期待特徴量数 (Ranker): {estimator.model_ranker.n_features_}")
-        if hasattr(estimator, 'model_regressor') and hasattr(estimator.model_regressor, 'n_features_'):
-            logging.info(f"モデル期待特徴量数 (Regressor): {estimator.model_regressor.n_features_}")
-        
-        # Check if rank_score is in X_eval
-        if 'rank_score' in X_eval.columns:
-            logging.warning("rank_score is already in X_eval!")
-
-        # MuEstimatorの実装に応じて渡すデータを切り替える
-        if hasattr(estimator, 'model_ranker') and estimator.model_ranker is not None:
-            # 新しい実装: race_idが必要なので final_df を渡す
-            # (内部で feature_names によるフィルタリングが行われる)
-            logging.info("新しいMuEstimator実装を検出: final_dfを渡します")
-            predictions = estimator.predict(final_df)
-        else:
-            # 古い実装: 特徴量のみが必要なので X_eval を渡す
-            # (内部でフィルタリングされないため、余計な列があるとエラーになる)
-            logging.info("古いMuEstimator実装を検出: X_eval（特徴量のみ）を渡します")
-            predictions = estimator.predict(X_eval)
+             # Fallback
+             predictions = estimator.predict(final_df[feature_names])
             
         final_df['predicted_score'] = predictions
         logging.info("予測スコアの計算が完了しました。")
+        
+        print(f"DEBUG: Predictions sample: {predictions[:10]}")
+        print(f"DEBUG: Predictions mean: {np.mean(predictions)}, std: {np.std(predictions)}")
+        
     except Exception as e:
         logging.error(f"予測の実行中にエラーが発生しました: {e}", exc_info=True)
         sys.exit(1)
@@ -280,6 +273,7 @@ def main():
         total_bet = 0
         total_return = 0
 
+        debug_race_count = 0
         for race_id, race_df in date_df.groupby('race_id'):
             if len(race_df) > 1:
                 # 相関係数
@@ -290,8 +284,19 @@ def main():
                     correlations.append(corr)
 
                 # AI本命馬を特定 (予測タイムが最小 = 最速予想)
+                # Note: MuEstimator returns higher score for better horse?
+                # If so, we should use idxmax(). But let's check what's happening.
                 best_horse_idx = race_df['predicted_score'].idxmin()
                 best_horse_rank = race_df.loc[best_horse_idx, 'finish_position']
+
+                if debug_race_count < 3:
+                    print(f"\nDEBUG: Race {race_id}")
+                    print(f"  Predictions: {pred_score.tolist()}")
+                    print(f"  True Ranks: {true_rank.tolist()}")
+                    print(f"  Best Horse Idx: {best_horse_idx}")
+                    print(f"  Best Horse Rank: {best_horse_rank}")
+                    print(f"  Win Odds: {race_df.loc[best_horse_idx, 'win_odds'] if 'win_odds' in race_df.columns else 'N/A'}")
+                    debug_race_count += 1
 
                 # Hit Rate (3着以内に入ったか)
                 if best_horse_rank <= 3:
@@ -328,7 +333,8 @@ def main():
     eval_df = pd.DataFrame(daily_metrics)
     output_dir = Path(config.get('data_path', 'data')) / 'evaluation'
     output_dir.mkdir(parents=True, exist_ok=True)
-    output_path = output_dir / 'evaluation_results.csv'
+    model_name = Path(args.model_dir).name
+    output_path = output_dir / f'evaluation_results_{model_name}.csv'
 
     eval_df.to_csv(output_path, index=False)
     logging.info(f"評価結果を保存しました: {output_path}")
