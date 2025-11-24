@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# src/pipeline_core.py
+# keibaai/src/pipeline_core.py
 """
 パイプラインコアユーティリティ
 - atomic_write: ファイルの安全な書き込み

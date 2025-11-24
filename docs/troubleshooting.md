@@ -10,23 +10,6 @@
 - [5. モデルファイル形式不整合](#5-モデルファイル形式不整合)
 
 ---
-
-## 1. Pythonインポートエラー
-
-### 問題
-`keibaai/src/models/predict.py`実行時に以下のエラー:
-```
-ImportError: No module named 'src.pipeline_core'
-```
-
-### 根本原因
-`project_root`の計算が不正確。`predict.py`の位置は`keibaai/src/models/predict.py`で、以下の計算が必要：
-- `parent`: `keibaai/src/models`
-- `parent.parent`: `keibaai/src`
-- `parent.parent.parent`: `keibaai` ← **正しいproject_root**
-
-### 解決策
-
 ```python
 # 誤った実装
 project_root = Path(__file__).resolve().parent.parent  # keibaai/src

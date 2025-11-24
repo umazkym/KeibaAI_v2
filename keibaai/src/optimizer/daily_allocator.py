@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# src/optimizer/daily_allocator.py
+# keibaai/src/optimizer/daily_allocator.py
 """
 日次予算配分モジュール
 1日の総予算を、各レースの「魅力度（期待リターン）」に基づいて配分する。

@@ -1,284 +1,160 @@
-# Byte-compiled / optimized / DLL files
+# ============================================================================
+# KeibaAI_v2 - Minimal Git Ignore Configuration
+# ============================================================================
+# Last Updated: 2025-11-24
+#
+# ポリシー: コード・ロジック・構造は全て公開、データ・モデルのみ除外
+#
+# 【Git管理対象（公開）】
+#   ✓ 全てのPythonコード (.py)
+#   ✓ 設定ファイル (.yaml, .json)
+#   ✓ ドキュメント (.md, docs/)
+#   ✓ テストコード (tests/)
+#   ✓ スクリプト (scripts/)
+#   ✓ ディレクトリ構造
+#
+# 【Git管理対象外（除外）】
+#   ✗ データファイル (.parquet, .bin, .csv)
+#   ✗ 訓練済みモデル (.pkl, .txt, .lgbm)
+#   ✗ ログファイル (.log)
+#   ✗ 実行時キャッシュ (__pycache__, .pyc)
+#   ✗ 環境ファイル (venv/, .env)
+#
+# このポリシーにより、第三者がコードを読むだけでプロジェクト全体を
+# 詳細に分析・推論できます。
+# ============================================================================
+
+# ============================================================================
+# 1. Python実行時キャッシュ（必須除外）
+# ============================================================================
 __pycache__/
 *.py[cod]
 *$py.class
-
-# C extensions
+*.pyc
+*.pyo
+*.pyd
 *.so
+*.dylib
 
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-pip-wheel-metadata/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
-
-# PyInstaller
-*.manifest
-*.spec
-
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
-
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
-.pytest_cache/
-
-# Translations
-*.mo
-*.pot
-
-# Django stuff:
-*.log
-local_settings.py
-db.sqlite3
-db.sqlite3-journal
-
-# Flask stuff:
-instance/
-.webassets-cache
-
-# Scrapy stuff:
-.scrapy
-
-# Sphinx documentation
-docs/_build/
-
-# PyBuilder
-target/
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# IPython
-profile_default/
-ipython_config.py
-
-# pyenv
-.python-version
-
-# pipenv
-Pipfile.lock
-
-# PEP 582
-__pypackages__/
-
-# Celery stuff
-celerybeat-schedule
-celerybeat.pid
-
-# SageMath parsed files
-*.sage.py
-
-# Environments
-.env
-.venv
-env/
+# ============================================================================
+# 2. 仮想環境（各開発者がローカルで作成）
+# ============================================================================
+.venv/
 venv/
+env/
 ENV/
-env.bak/
-venv.bak/
+.env
 
-# Spyder project settings
-.spyderproject
-.spyproject
+# ============================================================================
+# 3. データファイル（全て除外 - 大容量・個人情報含む）
+# ============================================================================
+# 注: ルート直下の data/ ディレクトリは削除済み（2025-11-24）
+#     正規のデータは keibaai/data/ にのみ存在
 
-# Rope project settings
-.ropeproject
+# --- Phase 0: RAWデータ（スクレイピング結果 .bin） ---
+keibaai/data/raw/
 
-# mkdocs documentation
-/site
+# --- Phase 1: パース済みデータ（.parquet） ---
+keibaai/data/parsed/
 
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
+# --- Phase 2: 特徴量データ（.parquet） ---
+keibaai/data/features/
 
-# Pyre type checker
-.pyre/
+# --- キャッシュファイル（master/） ---
+keibaai/data/master/
 
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# macOS
-.DS_Store
-
-# Data files
-*.parquet
-*.bin
-*.pkl
-*.pickle
-
-# Temporary files
-tmp/
-temp/
-*.tmp
-
-# =============================================================================
-# KeibaAI_v2 Project Specific - Added 2025-11-16
-# =============================================================================
-
-# Data directories (CRITICAL: Large files, never commit these)
-# Total size: ~278,098 race records = several GB
-keibaai/data/raw/html/
-keibaai/data/parsed/parquet/
-keibaai/data/features/parquet/
-keibaai/data/models/
-keibaai/data/simulations/
-# Exclude top-level simulations folder
-data/simulations/
-# Exclude test simulation folder
-/data/simulations/test/
-keibaai/data/orders/
-keibaai/data/logs/
-
-# Keep directory structure with .gitkeep files
-!keibaai/data/.gitkeep
-!keibaai/data/raw/.gitkeep
-!keibaai/data/raw/html/.gitkeep
-!keibaai/data/parsed/.gitkeep
-!keibaai/data/parsed/parquet/.gitkeep
-!keibaai/data/features/.gitkeep
-!keibaai/data/features/parquet/.gitkeep
-!keibaai/data/models/.gitkeep
-!keibaai/data/simulations/.gitkeep
-!keibaai/data/orders/.gitkeep
-!keibaai/data/logs/.gitkeep
-
-# Metadata database files
-keibaai/data/metadata/*.sqlite3
-keibaai/data/metadata/*.sqlite3-journal
-keibaai/data/metadata/*.db
-
-# Scraped/Generated CSV and text files
+# --- スクレイピング補助ファイル（CSV, TXT） ---
 kaisai_dates.csv
 race_id_list.csv
 horse_id_list.txt
-debug_scraped_data.csv
-distance_analysis.txt
 
-# Debug output directories and files
-output_final/
-output_*/
-debug_output/
-**/output_*.csv
-**/debug_*.csv
+# --- デバッグディレクトリ（削除済み: simulations_debug_*, evaluation） ---
+keibaai/data/simulations_debug*/
+keibaai/data/evaluation/
 
-# Additional model file formats
+# ============================================================================
+# 4. 訓練済みモデル（全て除外 - 再現可能）
+# ============================================================================
+# Phase 3: 訓練済みモデルファイル
+keibaai/data/models/
+
+# モデル形式全般
+*.pkl
+*.joblib
 *.h5
 *.hdf5
-*.joblib
 *.model
 *.lgbm
 *.onnx
 *.pt
 *.pth
 
-# Large data formats
-*.arrow
-*.feather
-*.msgpack
+# ============================================================================
+# 5. 予測・シミュレーション・最適化結果（全て除外 - 再現可能）
+# ============================================================================
+# Phase 4: 予測結果
+keibaai/data/predictions/
 
-# Jupyter Notebook outputs (comprehensive)
-**/.ipynb_checkpoints/
-*.ipynb_checkpoints
+# Phase 5: シミュレーション結果
+keibaai/data/simulations/
 
-# Web scraping tools
-chromedriver
-geckodriver
-*.crx
+# Phase 6: 投資配分結果
+keibaai/data/orders/
 
-# Temporary analysis and test files
+# ============================================================================
+# 6. ログ・モニタリング・レポート（除外）
+# ============================================================================
+keibaai/data/logs/
+keibaai/data/quality_reports/
+keibaai/data/metrics/
+keibaai/data/monitoring/
+*.log
+
+# ============================================================================
+# 7. メタデータ・データベース（除外）
+# ============================================================================
+keibaai/data/metadata/
+*.sqlite3
+*.sqlite3-journal
+*.db
+*.db-journal
+
+# ============================================================================
+# 8. デバッグ・一時ファイル（除外）
+# ============================================================================
+debug_output/
+output_*/
+**/output_*.csv
+**/debug_*.csv
+debug_scraped_data.csv
 analysis_*.csv
 analysis_*.txt
 test_output_*.txt
-test_output_*.csv
 verification_*.json
 validate_*.json
+keibaai/data/errors/
 
-# Configuration files with sensitive data
-keibaai/configs/secret.yaml
-keibaai/configs/credentials.yaml
-keibaai/configs/local_override.yaml
-.env.local
-.env.production
-.env.secret
+# scripts/temp/ の中身（README.md 以外）
+scripts/temp/**/*.py
+scripts/temp/**/*.csv
+scripts/temp/**/*.txt
+!scripts/temp/README.md
 
-# OS-specific files (comprehensive)
-Thumbs.db
-Desktop.ini
-.DS_Store
-._*
-
-# Raw JSON data
-keibaai/data/raw/json/
-
-# Parquet metadata
-keibaai/data/**/_metadata
-keibaai/data/**/_common_metadata
-
-# Python cache (additional patterns)
-*.pyc
-*.pyo
-*.pyd
-.Python
-*.so
-*.dylib
-
-# Testing artifacts
-.coverage.*
-htmlcov/
-.pytest_cache/
-.tox/
-.hypothesis/
-
-# Documentation build artifacts
-docs/_build/
-docs/_static/
-docs/_templates/
-
-# Backup files
+# ============================================================================
+# 9. バックアップ・アーカイブファイル（除外）
+# ============================================================================
 *.bak
 *.backup
 *.old
 *~
+*.tar.gz
+*.zip
+*.rar
+*.7z
 
-
-# Cache directories
-.cache/
-*.cache
-__pycache__/
-
-# IDE and editor files (comprehensive)
+# ============================================================================
+# 10. IDE・エディタ設定（除外 - 個人設定）
+# ============================================================================
 .vscode/
 .idea/
 *.swp
@@ -289,19 +165,81 @@ __pycache__/
 .settings/
 *.sublime-project
 *.sublime-workspace
+.spyderproject
+.spyproject
+.ropeproject
 
-# Node modules (if any frontend tools are used)
+# ============================================================================
+# 11. OS固有ファイル（除外）
+# ============================================================================
+.DS_Store
+._*
+Thumbs.db
+Desktop.ini
+*.lnk
+
+# ============================================================================
+# 12. テスト・カバレッジ（除外 - 実行結果）
+# ============================================================================
+.pytest_cache/
+.hypothesis/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.cover
+.tox/
+.nox/
+
+# ============================================================================
+# 13. Jupyter Notebook checkpoints（除外）
+# ============================================================================
+.ipynb_checkpoints/
+**/.ipynb_checkpoints/
+
+# ============================================================================
+# 14. Web スクレイピングツール バイナリ（除外）
+# ============================================================================
+chromedriver
+chromedriver.exe
+geckodriver
+geckodriver.exe
+
+# ============================================================================
+# 15. その他のキャッシュ（除外）
+# ============================================================================
+.cache/
+*.cache
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+
+# ============================================================================
+# 16. ドキュメント生成成果物（除外 - ソースから再生成可能）
+# ============================================================================
+docs/_build/
+/site
+
+# ============================================================================
+# 17. Node.js（将来的な可能性）
+# ============================================================================
 node_modules/
 
-# Compiled translations
-*.mo
-
-# Package files
-*.tar.gz
-*.zip
-*.rar
-*.7z
-
-keibaai/archives
-# Exclude parse failures results_parser
-data/errors/parse_failures/results_parser/
+# ============================================================================
+# END: プロジェクト分析に必要な最小限の除外設定
+# ============================================================================
+#
+# 【重要】以下はGit管理対象（含まれる）:
+#   - keibaai/src/**/*.py      （全てのソースコード）
+#   - scripts/**/*.py          （全ての実行スクリプト）
+#   - keibaai/configs/**/*.yaml（設定ファイル）
+#   - docs/**/*.md             （ドキュメント）
+#   - tests/**/*.py            （テストコード）
+#   - CLAUDE.md, README.md     （ガイドドキュメント）
+#   - requirements.txt         （依存関係）
+#   - .gitignore, .gitattributes（Git設定）
+#
+# これらのファイルから、プロジェクトの全体像・ロジック・アルゴリズムを
+# 完全に理解・再現できます。
+# ============================================================================

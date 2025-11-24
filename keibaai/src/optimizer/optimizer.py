@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# src/optimizer/optimizer.py
+# keibaai/src/optimizer/optimizer.py
 """
 ポートフォリオ最適化モジュール
 仕様書 10.2章 に基づく実装

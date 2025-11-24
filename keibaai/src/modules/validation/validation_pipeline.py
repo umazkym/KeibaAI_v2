@@ -1,4 +1,4 @@
-# src/modules/validation/validation_pipeline.py
+# keibaai/src/modules/validation/validation_pipeline.py
 """
 包括的なデータ品質検証パイプライン
 

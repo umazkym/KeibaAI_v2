@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# src/sim/simulator.py
+# keibaai/src/sim/simulator.py
 """
 Monte Carlo シミュレーションモジュール
 仕様書 8.2章 に基づく実装

@@ -10,7 +10,7 @@ import sys
 project_root = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.append(str(project_root))
 
-from src.utils.data_utils import load_parquet_data_by_date
+from keibaai.src.utils.data_utils import load_parquet_data_by_date
 
 st.set_page_config(page_title="AIの成績表", page_icon="📊", layout="wide")
 

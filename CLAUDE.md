@@ -68,67 +68,195 @@ A **sophisticated horse racing AI prediction and optimal investment system** tha
 │      ↓           ↓            ↓            ↓                 │
 │   HTML.bin   Parquet    Feature.pq   LightGBM               │
 │                                          ↓                   │
-│              [Simulation] → [Optimization] → [Execution]    │
-│                   ↓              ↓               ↓           │
-│              MC Probs      Kelly Bets      Paper Trade       │
-└─────────────────────────────────────────────────────────────┘
-```
+---
 
-### Directory Structure
+## 🔄 Data Pipeline Flow
+
+### Complete End-to-End Pipeline
+
+```
+---
+
+## 📂 Project Structure and Placement Rules
+
+**Last Updated**: 2025-11-24
+
+### Directory Placement Rules
+
+> [!IMPORTANT]
+> **明確な配置ルール（2025-11-24 標準化完了）**:
+> - **`keibaai/src/`**: Pythonパッケージとして `import` されるモジュール・クラス・関数のみ。一部レガシー実行スクリプトも残存。
+> - **`scripts/`**: CLIから直接実行するスクリプト（エントリーポイント）。全て `python scripts/xxx/yyy.py` で実行。
+> - **`scripts/training/experimental/`**: 実験的スクリプト・過去バージョン保存（モデル開発段階用）。
+> - **`docs/`**: プロジェクトドキュメント。レポートは `docs/reports/` に集約。
+> - **`archive/`**: 使用されなくなった古いスクリプト・ログ。
+
+### Complete Directory Structure
 
 ```
 KeibaAI_v2/
-├── keibaai/                          # Main application package
-│   ├── src/                          # Source code
+├── keibaai/                          # Main Python package
+│   ├── src/                          # Source code (modules for import)
 │   │   ├── modules/                  # Core business logic
-│   │   │   ├── preparing/           # Web scraping (23KB scraper)
-│   │   │   ├── parsers/             # 4 HTML parsers (results, shutuba, horse, pedigree)
-│   │   │   ├── features/            # Feature engineering (24KB engine)
-│   │   │   ├── models/              # LightGBM models (μ, σ, ν)
-│   │   │   ├── sim/                 # Monte Carlo simulator
-│   │   │   ├── optimizer/           # Portfolio optimization (Kelly)
-│   │   │   ├── executor/            # Order execution (disabled)
-│   │   │   ├── monitoring/          # Performance tracking
-│   │   │   └── constants/           # URL and path constants
-│   │   ├── features/                # Feature generation scripts
-│   │   ├── models/                  # Model training scripts
-│   │   ├── optimizer/               # Optimization scripts
-│   │   ├── sim/                     # Simulation scripts
-│   │   └── utils/                   # Utility functions
-│   ├── configs/                      # 5 YAML configuration files
-│   ├── data/                         # Local data storage (GITIGNORED)
-│   │   ├── raw/html/                # Scraped HTML (.bin files, EUC-JP)
+│   │   │   ├── preparing/           # Web scraping modules
+│   │   │   ├── parsers/             # HTML parsers
+│   │   │   ├── features/            # Feature engineering modules
+│   │   │   ├── models/              # Model classes (estimators)
+│   │   │   ├── sim/                 # Simulation modules
+│   │   │   ├── optimizer/           # Optimization modules
+│   │   │   ├── executor/            # Execution modules (disabled)
+│   │   │   ├── monitoring/          # Model analysis & monitoring
+│   │   │   ├── validation/          # Data quality validation
+│   │   │   └── constants/           # Constant definitions
+│   │   ├── features/                # Feature modules
+│   │   │   ├── feature_engine.py        # FeatureEngine class
+│   │   │   ├── advanced_features.py     # Advanced features
+│   │   │   ├── mu_v2_features.py        # μv2.0 features
+│   │   │   ├── time_series_features.py  # Time series features
+│   │   │   ├── track_bias.py            # Track bias features
+│   │   │   └── generate_features.py     # [MOVED] -> scripts/pipelines/
+│   │   ├── models/                  # Model modules
+│   │   │   ├── model_train.py           # MuEstimator class
+│   │   │   ├── calibration.py           # Probability calibration
+│   │   │   ├── sigma_estimator.py       # SigmaEstimator class
+│   │   │   └── nu_estimator.py          # NuEstimator class
+│   │   ├── optimizer/               # Optimization modules
+│   │   │   ├── optimizer.py             # PortfolioOptimizer class
+│   │   │   └── daily_allocator.py       # ★LEGACY: Daily allocation script
+│   │   ├── sim/                     # Simulation modules
+│   │   │   └── simulator.py             # RaceSimulator class
+│   │   ├── dashboard/               # Streamlit dashboard
+│   │   │   ├── pages/               # Dashboard pages
+│   │   │   └── app.py               # Dashboard entry point
+│   │   ├── utils/                   # Utility functions
+│   │   └── pipeline_core.py         # Pipeline common logic
+│   ├── configs/                     # YAML configuration files
+│   ├── data/                        # Local data storage (.gitignored)
+│   │   ├── raw/html/                # Raw HTML files (.bin format)
 │   │   │   ├── race/                # Race results
 │   │   │   ├── shutuba/             # Entry lists
-│   │   │   ├── horse/               # Horse profiles (*_profile.bin, *_perf.bin)
+│   │   │   ├── horse/               # Horse data
 │   │   │   └── ped/                 # Pedigree data
 │   │   ├── parsed/parquet/          # Parsed Parquet files
-│   │   │   ├── races/               # races.parquet (278K records, 27+ columns)
-│   │   │   ├── shutuba/             # shutuba.parquet (278K records, 21 columns)
-│   │   │   ├── horses/              # horses.parquet (profiles)
-│   │   │   └── pedigrees/           # pedigrees.parquet (1.3M records)
-│   │   ├── features/parquet/        # Generated features (partitioned by year/month)
-│   │   ├── models/                  # Trained models (LightGBM, calibration)
-│   │   ├── simulations/             # Simulation results (JSON)
-│   │   ├── orders/                  # Betting orders (logs, JSON)
-│   │   ├── logs/                    # Application logs (by date)
-│   │   └── metadata/db.sqlite3      # Metadata database
-│   ├── tests/                        # Test suite
-│   │   ├── unit/                    # Unit tests
-│   │   ├── integration/             # Integration tests
-│   │   └── regression/              # Regression tests
-│   ├── infra/                        # Infrastructure code
-│   │   ├── docker/                  # Docker setup
-│   │   └── sched/cron_examples/     # Cron job examples
-│   ├── scripts/                      # Utility scripts
-│   └── notebooks/                    # Jupyter notebooks
-├── (root debug scripts)              # 20+ debugging utilities
-├── 指示.md                           # Japanese instructions/requirements
-├── schema.md                         # Data schema documentation
-├── PROGRESS.md                       # Data quality progress tracking
-├── DEBUG_REPORT.md                   # HTML parser improvements
-└── CLAUDE.md                         # This file
+│   │   │   ├── races/               # Race results
+│   │   │   ├── shutuba/             # Entry lists
+│   │   │   ├── horses/              # Horse profiles
+│   │   │   └── pedigrees/           # Pedigree data
+│   │   ├── features/parquet/        # Feature data (partitioned by year/month)
+│   │   ├── models/                  # Trained models
+│   │   ├── predictions/             # Prediction results
+│   │   ├── simulations/             # Simulation results
+│   │   ├── orders/                  # Order logs
+│   │   ├── logs/                    # Application logs
+│   │   └── quality_reports/         # Quality check reports
+│   └── tests/                       # Test suite
+│       ├── unit/                    # Unit tests
+│       ├── integration/             # Integration tests
+│       └── regression/              # Regression tests
+├── scripts/                         # Executable scripts (CLI tools) ★
+│   ├── pipelines/                   # Data pipeline scripts (9 scripts)
+│   │   ├── run_scraping_resumable.py
+│   │   ├── run_scraping_pipeline_local.py
+│   │   ├── run_scraping_pipeline_with_args.py
+│   │   ├── run_parsing_pipeline_local.py
+│   │   └── run_parsing_resumable.py
+│   ├── training/                    # Model training & prediction ★
+│   │   ├── train_mu_model.py            # μ model training
+│   │   ├── train_mu_v2_model.py         # μv2.0 model training
+│   │   ├── train_sigma_nu_models.py     # σ/ν model training
+│   │   ├── optimize_hyperparameters.py  # Hyperparameter optimization
+│   │   ├── optimize_sigma_nu.py         # σ/ν optimization
+│   │   ├── evaluate_model.py            # Model evaluation
+│   │   ├── evaluate_model_advanced.py   # Advanced evaluation
+│   │   ├── predict.py                   # Prediction (⚠️ needs fix)
+│   │   └── experimental/                # Experimental scripts (model dev) ★
+│   │       ├── README.md                # Purpose & usage guide
+│   │       ├── train_full_pipeline.py   # Full pipeline experiment
+│   │       └── train_sigma_nu_phase_d.py # Phase D implementation
+│   ├── optimization/                # Portfolio optimization ★
+│   │   └── optimize_daily_races.py      # Kelly criterion optimization
+│   ├── simulation/                  # Simulation ★
+│   │   └── simulate_daily_races.py      # Monte Carlo simulation
+│   ├── debug/                       # Debug & validation tools (40+ scripts)
+│   │   ├── debug_scraping_issues.py
+│   │   ├── debug_combined.py
+│   │   └── check_*.py, validate_*.py など
+│   ├── analysis/                    # Analysis scripts
+│   │   └── analyze_model_performance.py
+│   └── temp/                        # Temporary work scripts
+├── docs/                            # Documentation
+│   ├── system/                      # System documentation (14 files)
+│   │   ├── 01_システム概要.md
+│   │   ├── 02_アーキテクチャ.md
+│   │   ├── 10_運用ガイド.md
+│   │   └── ...
+│   ├── reports/                     # Reports ★
+│   │   ├── FIX_REPORT_20251122.md
+│   │   └── ...
+│   ├── archive/                     # Archived docs
+│   │   └── reports/                 # Old reports
+│   ├── gemini.md                    # AI assistant guidelines
+│   ├── instructions.md              # User instructions
+│   └── schema.md                    # Data schema
+├── archive/                         # Archived files ★
+│   ├── scripts/                     # Deprecated scripts
+│   │   └── debug/                   # Old debug scripts (160+ files)
+│   └── logs/                        # Old logs
+├── CLAUDE.md                        # This file (AI developer guide)
+├── README.md                        # User-facing README
+├── .gitignore                       # Git ignore rules
+└── <utility scripts>                # Setup & utility scripts
+    ├── standardize_structure.ps1
+    ├── fix_moved_imports.py
+    └── ...
 ```
+
+**★ マーク**: 2025-11-24 標準化で整理されたディレクトリ・ファイル
+
+### File Placement Decision Tree
+
+新しいファイルを作成するときの配置ガイド:
+
+```
+新しいファイルを作成する
+    ↓
+[Q1] これは実行スクリプト (python xxx.py で直接実行)?
+    YES → ┐
+    NO  → keibaai/src/<category>/xxx.py (モジュール・クラス定義)
+          ↓
+    [Q2] 本番環境で使用?
+        YES → scripts/<category>/xxx.py
+        NO  → ┐
+              ↓
+        [Q3] 実験的スクリプト? (過去バージョン、試行錯誤)
+            YES → scripts/training/experimental/xxx.py
+            NO  → scripts/temp/xxx.py (一時スクリプト)
+```
+
+### Experimental Scripts (`scripts/training/experimental/`)
+
+**Purpose**: モデル開発段階での実験的スクリプト・過去バージョンの保存
+
+**保存対象**:
+- 過去の訓練アプローチ (`train_sigma_nu_phase_d.py`)
+- 実験的な実装 (`train_full_pipeline.py`)
+- 異なるアルゴリズムの試行
+
+**使用方法**:
+- **参照**: 過去のアプローチを理解・比較
+- **再現**: 特定バージョンのモデルを再現
+- **分析**: 試行錯誤の記録として後から推論・分析
+
+**注意**: これらは本番では使用されません。動作保証もありません。
+
+### Legacy Scripts
+
+一部の実行スクリプトが `keibaai/src/` に残存:
+
+| ファイル | 理由 | 将来計画 |
+|---------|------|---------|
+| `keibaai/src/features/generate_features.py` | 使用頻度が高い | 段階的に `scripts/` へ移行検討 |
+| `keibaai/src/optimizer/daily_allocator.py` | レガシー | 必要に応じて移行 |
 
 ---
 
@@ -402,8 +530,8 @@ if not race_data:
 ### Workflow 4: Model Development Cycle
 
 **Process**:
-1. Train models weekly: `python src/models/train_mu_model.py`
-2. Evaluate on validation set: `python src/models/evaluate_model.py`
+1. Train models weekly: `python scripts/training/train_mu_model.py`
+2. Evaluate on validation set: `python scripts/training/evaluate_model.py`
 3. Calibrate probabilities: Use calibration module
 4. Backtest on historical data
 5. Monitor Brier score and ECE
@@ -498,7 +626,7 @@ pytest --cov=keibaai
 
 ```bash
 # Edit date range in script first
-python keibaai/src/run_scraping_pipeline_local.py
+python scripts/pipelines/run_scraping_resumable.py
 ```
 
 **What it does**:
@@ -511,7 +639,7 @@ python keibaai/src/run_scraping_pipeline_local.py
 ### Task 2: Parse Scraped Data
 
 ```bash
-python keibaai/src/run_parsing_pipeline_local.py
+python scripts/pipelines/run_parsing_resumable.py
 ```
 
 **What it does**:
@@ -523,7 +651,7 @@ python keibaai/src/run_parsing_pipeline_local.py
 ### Task 3: Generate Features
 
 ```bash
-python keibaai/src/features/generate_features.py \
+python scripts/pipelines/generate_features.py \
   --start_date 2023-01-01 \
   --end_date 2023-12-31
 ```
@@ -534,16 +662,16 @@ python keibaai/src/features/generate_features.py \
 
 ```bash
 # Train μ model
-python keibaai/src/models/train_mu_model.py
+python scripts/training/train_mu_v2_model.py
 
 # Train σ and ν models
-python keibaai/src/models/train_sigma_nu_models.py
+python scripts/training/train_sigma_nu_models.py
 ```
 
 ### Task 5: Run Predictions
 
 ```bash
-python keibaai/src/models/predict.py \
+python scripts/training/predict.py \
   --date 2023-10-01 \
   --model_dir data/models/latest
 ```
@@ -551,7 +679,7 @@ python keibaai/src/models/predict.py \
 ### Task 6: Run Simulation
 
 ```bash
-python keibaai/src/sim/simulate_daily_races.py \
+python scripts/simulation/simulate_daily_races.py \
   --date 2023-10-01 \
   --K 1000
 ```
@@ -559,7 +687,7 @@ python keibaai/src/sim/simulate_daily_races.py \
 ### Task 7: Optimize Portfolio
 
 ```bash
-python keibaai/src/optimizer/optimize_daily_races.py \
+python scripts/optimization/optimize_daily_races.py \
   --date 2023-10-01 \
   --W_0 100000
 ```
@@ -584,9 +712,9 @@ python validate_parquet.py
 ### 1. File Naming
 
 - **Modules**: `snake_case.py`
-- **Scripts**: `verb_object.py` (e.g., `generate_features.py`, `train_mu_model.py`)
-- **Debug scripts**: `debug_*.py` (root directory)
-- **Validation scripts**: `validate_*.py`, `check_*.py`
+- **Scripts**: `scripts/pipelines/`, `scripts/training/` etc.
+- **Debug scripts**: `scripts/debug/debug_*.py`
+- **Validation scripts**: `scripts/debug/check_*.py`
 
 ### 2. Data Files
 

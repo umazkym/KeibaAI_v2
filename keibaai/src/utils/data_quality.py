@@ -1,4 +1,4 @@
-# src/utils/data_quality.py (新規)
+# keibaai/src/utils/data_quality.py (新規)
 
 class DataQualityChecker:
     """データ品質チェックと自動修正"""

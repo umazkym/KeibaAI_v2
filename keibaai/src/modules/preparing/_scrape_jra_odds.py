@@ -6,8 +6,8 @@ import random
 
 # from omegaconf import DictConfig
 
-from src import pipeline_core
-from src.utils import data_utils
+from keibaai.src import pipeline_core
+from keibaai.src.utils import data_utils
 
 log = logging.getLogger(__name__)
 
