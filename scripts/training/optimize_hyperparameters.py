@@ -112,7 +112,7 @@ def main():
     logger = logging.getLogger(__name__)
     
     # Load Config to get data path
-    config_path = project_root / "configs" / "default.yaml"
+    config_path = project_root / "keibaai" / "configs" / "default.yaml"
     with open(config_path, 'r', encoding='utf-8') as f:
         config = yaml.safe_load(f)
     

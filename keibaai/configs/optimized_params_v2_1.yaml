@@ -1,0 +1,21 @@
+mu_estimator:
+  ranker_params:
+    colsample_bytree: 0.8104950521643289
+    learning_rate: 0.02816986384825719
+    max_depth: 7
+    metric: ndcg
+    min_child_samples: 14
+    n_estimators: 1745
+    num_leaves: 96
+    objective: lambdarank
+    subsample: 0.7901920207059867
+  regressor_params:
+    colsample_bytree: 0.8104950521643289
+    learning_rate: 0.02816986384825719
+    max_depth: 7
+    min_child_samples: 14
+    n_estimators: 1745
+    num_leaves: 96
+    reg_alpha: 0.0016779544082356932
+    reg_lambda: 0.011882410771004851
+    subsample: 0.7901920207059867

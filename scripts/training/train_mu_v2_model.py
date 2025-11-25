@@ -196,7 +196,13 @@ class MuV2Trainer:
         exclude_cols = [
             'race_id', 'horse_id', 'race_date', 'finish_position', 'target', 
             'win_odds', 'jockey_id', 'trainer_id', 'owner_id', 'sire_id', 'damsire_id',
-            'race_name', 'horse_name', 'jockey_name', 'trainer_name'
+            'race_name', 'horse_name', 'jockey_name', 'trainer_name',
+            # Leakage columns (Target related or known only after race)
+            'finish_time_seconds', 'margin_seconds', 'prize_money', 'popularity',
+            'odds', 'finish_time_str', 'margin_str', 'last_3f_time', 'passing_order',
+            'final_corner_to_finish', 'passing_order_1', 'passing_order_2', 
+            'passing_order_3', 'passing_order_4', 'position_change_1_2', 
+            'scratched', 'time_except_last3f', 'win_probability', 'pace_index'
         ]
         feature_cols = [c for c in df.columns if c not in exclude_cols]
         
@@ -220,6 +226,7 @@ class MuV2Trainer:
                 'metric': 'auc',
                 'verbosity': -1,
                 'boosting_type': 'gbdt',
+                'feature_pre_filter': False,
                 'lambda_l1': trial.suggest_float('lambda_l1', 1e-8, 10.0, log=True),
                 'lambda_l2': trial.suggest_float('lambda_l2', 1e-8, 10.0, log=True),
                 'num_leaves': trial.suggest_int('num_leaves', 2, 256),

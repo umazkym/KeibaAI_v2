@@ -1,0 +1,23 @@
+﻿======================================================================
+Final Model Comparison - All Three Versions (2024 Evaluation)
+======================================================================
+
+Performance Metrics:
+
+Model                                              RMSE       Spearman   RecoveryRate    TotalLoss
+-----------------------------------------------------------------------------------------------
+python : Traceback (most recent call last):
+発生場所 行:1 文字:1
++ python final_comparison.py 2>&1 | Out-File -Encoding utf8 comparis
+on_ ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Traceback (most recent 
+    call last)::String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  File "C:\Users\zk-ht\Keiba\Keiba_AI_v2\final_comparison.py", line 
+37, in <module>
+    print(f"{name:<50} {rmse:<10.4f} {spearman:<10.4f} {recovery:<15
+.2%} \xa5{total_loss:,.0f}")
+UnicodeEncodeError: 'cp932' codec can't encode character '\xa5' in p
+osition 89: illegal multibyte sequence

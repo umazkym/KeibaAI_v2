@@ -1,0 +1,10 @@
+{
+  "version": "mu_phase_f_corrected",
+  "created_at": "2025-11-24T23:25:41.749651",
+  "train_period": "2020-01-01 to 2023-12-31",
+  "num_features": 149,
+  "calibrated": false,
+  "brier_score_before": null,
+  "brier_score_after": null,
+  "sigmoid_removed": true
+}

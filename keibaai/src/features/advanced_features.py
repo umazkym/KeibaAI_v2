@@ -32,12 +32,15 @@ class AdvancedFeatureEngine:
                         f'avg_finish_last{w}': np.nan,
                         f'win_rate_last{w}': np.nan,
                         f'place_rate_last{w}': np.nan,
-                        f'improvement_rate_{w}': np.nan
+                        f'improvement_rate_{w}': np.nan,
+                        f'finish_std_last{w}': np.nan,
+                        f'finish_cv_last{w}': np.nan
                     })
                 
                 avg_finish = recent['finish_position'].mean()
                 win_rate = (recent['finish_position'] == 1).mean()
                 place_rate = (recent['finish_position'] <= 2).mean()
+                finish_std = recent['finish_position'].std()
                 
                 if len(recent) >= 2:
                     half = len(recent) // 2
@@ -47,11 +50,18 @@ class AdvancedFeatureEngine:
                 else:
                     improvement = 0
                 
+                if avg_finish > 0:
+                    finish_cv = finish_std / avg_finish
+                else:
+                    finish_cv = 0
+
                 return pd.Series({
                     f'avg_finish_last{w}': avg_finish,
                     f'win_rate_last{w}': win_rate,
                     f'place_rate_last{w}': place_rate,
-                    f'improvement_rate_{w}': improvement
+                    f'improvement_rate_{w}': improvement,
+                    f'finish_std_last{w}': finish_std,
+                    f'finish_cv_last{w}': finish_cv
                 })
             
             trend_stats = performance_sorted.groupby('horse_id', observed=True).apply(calc_stats).reset_index()
@@ -161,6 +171,18 @@ class AdvancedFeatureEngine:
             'finish_position': ['mean', 'count'],
             'popularity': 'mean'
         }
+
+        # is_winがない場合は作成
+        if 'is_win' not in historical_df.columns and 'finish_position' in historical_df.columns:
+            historical_df = historical_df.copy()
+            historical_df['is_win'] = (historical_df['finish_position'] == 1).astype(int)
+
+        agg_dict = {
+            'finish_position': ['mean', 'count'],
+            'popularity': 'mean',
+            'is_win': 'mean'  # この行を追加
+        }
+
         if 'morning_odds' in historical_df.columns:
             agg_dict['morning_odds'] = 'mean'
 
@@ -168,10 +190,10 @@ class AdvancedFeatureEngine:
 
         if 'morning_odds' in historical_df.columns:
             combo_stats.columns = ['jockey_id', 'trainer_id', 'combo_avg_finish',
-                                  'combo_races', 'combo_avg_odds', 'combo_avg_popularity']
+                                  'combo_races', 'combo_avg_odds', 'combo_avg_popularity', 'combo_win_rate']
         else:
             combo_stats.columns = ['jockey_id', 'trainer_id', 'combo_avg_finish',
-                                  'combo_races', 'combo_avg_popularity']
+                                  'combo_races', 'combo_avg_popularity', 'combo_win_rate']
         
         # 期待値を上回る度合い
         combo_stats['combo_overperform'] = \
@@ -214,51 +236,6 @@ class AdvancedFeatureEngine:
         
         df = df.merge(sire_stats, left_on='sire_id', right_on='sire_id', how='left')
         
-        return df
-
-    def generate_pace_features(
-        self,
-        df: pd.DataFrame
-    ) -> pd.DataFrame:
-        """展開・ペース特徴量"""
-        # 通過順位から脚質を判定する簡易ロジック
-        # 1-1-1-1 のような形式を解析
-        
-        def estimate_running_style(passing_order_str):
-            if not isinstance(passing_order_str, str):
-                return 'unknown'
-            try:
-                # 最初の通過順を取得
-                first_pos = int(passing_order_str.split('-')[0])
-                if first_pos == 1:
-                    return 'nige' # 逃げ
-                elif first_pos <= 4:
-                    return 'senko' # 先行
-                elif first_pos <= 10:
-                    return 'sashi' # 差し
-                else:
-                    return 'oikomi' # 追込
-            except:
-                return 'unknown'
-
-        if 'passing_order' in df.columns:
-            df['running_style'] = df['passing_order'].apply(estimate_running_style)
-            
-            # レースごとの脚質構成比率
-            race_styles = df.groupby('race_id', observed=True)['running_style'].value_counts(normalize=True).unstack(fill_value=0)
-            
-            # 逃げ馬の割合（ペース予想の指標）
-            if 'nige' in race_styles.columns:
-                df = df.merge(race_styles[['nige']].rename(columns={'nige': 'nige_ratio'}), on='race_id', how='left')
-            else:
-                df['nige_ratio'] = 0.0
-                
-            # 先行馬の割合
-            if 'senko' in race_styles.columns:
-                df = df.merge(race_styles[['senko']].rename(columns={'senko': 'senko_ratio'}), on='race_id', how='left')
-            else:
-                df['senko_ratio'] = 0.0
-
         return df
 
     def generate_deep_pedigree_features(
@@ -497,4 +474,114 @@ class AdvancedFeatureEngine:
             self.logger.info("  ✓ 馬体重の相対値を計算完了")
         
         self.logger.info("✓ レース内相対指標の生成完了（オッズ除外）")
+        return df
+
+    def generate_condition_change_features(
+        self,
+        df: pd.DataFrame,
+        performance_df: pd.DataFrame
+    ) -> pd.DataFrame:
+        """条件変化特徴量（距離変更、馬場変更、場所変更）"""
+        self.logger.info("条件変化特徴量を生成中...")
+        
+        # 時系列順にソートして前走データを取得
+        last_race = performance_df.sort_values('race_date').groupby('horse_id').last().reset_index()
+        
+        # 必要なカラム: distance_m, track_surface, venue
+        cols_to_use = ['horse_id', 'distance_m', 'track_surface', 'venue']
+        last_race = last_race[cols_to_use].rename(columns={
+            'distance_m': 'prev_distance_m',
+            'track_surface': 'prev_track_surface',
+            'venue': 'prev_venue'
+        })
+        
+        df = df.merge(last_race, on='horse_id', how='left')
+        
+        # 距離変更
+        if 'distance_m' in df.columns and 'prev_distance_m' in df.columns:
+            df['distance_change'] = (df['distance_m'] - df['prev_distance_m']).abs()
+            df['is_distance_shortened'] = (df['distance_m'] < df['prev_distance_m']).astype(int)
+            df['is_distance_lengthened'] = (df['distance_m'] > df['prev_distance_m']).astype(int)
+            
+        # 馬場変更
+        if 'track_surface' in df.columns and 'prev_track_surface' in df.columns:
+            df['surface_change'] = (df['track_surface'] != df['prev_track_surface']).astype(int)
+            
+        # 場所変更
+        if 'venue' in df.columns and 'prev_venue' in df.columns:
+            df['venue_change'] = (df['venue'] != df['prev_venue']).astype(int)
+            
+        self.logger.info("✓ 条件変化特徴量の生成完了")
+        return df
+    
+    def generate_rest_period_features(
+        self,
+        df: pd.DataFrame,
+        performance_df: pd.DataFrame
+    ) -> pd.DataFrame:
+        """休養明け・間隔特徴量"""
+        self.logger.info("休養明け特徴量を生成中...")
+        
+        # 前走日付の取得
+        last_race_date = performance_df.sort_values('race_date').groupby('horse_id')['race_date'].last().reset_index()
+        last_race_date = last_race_date.rename(columns={'race_date': 'prev_race_date'})
+        
+        df = df.merge(last_race_date, on='horse_id', how='left')
+        
+        # 休養明けフラグ
+        if 'race_date' in df.columns and 'prev_race_date' in df.columns:
+            df['race_date'] = pd.to_datetime(df['race_date'])
+            df['prev_race_date'] = pd.to_datetime(df['prev_race_date'])
+            
+            df['days_since_last_race'] = (df['race_date'] - df['prev_race_date']).dt.days
+            
+            # 休養明けフラグ (90日以上)
+            df['is_rest_return'] = (df['days_since_last_race'] > 90).astype(int)
+        
+        self.logger.info("✓ 休養明け特徴量の生成完了")
+        return df
+
+    def generate_pace_features(
+        self,
+        df: pd.DataFrame,
+        performance_df: pd.DataFrame
+    ) -> pd.DataFrame:
+        """展開・ペース特徴量（過去走データから計算）"""
+        
+        # ⚠️ データリーク防止: 現在のレースの passing_order や last_3f_time は使用しない
+        # 過去の履歴データから各馬の傾向を計算する
+        
+        self.logger.info("ペース適性特徴量を生成中...")
+        
+        # 過去走からペース適性を計算（データリーク防止）
+        def get_first_passing(s):
+            if not isinstance(s, str): 
+                return np.nan
+            try:
+                return int(s.split('-')[0])
+            except:
+                return np.nan
+        
+        if 'passing_order' in performance_df.columns and 'head_count' in performance_df.columns:
+            performance_df = performance_df.copy()
+            performance_df['passing_order_1'] = performance_df['passing_order'].apply(get_first_passing)
+            performance_df['early_speed_index'] = performance_df['passing_order_1'] / performance_df['head_count']
+            
+            # 各馬の平均早期スピード指標
+            horse_early = performance_df.groupby('horse_id', observed=True)['early_speed_index'].mean().reset_index()
+            horse_early.columns = ['horse_id', 'horse_early_speed_index']
+            
+            df = df.merge(horse_early, on='horse_id', how='left')
+        
+        if 'last_3f_time' in performance_df.columns and 'distance_m' in performance_df.columns:
+            performance_df = performance_df.copy()
+            performance_df['late_speed_index'] = performance_df['last_3f_time'] / performance_df['distance_m']
+            
+            # 各馬の平均後期スピード指標
+            horse_late = performance_df.groupby('horse_id', observed=True)['late_speed_index'].mean().reset_index()
+            horse_late.columns = ['horse_id', 'horse_late_speed_index']
+            
+            df = df.merge(horse_late, on='horse_id', how='left')
+        
+        self.logger.info("✓ ペース適性特徴量の生成完了")
         return df

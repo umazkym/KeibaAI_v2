@@ -1,7 +1,7 @@
 # configs/default.yaml
 
 # 基本的なパス設定
-data_path: "data"
+data_path: "keibaai/data"
 raw_data_path: "${data_path}/raw"
 parsed_data_path: "${data_path}/parsed"
 features_path: "${data_path}/features"

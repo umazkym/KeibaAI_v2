@@ -262,10 +262,10 @@ def main():
     try:
         from keibaai.src.models.calibration import IsotonicCalibrator
         
-        # 学習データから検証用データを分離（時系列で後半20%を使用）
+        # 学習データから検証用データを分離（時系列で後半30%を使用）
         if 'race_date' in final_df.columns:
             final_df_sorted = final_df.sort_values('race_date')
-            split_idx = int(len(final_df_sorted) * 0.8)
+            split_idx = int(len(final_df_sorted) * 0.7)  # 70:30分割に変更
             train_df_calib = final_df_sorted.iloc[:split_idx]
             val_df_calib = final_df_sorted.iloc[split_idx:]
             logging.info(f"較正用の訓練データ: {len(train_df_calib)}行, 検証データ: {len(val_df_calib)}行")

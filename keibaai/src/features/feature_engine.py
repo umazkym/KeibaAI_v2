@@ -83,14 +83,29 @@ class FeatureEngine:
         # まずは生成された特徴量をマージ
         if 'is_target_race' in combined_df.columns:
             generated_features = combined_df[combined_df['is_target_race'] == 1]
-            # is_target_race と is_win はマージ対象から除外
-            cols_to_merge = [c for c in generated_features.columns if c not in df.columns or c in ['race_id', 'horse_id']]
-            df = df.merge(generated_features[cols_to_merge], on=['race_id', 'horse_id'], how='left')
+            
+            # past_系特徴量は強制的にマージ対象に含める（dfに存在していても上書き）
+            cols_to_merge = []
+            for c in generated_features.columns:
+                if c in ['race_id', 'horse_id', 'is_target_race', 'is_win']:
+                    continue
+                
+                # dfに無いか、またはpast_で始まる場合はマージ対象
+                if c not in df.columns or c.startswith('past_'):
+                    cols_to_merge.append(c)
+            
+            # 重複カラムがある場合はdf側を削除してからマージ
+            cols_to_drop = [c for c in cols_to_merge if c in df.columns]
+            if cols_to_drop:
+                logging.debug(f"既存の {len(cols_to_drop)} カラムを上書きのために削除します")
+                df = df.drop(columns=cols_to_drop)
+                
+            df = df.merge(generated_features[cols_to_merge + ['race_id', 'horse_id']], on=['race_id', 'horse_id'], how='left')
+            logging.debug(f"マージ後 df shape: {df.shape}")
 
         if self.recipes.get('relative_features', {}).get('enabled', False):
             df = self._add_relative_features(df)
 
-        # --- 高度な特徴量 (Advanced Features) ---
         # Phase D: ROI向上のため、未使用の高度な特徴量を追加
         try:
             # srcがパスに通っている前提
@@ -100,7 +115,7 @@ class FeatureEngine:
             logging.info("AdvancedFeatureEngine を使用して高度な特徴量を生成します...")
 
             # 1. ペース・脚質
-            df = adv_engine.generate_pace_features(df)
+            df = adv_engine.generate_pace_features(df, results_history_df)
 
             # 2. 血統 (Deep)
             if pedigree_df is not None and not pedigree_df.empty:
@@ -143,6 +158,22 @@ class FeatureEngine:
                 logging.warning(f"レース内相対指標の生成をスキップしました: {e}")
 
             logging.info("Phase D: 新規特徴量カテゴリの処理完了")
+
+            # 9. 条件変化特徴量 (New)
+            try:
+                logging.info("条件変化特徴量を生成中...")
+                df = adv_engine.generate_condition_change_features(df, results_history_df)
+                logging.info("✓ 条件変化特徴量の生成完了")
+            except Exception as e:
+                logging.warning(f"条件変化特徴量の生成をスキップしました: {e}")
+
+            # 10. 休養明け特徴量 (New)
+            try:
+                logging.info("休養明け特徴量を生成中...")
+                df = adv_engine.generate_rest_period_features(df, results_history_df)
+                logging.info("✓ 休養明け特徴量の生成完了")
+            except Exception as e:
+                logging.warning(f"休養明け特徴量の生成をスキップしました: {e}")
 
         except ImportError as e:
             logging.warning(f"AdvancedFeatureEngineのインポートに失敗しました: {e}")
@@ -235,6 +266,14 @@ class FeatureEngine:
         df = df.copy()
         df['is_target_race'] = 1
         
+        # ★ 修正: history_dfにあってdfに無いカラムをNaNで追加
+        # これにより、shutuba(df)とraces(history_df)の結合時にカラムが揃う
+        missing_cols_in_df = set(history_df.columns) - set(df.columns)
+        for col in missing_cols_in_df:
+            if col != 'is_target_race':  # is_target_raceは既に追加済み
+                df[col] = np.nan
+                logging.debug(f"shutuba_dfに存在しないカラム '{col}' をNaNで追加しました")
+        
         combined = pd.concat([history_df, df], ignore_index=True, sort=False)
         combined = combined.drop_duplicates(subset=['race_id', 'horse_id'], keep='last')
         
@@ -284,20 +323,38 @@ class FeatureEngine:
                 logging.warning(f"過去走集約: カラム '{col}' が存在しません。スキップします。")
                 continue
             
-            shifted = grouped[col].shift(1)
+            # ★ 修正: 有効なデータ（NaNでない）の数を確認
+            valid_count = df[col].notna().sum()
+            if valid_count == 0:
+                logging.warning(f"過去走集約: カラム '{col}' に有効なデータがありません。スキップします。")
+                continue
             
             for w in windows:
-                rolled = shifted.rolling(window=w, min_periods=1)
                 for agg in aggregations:
                     feat_name = f'past_{w}_{col}_{agg}'
                     try:
-                        agg_result = getattr(rolled, agg)()
-                        df[feat_name] = agg_result.reset_index(level=0, drop=True)
+                        # ★ 修正: transformを使用してグループごとのRolling集計を行う
+                        # これにより、馬ごとの境界を跨がず、かつインデックスの整合性も保たれる
+                        df[feat_name] = grouped[col].transform(
+                            lambda x: x.shift(1).rolling(window=w, min_periods=1).agg(agg)
+                        )
+                        
+                        # ★ 修正: 生成された特徴量の統計をログ出力（デバッグ用）
+                        # NaNはゼロではないので、NaNを除外してカウントするか、fillna(0)してからチェック
+                        non_zero_count = (df[feat_name].fillna(0) != 0).sum()
+                        if non_zero_count > 0:
+                            logging.debug(f"'{feat_name}' 生成完了: 非ゼロ値 {non_zero_count}/{len(df)}")
+                        else:
+                            logging.warning(f"'{feat_name}' 生成完了ですが、全てゼロまたはNaNです")
+                            
                     except AttributeError:
                         logging.error(f"集計関数 '{agg}' はサポートされていません。")
+                    except Exception as e:
+                        logging.error(f"'{feat_name}' の生成中にエラー: {e}")
         
         # 前走からの日数
-        df['days_since_last_race'] = grouped['race_date'].diff().dt.days
+        if 'race_date' in df.columns:
+            df['days_since_last_race'] = grouped['race_date'].diff().dt.days
         
         return df
 
@@ -524,6 +581,7 @@ class FeatureEngine:
                 try:
                     if re.match(pattern, col):
                         is_excluded = True
+                        # logging.debug(f"特徴量除外: '{col}' (パターン '{pattern}' にマッチ)")
                         break
                 except re.error as e:
                     logging.warning(f"特徴量選択の除外パターンで正規表現エラー: '{pattern}' - {e}")
@@ -533,6 +591,11 @@ class FeatureEngine:
                 # さらに数値型であることも確認
                 if pd.api.types.is_numeric_dtype(df[col]):
                     feature_cols.append(col)
+                else:
+                    if col.startswith('past_'):
+                        logging.warning(f"特徴量除外: '{col}' は数値型ではありません ({df[col].dtype})")
+                        # サンプル値を表示
+                        logging.warning(f"  サンプル: {df[col].dropna().head(3).tolist()}")
 
         return sorted(list(dict.fromkeys(feature_cols)))
 

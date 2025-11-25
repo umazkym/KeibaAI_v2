@@ -21,9 +21,9 @@ import yaml
 from tqdm import tqdm
 
 # --- プロジェクトルート (keibaai/) を基準にする ---
-script_dir = Path(__file__).resolve().parent  # keibaai/src/features/
-src_dir = script_dir.parent  # keibaai/src/
-project_root = src_dir.parent  # keibaai/
+script_dir = Path(__file__).resolve().parent  # scripts/pipelines/
+project_root = script_dir.parent.parent  # Keiba_AI_v2/
+src_dir = project_root / "keibaai" / "src"  # keibaai/src/
 
 sys.path.insert(0, str(src_dir))
 
@@ -120,11 +120,8 @@ def main():
     paths_config = {}
     try:
         # 設定ファイルパスを解決
-        config_rel = args.config.replace("keibaai/", "").replace("keibaai\\", "")
-        features_config_rel = args.features_config.replace("keibaai/", "").replace("keibaai\\", "")
-        
-        config_path = project_root / config_rel
-        features_config_path = project_root / features_config_rel
+        config_path = project_root / args.config
+        features_config_path = project_root / args.features_config
         
         # 設定ファイルをロード
         with open(config_path, 'r', encoding='utf-8') as f:
@@ -211,7 +208,52 @@ def main():
         if 'horse_id' in cols_to_merge and len(cols_to_merge) > 1:
             logging.info(f"results_history_df に血統情報 {cols_to_merge} をマージします。")
             ped_info = data["horse_profiles_df"][cols_to_merge]
-    logging.info("=" * 60)
+            # results_history_df にマージ
+            data["results_history_df"] = data["results_history_df"].merge(ped_info, on='horse_id', how='left')
+
+    # --- 3.5 レース情報のマージ (Fix for All Zeros issue) ---
+    logging.info("レース情報を shutuba_df にマージしています...")
+    if "results_history_df" in data and not data["results_history_df"].empty:
+        # レース単位の情報を抽出 (重複排除)
+        # ⚠️ データリーク防止: 結果系カラムは絶対に含まない
+        race_info_cols = [
+            'race_id', 
+            'distance_m', 
+            'track_surface', 
+            'weather', 
+            'track_condition',
+            'venue', 
+            'race_class',
+            'round_of_year',
+            'day_of_meeting'
+        ]
+        
+        # 存在するカラムのみを選択
+        available_cols = [c for c in race_info_cols if c in data["results_history_df"].columns]
+        
+        if len(available_cols) > 1: # race_id以外もある場合
+            race_info = data["results_history_df"][available_cols].drop_duplicates(subset=['race_id'])
+            
+            # マージ実行
+            before_len = len(data["shutuba_df"])
+            
+            # 既存のカラムと重複しないようにチェック
+            cols_to_merge = [c for c in available_cols if c not in data["shutuba_df"].columns or c == 'race_id']
+            
+            if len(cols_to_merge) > 1:
+                data["shutuba_df"] = data["shutuba_df"].merge(race_info[cols_to_merge], on='race_id', how='left')
+                after_len = len(data["shutuba_df"])
+                
+                logging.info(f"レース情報マージ完了: {len(cols_to_merge)-1}カラムを追加")
+                
+                # 検証
+                if 'distance_m' in data["shutuba_df"].columns:
+                    nulls = data["shutuba_df"]['distance_m'].isna().sum()
+                    logging.info(f"マージ後の distance_m 欠損数: {nulls}/{after_len}")
+            else:
+                logging.info("追加すべきレース情報カラムがありませんでした（既に存在するか、データ不足）。")
+        else:
+            logging.warning("results_history_df にレース情報カラムが見つかりません。")
 
     # --- 4. 特徴量生成 ---
     features_df = engine.generate_features(
