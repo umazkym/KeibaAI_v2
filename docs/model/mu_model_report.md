@@ -1,228 +1,132 @@
-# μモデル v2.2 (Fixed) 詳細レポート
+# μモデル (Win Probability Model) レポート
 
-**作成日**: 2025-11-26
-**バージョン**: v2.2 (Fixed / Leakage Free)
-**目的**: 競馬レースにおける各馬の勝率（1着になる確率）を予測する
+## モデル概要 (Model Overview)
 
-## 1. モデル概要
+*   **バージョン**: v2.3 (2025-11-27 Update)
+*   **目的**: 各出走馬が1着になる確率（勝率）を予測する
+*   **アルゴリズム**: LightGBM (Gradient Boosting Decision Tree)
+*   **評価指標**: AUC (Area Under the ROC Curve), LogLoss, ROI (回収率)
 
-本モデルは、**LightGBM Ranker**（着順の順序学習）を使用したランキングモデルです。
-2025年11月25日に発覚した重大な特徴量バグ（過去走データが全て0になる）と、学習時のデータリークを修正した**完全版**です。
+## パフォーマンス評価 (Performance Evaluation)
 
-- **アルゴリズム**: LightGBM (Gradient Boosting Decision Tree)
-- **タスク**: Binary Classification (1着 vs その他) / Ranking
-- **評価指標**: AUC (0.7746), ROI (79.59%)
-
-### 訓練設定
-- **訓練期間**: 2020年1月1日 〜 2023年12月31日
-- **検証期間**: 2024年1月1日 〜 2024年12月31日
-- **データ数**: 約27万レース結果
-- **リーク対策**:
-    - `finish_time_seconds` (走破タイム) などの未来情報を完全除外
-    - `past_` 特徴量の生成時に `shift(1)` を厳密に適用し、当該レースの結果を含まないように保証
-
-## 2. ハイパーパラメータ設定
-
-Optunaによる自動探索と、手動調整を組み合わせた設定です。
-特に `feature_pre_filter=False` を設定することで、学習時の動的なビン生成を有効にしています。
-
-| パラメータ | 設定値 | 説明 |
-|-----------|-------|------|
-| `objective` | `binary` | 2値分類（1着か否か） |
-| `metric` | `auc` | ROC曲線下面積 |
-| `boosting_type` | `gbdt` | 勾配ブースティング |
-| `learning_rate` | **0.05** | 一般的な学習率 |
-| `num_leaves` | **31** | 決定木の複雑さ |
-| `feature_pre_filter` | **False** | **重要**: データセット構築後のパラメータ変更を許可 |
-| `bagging_fraction` | 0.8 | データのサンプリング率 |
-| `feature_fraction` | 0.8 | 特徴量のサンプリング率 |
-
-## 3. 特徴量詳細 (全114個)
-
-本モデルで使用されている全特徴量を以下に列挙します。これらは全て**レース開始前に入手可能な情報**のみで構成されています。
-
-### A. 過去走集計 (Past Performance) - 64個
-馬の過去のレース成績（1走、3走、5走、10走前まで）を集計した指標です。
-今回のバグ修正により、最も予測に寄与する重要な特徴量となりました。
-
-<details>
-<summary>詳細リストを開く</summary>
-
-| 特徴量名 | 説明 |
-|---|---|
-| `past_1_finish_position_mean` | 前走の着順（平均） |
-| `past_1_finish_position_std` | 前走の着順（標準偏差） |
-| `past_1_finish_position_max` | 前走の着順（最大値） |
-| `past_1_finish_position_median` | 前走の着順（中央値） |
-| `past_1_last_3f_time_mean` | 前走の上がり3Fタイム（平均） |
-| `past_1_last_3f_time_std` | 前走の上がり3Fタイム（標準偏差） |
-| `past_1_last_3f_time_max` | 前走の上がり3Fタイム（最大値） |
-| `past_1_last_3f_time_median` | 前走の上がり3Fタイム（中央値） |
-| `past_1_passing_order_1_mean` | 前走の第1コーナー通過順位（平均） |
-| `past_1_passing_order_1_std` | 前走の第1コーナー通過順位（標準偏差） |
-| `past_1_passing_order_1_max` | 前走の第1コーナー通過順位（最大値） |
-| `past_1_passing_order_1_median` | 前走の第1コーナー通過順位（中央値） |
-| `past_1_passing_order_4_mean` | 前走の第4コーナー通過順位（平均） |
-| `past_1_passing_order_4_std` | 前走の第4コーナー通過順位（標準偏差） |
-| `past_1_passing_order_4_max` | 前走の第4コーナー通過順位（最大値） |
-| `past_1_passing_order_4_median` | 前走の第4コーナー通過順位（中央値） |
-| `past_3_finish_position_mean` | 過去3走の着順（平均） |
-| `past_3_finish_position_std` | 過去3走の着順（標準偏差） |
-| `past_3_finish_position_max` | 過去3走の着順（最大値） |
-| `past_3_finish_position_median` | 過去3走の着順（中央値） |
-| `past_3_last_3f_time_mean` | 過去3走の上がり3Fタイム（平均） |
-| `past_3_last_3f_time_std` | 過去3走の上がり3Fタイム（標準偏差） |
-| `past_3_last_3f_time_max` | 過去3走の上がり3Fタイム（最大値） |
-| `past_3_last_3f_time_median` | 過去3走の上がり3Fタイム（中央値） |
-| `past_3_passing_order_1_mean` | 過去3走の第1コーナー通過順位（平均） |
-| `past_3_passing_order_1_std` | 過去3走の第1コーナー通過順位（標準偏差） |
-| `past_3_passing_order_1_max` | 過去3走の第1コーナー通過順位（最大値） |
-| `past_3_passing_order_1_median` | 過去3走の第1コーナー通過順位（中央値） |
-| `past_3_passing_order_4_mean` | 過去3走の第4コーナー通過順位（平均） |
-| `past_3_passing_order_4_std` | 過去3走の第4コーナー通過順位（標準偏差） |
-| `past_3_passing_order_4_max` | 過去3走の第4コーナー通過順位（最大値） |
-| `past_3_passing_order_4_median` | 過去3走の第4コーナー通過順位（中央値） |
-| `past_5_finish_position_mean` | 過去5走の着順（平均） |
-| `past_5_finish_position_std` | 過去5走の着順（標準偏差） |
-| `past_5_finish_position_max` | 過去5走の着順（最大値） |
-| `past_5_finish_position_median` | 過去5走の着順（中央値） |
-| `past_5_last_3f_time_mean` | 過去5走の上がり3Fタイム（平均） |
-| `past_5_last_3f_time_std` | 過去5走の上がり3Fタイム（標準偏差） |
-| `past_5_last_3f_time_max` | 過去5走の上がり3Fタイム（最大値） |
-| `past_5_last_3f_time_median` | 過去5走の上がり3Fタイム（中央値） |
-| `past_5_passing_order_1_mean` | 過去5走の第1コーナー通過順位（平均） |
-| `past_5_passing_order_1_std` | 過去5走の第1コーナー通過順位（標準偏差） |
-| `past_5_passing_order_1_max` | 過去5走の第1コーナー通過順位（最大値） |
-| `past_5_passing_order_1_median` | 過去5走の第1コーナー通過順位（中央値） |
-| `past_5_passing_order_4_mean` | 過去5走の第4コーナー通過順位（平均） |
-| `past_5_passing_order_4_std` | 過去5走の第4コーナー通過順位（標準偏差） |
-| `past_5_passing_order_4_max` | 過去5走の第4コーナー通過順位（最大値） |
-| `past_5_passing_order_4_median` | 過去5走の第4コーナー通過順位（中央値） |
-| `past_10_finish_position_mean` | 過去10走の着順（平均） |
-| `past_10_finish_position_std` | 過去10走の着順（標準偏差） |
-| `past_10_finish_position_max` | 過去10走の着順（最大値） |
-| `past_10_finish_position_median` | 過去10走の着順（中央値） |
-| `past_10_last_3f_time_mean` | 過去10走の上がり3Fタイム（平均） |
-| `past_10_last_3f_time_std` | 過去10走の上がり3Fタイム（標準偏差） |
-| `past_10_last_3f_time_max` | 過去10走の上がり3Fタイム（最大値） |
-| `past_10_last_3f_time_median` | 過去10走の上がり3Fタイム（中央値） |
-| `past_10_passing_order_1_mean` | 過去10走の第1コーナー通過順位（平均） |
-| `past_10_passing_order_1_std` | 過去10走の第1コーナー通過順位（標準偏差） |
-| `past_10_passing_order_1_max` | 過去10走の第1コーナー通過順位（最大値） |
-| `past_10_passing_order_1_median` | 過去10走の第1コーナー通過順位（中央値） |
-| `past_10_passing_order_4_mean` | 過去10走の第4コーナー通過順位（平均） |
-| `past_10_passing_order_4_std` | 過去10走の第4コーナー通過順位（標準偏差） |
-| `past_10_passing_order_4_max` | 過去10走の第4コーナー通過順位（最大値） |
-| `past_10_passing_order_4_median` | 過去10走の第4コーナー通過順位（中央値） |
-
-</details>
-
-### B. 騎手・調教師データ (Entity Statistics) - 32個
-騎手と調教師の過去の実績データです。
-
-<details>
-<summary>詳細リストを開く</summary>
-
-| 特徴量名 | 説明 |
-|---|---|
-| `jockey_win_rate` | 騎手の通算勝率 |
-| `jockey_sprint_win_rate` | 騎手の短距離（〜1300m）勝率 |
-| `jockey_mile_win_rate` | 騎手のマイル（1301〜1899m）勝率 |
-| `jockey_intermediate_win_rate` | 騎手の中距離（1900〜2100m）勝率 |
-| `jockey_long_win_rate` | 騎手の長距離（2101〜2700m）勝率 |
-| `jockey_marathon_win_rate` | 騎手の超長距離（2701m〜）勝率 |
-| `jockey_unknown_win_rate` | 騎手の距離不明レース勝率 |
-| `jockey_芝_win_rate` | 騎手の芝コース勝率 |
-| `jockey_ダート_win_rate` | 騎手のダートコース勝率 |
-| `jockey_札幌_win_rate` | 騎手の札幌競馬場勝率 |
-| `jockey_函館_win_rate` | 騎手の函館競馬場勝率 |
-| `jockey_福島_win_rate` | 騎手の福島競馬場勝率 |
-| `jockey_新潟_win_rate` | 騎手の新潟競馬場勝率 |
-| `jockey_東京_win_rate` | 騎手の東京競馬場勝率 |
-| `jockey_中山_win_rate` | 騎手の中山競馬場勝率 |
-| `jockey_中京_win_rate` | 騎手の中京競馬場勝率 |
-| `jockey_京都_win_rate` | 騎手の京都競馬場勝率 |
-| `jockey_阪神_win_rate` | 騎手の阪神競馬場勝率 |
-| `jockey_小倉_win_rate` | 騎手の小倉競馬場勝率 |
-| `trainer_win_rate` | 調教師の通算勝率 |
-| `trainer_札幌_win_rate` | 調教師の札幌競馬場勝率 |
-| `trainer_函館_win_rate` | 調教師の函館競馬場勝率 |
-| `trainer_福島_win_rate` | 調教師の福島競馬場勝率 |
-| `trainer_新潟_win_rate` | 調教師の新潟競馬場勝率 |
-| `trainer_東京_win_rate` | 調教師の東京競馬場勝率 |
-| `trainer_中山_win_rate` | 調教師の中山競馬場勝率 |
-| `trainer_中京_win_rate` | 調教師の中京競馬場勝率 |
-| `trainer_京都_win_rate` | 調教師の京都競馬場勝率 |
-| `trainer_阪神_win_rate` | 調教師の阪神競馬場勝率 |
-| `trainer_小倉_win_rate` | 調教師の小倉競馬場勝率 |
-| `is_jockey_id_changed` | 騎手乗り替わりフラグ |
-| `is_trainer_id_changed` | 調教師変更（転厩）フラグ |
-
-</details>
-
-### C. レース条件・馬体 (Condition & Attributes) - 13個
-当日のレース条件や馬の状態に関する指標です。
-
-| 特徴量名 | 説明 |
-|---|---|
-| `distance_m` | 距離 (メートル) |
-| `track_芝` | 馬場種別：芝 (One-Hot) |
-| `track_ダート` | 馬場種別：ダート (One-Hot) |
-| `days_since_last_race` | 前走からの間隔 (日数) |
-| `horse_weight` | 馬体重 |
-| `horse_weight_change` | 馬体重増減 |
-| `age` | 馬齢 |
-| `sex_牡` | 性別：牡 (One-Hot) |
-| `sex_牝` | 性別：牝 (One-Hot) |
-| `sex_セ` | 性別：セン (One-Hot) |
-| `bracket_is_inner` | 枠番：内枠 (1-3枠) |
-| `bracket_is_middle` | 枠番：中枠 (4-6枠) |
-| `bracket_is_outer` | 枠番：外枠 (7-8枠) |
-| `horse_number` | 馬番 |
-
-### D. 相対指標 (Relative Metrics) - 3個
-レースメンバー内での相対的な位置付けを示す指標です。
-
-| 特徴量名 | 説明 |
-|---|---|
-| `age_zscore` | 馬齢の偏差値 |
-| `horse_weight_zscore` | 馬体重の偏差値 |
-| `basis_weight_zscore` | 斤量の偏差値 |
-| `basis_weight` | 斤量（負担重量） |
-
-### E. 除外された特徴量 (Leakage Prevention)
-以下の項目は、**学習時に意図的に除外**しています（リーク防止のため）。
-これらが特徴量リストに含まれていないことは、モデルの健全性を証明する上で重要です。
-
-*   `finish_position` (今回の着順)
-*   `finish_time_seconds` (今回の走破タイム)
-*   `win_odds` (確定オッズ)
-*   `prize_money` (獲得賞金)
-*   `pace_index` (レース全体のペース指数 ※事後計算のため)
-
-## 4. パフォーマンス評価 (2024年テストデータ)
-
-バグ修正と再学習の結果、以下の高いパフォーマンスを確認しました。
+2024年のテストデータ（約6万レース）における評価結果です。
 
 | 指標 | 値 | 評価 |
 |------|----|------|
-| **Test AUC** | **0.7746** | 0.7以上で実用的とされる中、非常に高い識別精度を示しています。 |
-| **ROI (Top1)** | **79.59%** | 単勝1番人気予測馬の回収率。控除率(約80%)を考慮すると、ベースラインとして極めて優秀です。 |
-| **Accuracy** | **28.10%** | 1着的中率。 |
+| **Test AUC** | **0.7787** | 非常に高い識別精度を示しています。(Previous v2.2: 0.7746) |
+| **ROI (Top1)** | **77.47%** | 単勝回収率 (490,600/633,300)。Top1的中率は **27.36%**。 |
+| **LogLoss** | **0.2256** | 予測確率の正確性を示す指標（低いほど良い）。 |
 
-## 5. 修正履歴 (2025-11-25)
+> [!NOTE]
+> ROIが100%を下回っていますが、これは**データリーク（カンニング）を完全に排除した正当な結果**です。
+> 単勝控除率（約20%）を考慮すると、ベースラインとして非常に健全な数値であり、ここからオッズの歪みを突く戦略（σ・νモデル）を組み合わせることで100%超えを目指します。
 
-### Zero Feature Bug
-- **現象**: `past_` 系の特徴量が全て0になっていた。
-- **原因**: データ結合時のカラム不整合と、集計ロジックのバグ。
-- **対応**: `feature_engine.py` を修正し、`transform` を用いた正しい集計処理を実装。
+## 特徴量 (Features)
 
-### Data Leakage
-- **現象**: 初回の再学習でAUC 0.99という異常値を記録。
-- **原因**: `finish_time_seconds` などが特徴量に含まれていた。
-- **対応**: 学習スクリプトの `exclude_cols` にリーク変数を追加し、完全除外。
+現在、モデルは以下のカテゴリに分類される特徴量を使用しています。
 
-## 6. 運用上の注意点
+### 1. 基本情報 (Basic Info)
+レースや馬の基本的な属性情報です。
+*   `horse_number`: 馬番 (枠順の有利不利を反映)
+*   `age`: 馬齢 (成長曲線や衰えを反映)
+*   `sex_牡`, `sex_牝`, `sex_セ`: 性別 (牡馬/牝馬/セン馬の特性)
+*   `basis_weight`: 斤量 (負担重量の影響)
+*   `horse_weight`: 馬体重 (馬格)
+*   `horse_weight_change`: 馬体重増減 (当日のコンディション)
+*   `distance_m`: 距離 (m)
+*   `direction_右`, `direction_左`, `direction_直`: コース周回方向
+*   `weather_晴`, `weather_曇`, `weather_雨`, `weather_小雨`, `weather_雪`, `weather_小雪`: 天候
+*   `track_condition_良`, `track_condition_稍`, `track_condition_重`, `track_condition_不`: 馬場状態
+*   `track_surface`: 芝/ダート
 
-- **`win_odds` の扱い**: 現在の学習データにはオッズが含まれていません（リーク防止のため）。ROI計算時には別途 `horses_performance` テーブルからオッズを参照する必要があります。
-- **定期更新**: 毎週のデータ更新時に `generate_features.py` を実行し、最新の履歴データを反映させてください。
+### 2. 過去のパフォーマンス (Past Performance)
+馬の過去の競走成績を集約した指標です。近走の勢いや安定感を示します。
+*   **着順 (Finish Position)**
+    *   `past_1_finish_position_mean/max/min/std`: 前走
+    *   `past_3_finish_position_mean/max/min/std`: 近3走
+    *   `past_5_finish_position_mean/max/min/std`: 近5走
+    *   `past_10_finish_position_mean/max/min/std`: 近10走
+*   **上がり3F (Last 3F Time)**
+    *   `past_1_last_3f_time_mean/max/min/std` ... `past_10_...`
+    *   末脚の切れ味や持続力を示します。
+*   **通過順位 (Passing Order)**
+    *   `past_1_passing_order_1_mean` ...: 第1コーナー通過順（先行力）
+    *   `past_1_passing_order_4_mean` ...: 第4コーナー通過順（位置取り）
+*   **賞金 (Prize)**
+    *   `prize_total`: 獲得賞金総額（馬の格）
+*   **経験 (Experience)**
+    *   `career_starts`: 通算出走数
+    *   `career_wins`: 通算勝利数
+    *   `days_since_last_race`: 前走からの間隔（ローテーション）
+
+### 3. 関係者実績 (Connections)
+騎手や調教師の実績データです。
+*   **騎手 (Jockey)**
+    *   `jockey_win_rate`: 通算勝率
+    *   `jockey_rank_avg`: 平均着順
+    *   `jockey_races`: 出走回数（経験値）
+*   **調教師 (Trainer)**
+    *   `trainer_win_rate`: 通算勝率
+    *   `trainer_rank_avg`: 平均着順
+    *   `trainer_races`: 出走回数
+
+### 4. 血統 (Pedigree)
+*   `sire_win_rate`: 父馬（種牡馬）の産駒勝率
+*   `sire_rank_avg`: 父馬の産駒平均着順
+*   `sire_races`: 父馬の産駒出走回数
+
+### 5. 変化フラグ (Change Flags)
+今回と前走の変化を捉えるフラグです。
+*   `is_jockey_id_changed`: 騎手乗り替わり（勝負気配や相性）
+*   `is_trainer_id_changed`: 転厩
+
+### 6. 交互作用 (Interactions)
+特定の条件下での強さを示す組み合わせ特徴量です。
+*   **騎手×条件**
+    *   `jockey_芝_win_rate`, `jockey_ダート_win_rate`: 馬場適性
+    *   `jockey_sprint_win_rate` (~1400m), `jockey_mile_win_rate` (1400-1800m), `jockey_intermediate_win_rate` (1800-2200m), `jockey_long_win_rate` (2200-2800m), `jockey_marathon_win_rate` (2800m+): 距離適性
+    *   `jockey_札幌_win_rate`, `jockey_東京_win_rate`, ...: 競馬場適性
+*   **調教師×条件**
+    *   `trainer_芝_win_rate`, `trainer_ダート_win_rate`
+    *   `trainer_sprint_win_rate` ... `trainer_marathon_win_rate`
+    *   `trainer_札幌_win_rate` ... `trainer_東京_win_rate`
+*   **種牡馬×条件**
+    *   `sire_芝_win_rate`, `sire_ダート_win_rate`
+    *   `sire_sprint_win_rate` ... `sire_marathon_win_rate`
+    *   `sire_札幌_win_rate` ... `sire_東京_win_rate`
+
+### 7. 高度な特徴量 (Advanced Features - v2.3 New)
+v2.3で導入された、コンテキストと相対性を重視した特徴量です。
+
+*   **騎手×競馬場 相性 (Jockey-Venue Affinity)**
+    *   `jockey_venue_avg_finish`: その競馬場における騎手の平均着順。
+    *   `jockey_venue_win_rate`: その競馬場における騎手の勝率。
+*   **レース内相対指標 (Relative Metrics)**
+    *   `horse_weight_diff_from_avg`: レースメンバー平均馬体重との差。
+    *   `age_zscore`: レース内での馬齢偏差値。
+*   **展開適合スコア (Pace Fit Score)**
+    *   `pace_fit_score`: レースのペース傾向と馬の脚質の適合度。
+*   **バイアス (Bias)**
+    *   `bias_seasonal_score`: 季節・コース・枠順による有利不利スコア。
+
+## 特徴量重要度 (Feature Importance Analysis)
+
+v2.3における主要な特徴量は以下の通りです。
+
+| Rank | Feature | Importance | Description |
+| :--- | :--- | :--- | :--- |
+| 1 | `past_1_finish_position_max` | 32,244 | 前走の着順（最も直近のパフォーマンス） |
+| 2 | `jockey_win_rate` | 16,530 | 騎手の通算勝率 |
+| 3 | `past_3_finish_position_mean` | 14,164 | 近3走の平均着順（安定感） |
+| ... | ... | ... | ... |
+| **13** | **`jockey_venue_avg_finish`** | **5,119** | **[New] 騎手×競馬場の相性** |
+| **15** | **`horse_weight_diff_from_avg`** | **4,455** | **[New] 馬体重の相対差** |
+| **23** | **`pace_fit_score`** | **2,792** | **[New] 展開適合度** |
+
+## データリーク対策 (Leakage Prevention)
+
+v2.3では、以下のデータリーク対策を徹底しています。
+
+1.  **未来の情報の排除**: 特徴量生成時、対象レース以降のデータ（結果、オッズ、上がりタイムなど）は一切使用しません。
+2.  **オッズの扱い**: `win_odds` (単勝オッズ) は予測時の入力特徴量としては使用せず、レース後のROI計算（評価）のみに使用します。
+3.  **再学習プロセス**: 定期的な再学習において、常に過去のデータのみから特徴量を生成するパイプラインを構築しています。

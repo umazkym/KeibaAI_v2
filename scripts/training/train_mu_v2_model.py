@@ -65,11 +65,26 @@ class MuV2Trainer:
         df = pd.read_parquet(perf_path)
         df['race_date'] = pd.to_datetime(df['race_date'])
         
-        # 2. 血統データ
+        # 2. レース情報 (補完用)
+        # horses_performance_fixed.parquet に一部のカラム(round_of_year等)が欠けている場合があるため
+        races_path = self.data_dir / 'races/races.parquet'
+        if races_path.exists():
+            races_df = pd.read_parquet(races_path)
+            # 必要なカラムを定義
+            cols_to_add = ['round_of_year', 'day_of_meeting', 'track_condition', 'venue', 'track_surface', 'win_odds']
+            # dfに存在しないものだけをマージ対象にする
+            cols_to_merge = [c for c in cols_to_add if c not in df.columns]
+            
+            if cols_to_merge:
+                logging.info(f"races.parquet から以下のカラムを補完します: {cols_to_merge}")
+                # race_idをキーにしてマージ
+                df = df.merge(races_df[['race_id'] + cols_to_merge], on='race_id', how='left')
+        
+        # 3. 血統データ
         ped_path = self.data_dir / 'pedigrees/pedigrees.parquet'
         ped_df = pd.read_parquet(ped_path) if ped_path.exists() else pd.DataFrame()
         
-        # 3. 馬プロファイル
+        # 4. 馬プロファイル
         prof_path = self.data_dir / 'horses/horses.parquet'
         prof_df = pd.read_parquet(prof_path) if prof_path.exists() else pd.DataFrame()
         

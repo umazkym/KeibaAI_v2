@@ -43,6 +43,7 @@ class FeatureEngine:
         """
         shutuba_df と各種履歴データから特徴量を生成する
         """
+        print("DEBUG: generate_features called (Modified Version)")
         logging.info("レシピベースの特徴量生成パイプラインを開始します...")
         df = shutuba_df.copy()
 
@@ -107,86 +108,158 @@ class FeatureEngine:
             df = self._add_relative_features(df)
 
         # Phase D: ROI向上のため、未使用の高度な特徴量を追加
+        adv_engine = None
         try:
             # srcがパスに通っている前提
             from features.advanced_features import AdvancedFeatureEngine
             adv_engine = AdvancedFeatureEngine()
-
-            logging.info("AdvancedFeatureEngine を使用して高度な特徴量を生成します...")
-
-            # 1. ペース・脚質
-            df = adv_engine.generate_pace_features(df, results_history_df)
-
-            # 2. 血統 (Deep)
-            if pedigree_df is not None and not pedigree_df.empty:
-                df = adv_engine.generate_deep_pedigree_features(df, pedigree_df, results_history_df)
-
-            # 3. コースバイアス
-            df = adv_engine.generate_course_bias_features(df, results_history_df)
-
-            # 4. パフォーマンストレンド
-            df = adv_engine.generate_performance_trend_features(df, results_history_df)
-
-            # 5. 騎手×調教師の相性 (Synergy)
-            df = adv_engine.generate_jockey_trainer_synergy(df, results_history_df)
-
-            # 🆕 Phase D: 以下3つの特徴量を新規追加 (ROI向上のため)
-            # 各特徴量は個別にtry-exceptで保護し、エラー時もパイプライン全体は継続
-
-            # 6. コース適性特徴量 (競馬場別・距離別・馬場別成績)
-            try:
-                logging.info("コース適性特徴量を生成中...")
-                df = adv_engine.generate_course_affinity_features(df, results_history_df)
-                logging.info("✓ コース適性特徴量の生成完了")
-            except Exception as e:
-                logging.warning(f"コース適性特徴量の生成をスキップしました: {e}")
-
-            # 7. レース条件特徴量 (フィールドサイズ・季節性・レース重要度)
-            try:
-                logging.info("レース条件特徴量を生成中...")
-                df = adv_engine.generate_race_condition_features(df)
-                logging.info("✓ レース条件特徴量の生成完了")
-            except Exception as e:
-                logging.warning(f"レース条件特徴量の生成をスキップしました: {e}")
-
-            # 8. 相対指標 (タイム偏差値・上がり3F相対値・オッズ順位)
-            try:
-                logging.info("レース内相対指標を生成中...")
-                df = adv_engine.calculate_relative_metrics(df)
-                logging.info("✓ レース内相対指標の生成完了")
-            except Exception as e:
-                logging.warning(f"レース内相対指標の生成をスキップしました: {e}")
-
-            logging.info("Phase D: 新規特徴量カテゴリの処理完了")
-
-            # 9. 条件変化特徴量 (New)
-            try:
-                logging.info("条件変化特徴量を生成中...")
-                df = adv_engine.generate_condition_change_features(df, results_history_df)
-                logging.info("✓ 条件変化特徴量の生成完了")
-            except Exception as e:
-                logging.warning(f"条件変化特徴量の生成をスキップしました: {e}")
-
-            # 10. 休養明け特徴量 (New)
-            try:
-                logging.info("休養明け特徴量を生成中...")
-                df = adv_engine.generate_rest_period_features(df, results_history_df)
-                logging.info("✓ 休養明け特徴量の生成完了")
-            except Exception as e:
-                logging.warning(f"休養明け特徴量の生成をスキップしました: {e}")
-
-        except ImportError as e:
-            logging.warning(f"AdvancedFeatureEngineのインポートに失敗しました: {e}")
-            # パスが通っていない場合のフォールバック（相対インポート）
+        except ImportError:
             try:
                 from .advanced_features import AdvancedFeatureEngine
                 adv_engine = AdvancedFeatureEngine()
-                # 再試行... (コード重複を避けるためここではログのみ)
-                logging.info("相対インポートで成功しました。再実行は実装されていません。")
-            except:
-                pass
-        except Exception as e:
-            logging.error(f"高度な特徴量の生成中にエラー: {e}", exc_info=True)
+                logging.info("相対インポートでAdvancedFeatureEngineを初期化しました")
+            except ImportError:
+                try:
+                    from keibaai.src.features.advanced_features import AdvancedFeatureEngine
+                    adv_engine = AdvancedFeatureEngine()
+                    logging.info("絶対パス(keibaai.src...)でAdvancedFeatureEngineを初期化しました")
+                except ImportError as e:
+                    logging.warning(f"AdvancedFeatureEngineのインポートに失敗しました: {e}")
+
+        if adv_engine:
+            try:
+                logging.info("AdvancedFeatureEngine を使用して高度な特徴量を生成します...")
+
+                # 1. ペース・脚質
+                try:
+                    df = adv_engine.generate_pace_features(df)
+                except Exception as e:
+                    logging.warning(f"ペース特徴量(Legacy)の生成をスキップしました: {e}")
+
+                # 2. 血統 (Deep)
+                try:
+                    if pedigree_df is not None and not pedigree_df.empty:
+                        df = adv_engine.generate_deep_pedigree_features(df, pedigree_df, results_history_df)
+                except Exception as e:
+                    logging.warning(f"血統特徴量(Deep)の生成をスキップしました: {e}")
+
+                # 3. コースバイアス
+                try:
+                    df = adv_engine.generate_course_bias_features(df, results_history_df)
+                except Exception as e:
+                    logging.warning(f"コースバイアス特徴量(Legacy)の生成をスキップしました: {e}")
+
+                # 4. パフォーマンストレンド
+                try:
+                    df = adv_engine.generate_performance_trend_features(df, results_history_df)
+                except Exception as e:
+                    logging.warning(f"パフォーマンストレンド特徴量の生成をスキップしました: {e}")
+
+                # 5. 騎手×調教師の相性 (Synergy)
+                try:
+                    df = adv_engine.generate_jockey_trainer_synergy(df, results_history_df)
+                except Exception as e:
+                    logging.warning(f"騎手×調教師相性特徴量の生成をスキップしました: {e}")
+
+                # 🆕 Phase D: 以下3つの特徴量を新規追加 (ROI向上のため)
+                # 各特徴量は個別にtry-exceptで保護し、エラー時もパイプライン全体は継続
+
+                # 6. コース適性特徴量 (競馬場別・距離別・馬場別成績)
+                try:
+                    logging.info("コース適性特徴量を生成中...")
+                    df = adv_engine.generate_course_affinity_features(df, results_history_df)
+                    logging.info("✓ コース適性特徴量の生成完了")
+                except Exception as e:
+                    logging.warning(f"コース適性特徴量の生成をスキップしました: {e}")
+
+                # 7. レース条件特徴量 (フィールドサイズ・季節性・レース重要度)
+                try:
+                    logging.info("レース条件特徴量を生成中...")
+                    df = adv_engine.generate_race_condition_features(df)
+                    logging.info("✓ レース条件特徴量の生成完了")
+                except Exception as e:
+                    logging.warning(f"レース条件特徴量の生成をスキップしました: {e}")
+
+                # 8. 相対指標 (タイム偏差値・上がり3F相対値・オッズ順位)
+                try:
+                    logging.info("レース内相対指標を生成中...")
+                    df = adv_engine.calculate_relative_metrics(df)
+                    logging.info("✓ レース内相対指標の生成完了")
+                except Exception as e:
+                    logging.warning(f"レース内相対指標の生成をスキップしました: {e}")
+
+                logging.info("Phase D: 新規特徴量カテゴリの処理完了")
+
+                # 9. 条件変化特徴量 (New)
+                try:
+                    logging.info("条件変化特徴量を生成中...")
+                    df = adv_engine.generate_condition_change_features(df, results_history_df)
+                    logging.info("✓ 条件変化特徴量の生成完了")
+                except Exception as e:
+                    logging.warning(f"条件変化特徴量の生成をスキップしました: {e}")
+
+                # 10. 休養明け特徴量 (New)
+                try:
+                    logging.info("休養明け特徴量を生成中...")
+                    df = adv_engine.generate_rest_period_features(df, results_history_df)
+                    logging.info("✓ 休養明け特徴量の生成完了")
+                except Exception as e:
+                    logging.warning(f"休養明け特徴量の生成をスキップしました: {e}")
+
+                # 11. 季節性バイアス特徴量 (New)
+                try:
+                    logging.info("季節性バイアス特徴量を生成中...")
+                    df = adv_engine.generate_seasonal_bias_features(df, results_history_df)
+                    logging.info("✓ 季節性バイアス特徴量の生成完了")
+                except Exception as e:
+                    logging.warning(f"季節性バイアス特徴量の生成をスキップしました: {e}")
+
+                # 12. 動的バイアス特徴量 (New)
+                try:
+                    logging.info("動的バイアス特徴量を生成中...")
+                    df = adv_engine.generate_dynamic_bias_features(df, results_history_df)
+                    logging.info("✓ 動的バイアス特徴量の生成完了")
+                except Exception as e:
+                    logging.warning(f"動的バイアス特徴量の生成をスキップしました: {e}")
+
+                # 13. 基本血統特徴量 (Sire/BMS)
+                try:
+                    if pedigree_df is not None and not pedigree_df.empty:
+                        logging.info("基本血統特徴量(Sire/BMS)を生成中...")
+                        df = adv_engine.generate_bloodline_features(df, pedigree_df, results_history_df)
+                        logging.info("✓ 基本血統特徴量の生成完了")
+                except Exception as e:
+                    logging.warning(f"基本血統特徴量の生成をスキップしました: {e}")
+
+                # 14. 生産者・産地特徴量
+                # try:
+                #     if not horse_profiles_df.empty:
+                #         logging.info("生産者・産地特徴量を生成中...")
+                #         df = adv_engine.generate_breeder_producing_area_features(df, horse_profiles_df, results_history_df)
+                #         logging.info("✓ 生産者・産地特徴量の生成完了")
+                # except Exception as e:
+                #     logging.warning(f"生産者・産地特徴量の生成をスキップしました: {e}")
+
+                # 15. 騎手・調教師の近走成績 (Recent Form)
+                # try:
+                #     logging.info("騎手・調教師の近走成績を生成中...")
+                #     df = adv_engine.generate_recent_form_features(df, results_history_df)
+                #     logging.info("✓ 近走成績特徴量の生成完了")
+                # except Exception as e:
+                #     logging.warning(f"近走成績特徴量の生成をスキップしました: {e}")
+
+                # 16. 騎手×競馬場相性
+                # try:
+                #     logging.info("騎手×競馬場相性特徴量を生成中...")
+                #     df = adv_engine.generate_jockey_venue_affinity(df, results_history_df)
+                #     logging.info("✓ 騎手×競馬場相性特徴量の生成完了")
+                # except Exception as e:
+                #     logging.warning(f"騎手×競馬場相性特徴量の生成をスキップしました: {e}")
+
+
+
+            except Exception as e:
+                logging.error(f"高度な特徴量の生成中にエラー: {e}", exc_info=True)
 
         # --- 後処理 ---
         df = self._handle_missing_values(df)
@@ -212,7 +285,7 @@ class FeatureEngine:
         
         # ★ ターゲット変数を追加（評価時に必要）★
         # feature_names_ からは除外されているが、保存時には評価のために必要
-        target_cols_to_save = ['finish_position', 'finish_time_seconds']
+        target_cols_to_save = ['finish_position', 'finish_time_seconds', 'win_odds', 'is_win']
         for target_col in target_cols_to_save:
             if target_col in df.columns:
                 final_cols.append(target_col)
