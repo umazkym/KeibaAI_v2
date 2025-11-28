@@ -19,56 +19,48 @@ class AdvancedFeatureEngine:
         
         self.logger.info(f"パフォーマンストレンド特徴量を生成中... (馬数: {df['horse_id'].nunique():,}頭)")
         
-        # 直近N走の成績トレンド（groupby + apply で最適化）
+        # ID型変換
+        if 'horse_id' in df.columns:
+            df['horse_id'] = df['horse_id'].astype(str)
+        if 'horse_id' in performance_df.columns:
+            performance_df = performance_df.copy()
+            performance_df['horse_id'] = performance_df['horse_id'].astype(str)
+        
+        # 直近N走の成績トレンド
         windows = [3, 5, 10]
         performance_sorted = performance_df.sort_values('race_date')
+        
+        # is_win, is_place作成
+        if 'is_win' not in performance_sorted.columns:
+            performance_sorted['is_win'] = (performance_sorted['finish_position'] == 1).fillna(False).astype(int)
+        performance_sorted['is_place'] = (performance_sorted['finish_position'] <= 3).fillna(False).astype(int)
         
         for w in windows:
             self.logger.info(f"  → 直近{w}走の統計を計算中...")
             
-            def calc_stats(group):
-                recent = group.tail(w)
-                if len(recent) == 0:
-                    return pd.Series({
-                        f'avg_finish_last{w}': np.nan,
-                        f'win_rate_last{w}': np.nan,
-                        f'place_rate_last{w}': np.nan,
-                        f'improvement_rate_{w}': np.nan,
-                        f'finish_std_last{w}': np.nan,
-                        f'finish_cv_last{w}': np.nan
-                    })
-                
-                avg_finish = recent['finish_position'].mean()
-                win_rate = (recent['finish_position'] == 1).mean()
-                place_rate = (recent['finish_position'] <= 2).mean()
-                finish_std = recent['finish_position'].std()
-                
-                if len(recent) >= 2:
-                    half = len(recent) // 2
-                    first_avg = recent.iloc[:half]['finish_position'].mean()
-                    second_avg = recent.iloc[half:]['finish_position'].mean()
-                    improvement = (first_avg - second_avg) / first_avg if first_avg > 0 else 0
-                else:
-                    improvement = 0
-                
-                if avg_finish > 0:
-                    finish_cv = finish_std / avg_finish
-                else:
-                    finish_cv = 0
-
-                return pd.Series({
-                    f'avg_finish_last{w}': avg_finish,
-                    f'win_rate_last{w}': win_rate,
-                    f'place_rate_last{w}': place_rate,
-                    f'improvement_rate_{w}': improvement,
-                    f'finish_std_last{w}': finish_std,
-                    f'finish_cv_last{w}': finish_cv
-                })
+            # 各馬の直近w走を抽出
+            recent = performance_sorted.groupby('horse_id', observed=True).tail(w)
             
-            trend_stats = performance_sorted.groupby('horse_id', observed=True).apply(calc_stats).reset_index()
-            df = df.merge(trend_stats, on='horse_id', how='left')
+            # 集計
+            stats = recent.groupby('horse_id', observed=True).agg({
+                'finish_position': ['mean', 'std'],
+                'is_win': 'mean',
+                'is_place': 'mean'
+            })
+            
+            # カラム名のフラット化
+            stats.columns = [
+                f'avg_finish_last{w}', f'finish_std_last{w}',
+                f'win_rate_last{w}', f'place_rate_last{w}'
+            ]
+            
+            # 変動係数 (CV)
+            stats[f'finish_cv_last{w}'] = stats[f'finish_std_last{w}'] / (stats[f'avg_finish_last{w}'] + 1e-6)
+            
+            stats = stats.reset_index()
+            df = df.merge(stats, on='horse_id', how='left')
         
-        self.logger.info("✓ パフォーマンストレンド特徴量の生成完了")
+        self.logger.info("パフォーマンストレンド特徴量の生成完了")
         return df
     
     def generate_course_affinity_features(
@@ -87,8 +79,14 @@ class AdvancedFeatureEngine:
 
         self.logger.info(f"コース適性特徴量を生成中... (データ数: {len(performance_df):,}行)")
 
+        # ID型変換
+        if 'horse_id' in df.columns:
+            df['horse_id'] = df['horse_id'].astype(str)
+        if 'horse_id' in performance_df.columns:
+            performance_df = performance_df.copy()
+            performance_df['horse_id'] = performance_df['horse_id'].astype(str)
+
         # 競馬場別成績
-        # Note: morning_oddsを使用（win_oddsはデータリークを引き起こす）
         agg_dict = {
             'finish_position': ['mean', 'count']
         }
@@ -166,11 +164,17 @@ class AdvancedFeatureEngine:
     ) -> pd.DataFrame:
         """騎手・調教師の相性特徴量"""
         
+        # IDカラムを文字列型に統一
+        for col in ['jockey_id', 'trainer_id']:
+            if col in df.columns:
+                df[col] = df[col].astype(str)
+            if col in historical_df.columns:
+                historical_df[col] = historical_df[col].astype(str)
+
         # 騎手×調教師のコンビ成績
-        # Note: morning_oddsを使用（win_oddsはデータリークを引き起こす）
         agg_dict = {
             'finish_position': ['mean', 'count'],
-            'popularity': 'mean'
+            'is_win': 'mean'
         }
 
         # is_winがない場合は作成
@@ -178,32 +182,45 @@ class AdvancedFeatureEngine:
             historical_df = historical_df.copy()
             historical_df['is_win'] = (historical_df['finish_position'] == 1).astype(int)
 
-        agg_dict = {
-            'finish_position': ['mean', 'count'],
-            'popularity': 'mean',
-            'is_win': 'mean'  # この行を追加
-        }
+        if 'popularity' in historical_df.columns:
+            agg_dict['popularity'] = 'mean'
 
         if 'morning_odds' in historical_df.columns:
             agg_dict['morning_odds'] = 'mean'
 
         combo_stats = historical_df.groupby(['jockey_id', 'trainer_id'], observed=True).agg(agg_dict).reset_index()
 
+        # カラム名の設定
+        combo_stats.columns = ['_'.join(col).strip() if col[1] else col[0] for col in combo_stats.columns.values]
+        
+        # リネーム
+        rename_map = {
+            'jockey_id': 'jockey_id',
+            'trainer_id': 'trainer_id',
+            'finish_position_mean': 'combo_avg_finish',
+            'finish_position_count': 'combo_races',
+            'is_win_mean': 'combo_win_rate'
+        }
+        if 'popularity' in historical_df.columns:
+            rename_map['popularity_mean'] = 'combo_avg_popularity'
         if 'morning_odds' in historical_df.columns:
-            combo_stats.columns = ['jockey_id', 'trainer_id', 'combo_avg_finish',
-                                  'combo_races', 'combo_avg_odds', 'combo_avg_popularity', 'combo_win_rate']
-        else:
-            combo_stats.columns = ['jockey_id', 'trainer_id', 'combo_avg_finish',
-                                  'combo_races', 'combo_avg_popularity', 'combo_win_rate']
+            rename_map['morning_odds_mean'] = 'combo_avg_odds'
+            
+        combo_stats = combo_stats.rename(columns=rename_map)
         
         # 期待値を上回る度合い
-        combo_stats['combo_overperform'] = \
-            combo_stats['combo_avg_popularity'] - combo_stats['combo_avg_finish']
+        if 'combo_avg_popularity' in combo_stats.columns:
+            combo_stats['combo_overperform'] = \
+                combo_stats['combo_avg_popularity'] - combo_stats['combo_avg_finish']
         
+        # マージ前に型を確認
+        combo_stats['jockey_id'] = combo_stats['jockey_id'].astype(str)
+        combo_stats['trainer_id'] = combo_stats['trainer_id'].astype(str)
+
         df = df.merge(combo_stats, on=['jockey_id', 'trainer_id'], how='left')
         
         return df
-    
+
     def generate_bloodline_features(
         self,
         df: pd.DataFrame,
@@ -212,8 +229,22 @@ class AdvancedFeatureEngine:
     ) -> pd.DataFrame:
         """血統特徴量の生成"""
         
+        # ID型変換
+        if 'horse_id' in df.columns:
+            df['horse_id'] = df['horse_id'].astype(str)
+        
+        # pedigree_df, performance_dfのIDも文字列化
+        pedigree_df = pedigree_df.copy()
+        performance_df = performance_df.copy()
+        
+        for col in ['horse_id', 'ancestor_id']:
+            if col in pedigree_df.columns:
+                pedigree_df[col] = pedigree_df[col].astype(str)
+        
+        if 'horse_id' in performance_df.columns:
+            performance_df['horse_id'] = performance_df['horse_id'].astype(str)
+
         # 父系の成績集計
-        # Note: morning_oddsを使用（win_oddsはデータリークを引き起こす）
         perf_with_sire = performance_df.merge(
             pedigree_df[pedigree_df['generation'] == 1][['horse_id', 'ancestor_id']],
             on='horse_id'
@@ -238,7 +269,6 @@ class AdvancedFeatureEngine:
         df = df.merge(sire_stats, left_on='sire_id', right_on='sire_id', how='left')
 
         # 母父の成績集計 (BMS)
-        # 母父IDを取得
         damsires = pedigree_df[(pedigree_df['generation'] == 2) & (pedigree_df['ancestor_name'].str.contains('母', na=False))][['horse_id', 'ancestor_id']].rename(columns={'ancestor_id': 'damsire_id'})
         
         if not damsires.empty:
@@ -261,7 +291,7 @@ class AdvancedFeatureEngine:
             # メインDFに母父IDがない場合はマージしてから
             if 'damsire_id' not in df.columns:
                 df = df.merge(damsires, on='horse_id', how='left')
-                
+            
             df = df.merge(bms_stats, on='damsire_id', how='left')
         
         return df
@@ -275,8 +305,21 @@ class AdvancedFeatureEngine:
         """詳細な血統特徴量（ニックス、コース適性）"""
 
         try:
+            # ID型変換
+            if 'horse_id' in df.columns:
+                df['horse_id'] = df['horse_id'].astype(str)
+            
+            pedigree_df = pedigree_df.copy()
+            performance_df = performance_df.copy()
+            
+            for col in ['horse_id', 'ancestor_id']:
+                if col in pedigree_df.columns:
+                    pedigree_df[col] = pedigree_df[col].astype(str)
+            
+            if 'horse_id' in performance_df.columns:
+                performance_df['horse_id'] = performance_df['horse_id'].astype(str)
+
             # 1. ニックス（父×母父）
-            # まず、各馬の父と母父を特定
             sires = pedigree_df[pedigree_df['generation'] == 1][['horse_id', 'ancestor_id']].rename(columns={'ancestor_id': 'sire_id'})
             damsires = pedigree_df[(pedigree_df['generation'] == 2) & (pedigree_df['ancestor_name'].str.contains('母', na=False))][['horse_id', 'ancestor_id']].rename(columns={'ancestor_id': 'damsire_id'})
 
@@ -290,15 +333,12 @@ class AdvancedFeatureEngine:
                 self.logger.warning("父×母父の組み合わせが見つかりません。血統特徴量をスキップします。")
                 return df
 
-            # パフォーマンスデータに血統情報を結合
             perf_ped = performance_df.merge(horse_pedigree, on='horse_id', how='inner')
 
             if perf_ped.empty or 'sire_id' not in perf_ped.columns or 'damsire_id' not in perf_ped.columns:
                 self.logger.warning("血統情報のマージに失敗しました。血統特徴量をスキップします。")
                 return df
 
-            # ニックスごとの成績集計
-            # Note: morning_oddsを使用（win_oddsはデータリークを引き起こす）
             agg_dict = {
                 'finish_position': ['mean', 'count', 'std']
             }
@@ -312,18 +352,14 @@ class AdvancedFeatureEngine:
             else:
                 nicks_stats.columns = ['sire_id', 'damsire_id', 'nicks_avg_finish', 'nicks_count', 'nicks_std_finish']
 
-            # 信頼度のため、ある程度の出走数があるもののみ採用
             nicks_stats = nicks_stats[nicks_stats['nicks_count'] >= 5]
 
-            # メインデータフレームに結合（父・母父が必要）
-            # dfにsire_id, damsire_idがある前提、なければ結合してから
             if 'sire_id' not in df.columns or 'damsire_id' not in df.columns:
                  df = df.merge(horse_pedigree, on='horse_id', how='left')
 
             df = df.merge(nicks_stats, on=['sire_id', 'damsire_id'], how='left')
 
             # 2. 種牡馬×コース適性
-            # 種牡馬ごとの、競馬場・距離カテゴリ・芝ダート別の成績
             if 'distance_m' not in perf_ped.columns:
                 self.logger.warning("distance_mカラムがありません。種牡馬×コース適性をスキップします。")
                 return df
@@ -334,14 +370,12 @@ class AdvancedFeatureEngine:
                 labels=['sprint', 'mile', 'intermediate', 'long', 'extreme_long']
             )
 
-            # 必要なカラムの存在チェック
             required_cols = ['sire_id', 'venue', 'distance_category', 'track_surface']
             missing_cols = [col for col in required_cols if col not in perf_ped.columns]
             if missing_cols:
                 self.logger.warning(f"種牡馬×コース適性に必要なカラムがありません: {missing_cols}")
                 return df
 
-            # Note: morning_oddsを使用（win_oddsはデータリークを引き起こす）
             agg_dict = {'finish_position': 'mean'}
             if 'morning_odds' in perf_ped.columns:
                 agg_dict['morning_odds'] = 'mean'
@@ -353,8 +387,6 @@ class AdvancedFeatureEngine:
             else:
                 sire_course_stats.columns = ['sire_id', 'venue', 'distance_category', 'track_surface', 'sire_course_avg_finish']
 
-            # メインデータフレームに結合
-            # dfにdistance_categoryなどが必要
             if 'distance_category' not in df.columns:
                  if 'distance_m' in df.columns:
                      df['distance_category'] = pd.cut(
@@ -372,7 +404,7 @@ class AdvancedFeatureEngine:
 
         except Exception as e:
             self.logger.error(f"血統特徴量の生成中にエラー: {e}", exc_info=True)
-            return df  # エラー時は元のDataFrameを返す
+            return df
 
     def generate_course_bias_features(
         self,
@@ -381,22 +413,17 @@ class AdvancedFeatureEngine:
     ) -> pd.DataFrame:
         """コースバイアス（枠順など）"""
         
-        # 必要なカラムの存在チェック
         required_cols = ['venue', 'distance_m', 'track_surface', 'bracket_number', 'finish_position']
         missing_cols = [col for col in required_cols if col not in performance_df.columns]
         if missing_cols:
             self.logger.warning(f"コースバイアス特徴量に必要なカラムがありません: {missing_cols}")
             return df
 
-        # データが少なすぎる場合はスキップ
         if len(performance_df) < 100:
             self.logger.warning(f"コースバイアス特徴量: データ数が少なすぎます（{len(performance_df)}行）。スキップします。")
             return df
 
         self.logger.info(f"コースバイアス特徴量を生成中... (データ数: {len(performance_df):,}行)")
-
-        # 枠順バイアス
-        # コース（競馬場、距離、芝ダート）ごとの枠番別成績
 
         performance_df['distance_category'] = pd.cut(
             performance_df['distance_m'],
@@ -404,7 +431,6 @@ class AdvancedFeatureEngine:
             labels=['sprint', 'mile', 'intermediate', 'long', 'extreme_long']
         )
 
-        # observed=True でパフォーマンス改善
         bracket_stats = performance_df.groupby(
             ['venue', 'distance_category', 'track_surface', 'bracket_number'],
             observed=True
@@ -415,7 +441,6 @@ class AdvancedFeatureEngine:
 
         self.logger.info(f"枠順バイアス統計を計算完了: {len(bracket_stats):,}パターン")
 
-        # メインデータフレームに結合
         if 'distance_category' not in df.columns:
              df['distance_category'] = pd.cut(
                 df['distance_m'],
@@ -436,11 +461,12 @@ class AdvancedFeatureEngine:
         """レース条件に関する特徴量"""
         
         # 1. フィールドサイズの影響
-        df['field_size_category'] = pd.cut(
-            df['head_count'],
-            bins=[0, 10, 14, 18, 24],
-            labels=['small', 'medium', 'large', 'extra_large']
-        )
+        if 'head_count' in df.columns:
+            df['field_size_category'] = pd.cut(
+                df['head_count'],
+                bins=[0, 10, 14, 18, 24],
+                labels=['small', 'medium', 'large', 'extra_large']
+            )
         
         # 2. 季節性
         df['race_month'] = pd.to_datetime(df['race_date']).dt.month
@@ -452,7 +478,6 @@ class AdvancedFeatureEngine:
         })
         
         # 3. レースの重要度（賞金ベース）
-        # prize_1st または prize_money カラムを使用
         prize_col = None
         if 'prize_1st' in df.columns:
             prize_col = 'prize_1st'
@@ -463,7 +488,6 @@ class AdvancedFeatureEngine:
                 lambda x: 'high' if x >= 2000 else ('medium' if x >= 1000 else 'low')
             )
         else:
-            # デフォルト値を設定
             df['race_importance'] = 'medium'
             self.logger.warning("賞金カラム（prize_1st/prize_money）が見つかりません。race_importanceをデフォルト値に設定します。")
         
@@ -477,20 +501,11 @@ class AdvancedFeatureEngine:
         
         self.logger.info(f"レース内相対指標を生成中... (レース数: {df['race_id'].nunique():,})")
         
-        # ⚠️ データリーク防止: オッズと結果データは除外
-        # × finish_time_seconds → レース後にしか判明しない
-        # × last_3f_time → レース後にしか判明しない
-        # × オッズ (morning_odds / win_odds) → 学習には使わない（評価時のROI計算のみ使用）
-        # ○ basis_weight → レース前に確定
-        # ○ horse_weight → レース前に計測（当日朝）
-        
-        # groupby + transform で最適化（ループ不要）
-        
         # 1. 斤量の相対値（レース内平均との差）
         if 'basis_weight' in df.columns:
             race_avg_weight = df.groupby('race_id', observed=True)['basis_weight'].transform('mean')
             df['weight_diff_from_avg'] = df['basis_weight'] - race_avg_weight
-            self.logger.info("  ✓ 斤量の相対値を計算完了")
+            self.logger.info("  斤量の相対値を計算完了")
         else:
             self.logger.warning("basis_weightカラムがないため、weight_diff_from_avgをスキップします")
         
@@ -498,9 +513,9 @@ class AdvancedFeatureEngine:
         if 'horse_weight' in df.columns:
             race_avg_hw = df.groupby('race_id', observed=True)['horse_weight'].transform('mean')
             df['horse_weight_diff_from_avg'] = df['horse_weight'] - race_avg_hw
-            self.logger.info("  ✓ 馬体重の相対値を計算完了")
+            self.logger.info("  馬体重の相対値を計算完了")
         
-        self.logger.info("✓ レース内相対指標の生成完了（オッズ除外）")
+        self.logger.info("レース内相対指標の生成完了（オッズ除外）")
         return df
 
     def generate_condition_change_features(
@@ -511,10 +526,8 @@ class AdvancedFeatureEngine:
         """条件変化特徴量（距離変更、馬場変更、場所変更）"""
         self.logger.info("条件変化特徴量を生成中...")
         
-        # 時系列順にソートして前走データを取得
         last_race = performance_df.sort_values('race_date').groupby('horse_id').last().reset_index()
         
-        # 必要なカラム: distance_m, track_surface, venue
         cols_to_use = ['horse_id', 'distance_m', 'track_surface', 'venue']
         last_race = last_race[cols_to_use].rename(columns={
             'distance_m': 'prev_distance_m',
@@ -524,21 +537,18 @@ class AdvancedFeatureEngine:
         
         df = df.merge(last_race, on='horse_id', how='left')
         
-        # 距離変更
         if 'distance_m' in df.columns and 'prev_distance_m' in df.columns:
             df['distance_change'] = (df['distance_m'] - df['prev_distance_m']).abs()
             df['is_distance_shortened'] = (df['distance_m'] < df['prev_distance_m']).fillna(False).astype(int)
             df['is_distance_lengthened'] = (df['distance_m'] > df['prev_distance_m']).fillna(False).astype(int)
             
-        # 馬場変更
         if 'track_surface' in df.columns and 'prev_track_surface' in df.columns:
             df['surface_change'] = (df['track_surface'] != df['prev_track_surface']).fillna(False).astype(int)
             
-        # 場所変更
         if 'venue' in df.columns and 'prev_venue' in df.columns:
             df['venue_change'] = (df['venue'] != df['prev_venue']).fillna(False).astype(int)
             
-        self.logger.info("✓ 条件変化特徴量の生成完了")
+        self.logger.info("条件変化特徴量の生成完了")
         return df
     
     def generate_rest_period_features(
@@ -549,23 +559,20 @@ class AdvancedFeatureEngine:
         """休養明け・間隔特徴量"""
         self.logger.info("休養明け特徴量を生成中...")
         
-        # 前走日付の取得
         last_race_date = performance_df.sort_values('race_date').groupby('horse_id')['race_date'].last().reset_index()
         last_race_date = last_race_date.rename(columns={'race_date': 'prev_race_date'})
         
         df = df.merge(last_race_date, on='horse_id', how='left')
         
-        # 休養明けフラグ
         if 'race_date' in df.columns and 'prev_race_date' in df.columns:
             df['race_date'] = pd.to_datetime(df['race_date'])
             df['prev_race_date'] = pd.to_datetime(df['prev_race_date'])
             
             df['days_since_last_race'] = (df['race_date'] - df['prev_race_date']).dt.days
             
-            # 休養明けフラグ (90日以上)
             df['is_rest_return'] = (df['days_since_last_race'] > 90).fillna(False).astype(int)
         
-        self.logger.info("✓ 休養明け特徴量の生成完了")
+        self.logger.info("休養明け特徴量の生成完了")
         return df
 
     def generate_seasonal_bias_features(
@@ -815,7 +822,7 @@ class AdvancedFeatureEngine:
         df = df.merge(breeder_stats[['breeder_name', 'breeder_avg_finish', 'breeder_win_rate']], on='breeder_name', how='left')
         df = df.merge(area_stats[['producing_area', 'area_avg_finish', 'area_win_rate']], on='producing_area', how='left')
         
-        self.logger.info("✓ 生産者・産地特徴量の生成完了")
+        self.logger.info("生産者・産地特徴量の生成完了")
         return df
 
     def generate_recent_form_features(
@@ -879,7 +886,7 @@ class AdvancedFeatureEngine:
             
             df = df.merge(performance_df[cols], on=['race_id', 'horse_id'], how='left')
             
-            self.logger.info("✓ 近走成績特徴量の生成完了")
+            self.logger.info("近走成績特徴量の生成完了")
             return df
         except Exception as e:
             import traceback
@@ -918,7 +925,7 @@ class AdvancedFeatureEngine:
             
             df = df.merge(affinity_stats[['jockey_id', 'venue', 'jockey_venue_avg_finish', 'jockey_venue_win_rate']], on=['jockey_id', 'venue'], how='left')
             
-            self.logger.info("✓ 騎手×競馬場相性特徴量の生成完了")
+            self.logger.info("騎手×競馬場相性特徴量の生成完了")
             return df
         except Exception as e:
             import traceback

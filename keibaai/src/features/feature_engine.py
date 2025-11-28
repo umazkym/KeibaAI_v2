@@ -47,12 +47,39 @@ class FeatureEngine:
         logging.info("レシピベースの特徴量生成パイプラインを開始します...")
         df = shutuba_df.copy()
 
-        # --- 前処理: 必要なIDをマージ ---
+        # --- 前処理: 血統IDをpedigrees.parquetから抽出 ---
+        if pedigree_df is not None and not pedigree_df.empty:
+            try:
+                # 父（sire）: generation=1
+                sire_df = pedigree_df[pedigree_df['generation'] == 1][['horse_id', 'ancestor_id']].copy()
+                sire_df.columns = ['horse_id', 'sire_id']
+                sire_df['horse_id'] = sire_df['horse_id'].astype(str)
+                sire_df['sire_id'] = sire_df['sire_id'].astype(str)
+                sire_df = sire_df.drop_duplicates(subset=['horse_id'], keep='first')
+                
+                # 母父（damsire）: generation=2 の3番目（母父, 0-indexedで2番目）
+                damsire_df = pedigree_df[pedigree_df['generation'] == 2].copy()
+                # horse_idでグループ化し、3番目のancestor_id（0-indexedで2番目）を取得
+                # 順序: 父父(0), 父母(1), 母父(2), 母母(3)
+                damsire_df = damsire_df.groupby('horse_id', as_index=False).nth(2)[['horse_id', 'ancestor_id']]
+                damsire_df.columns = ['horse_id', 'damsire_id']
+                damsire_df['horse_id'] = damsire_df['horse_id'].astype(str)
+                damsire_df['damsire_id'] = damsire_df['damsire_id'].astype(str)
+                
+                # dfにマージ
+                df = df.merge(sire_df, on='horse_id', how='left')
+                df = df.merge(damsire_df, on='horse_id', how='left')
+                logging.info(f"血統ID抽出完了: sire_id={df['sire_id'].notna().sum()}/{len(df)}, damsire_id={df['damsire_id'].notna().sum()}/{len(df)}")
+            except Exception as e:
+                logging.warning(f"血統ID抽出に失敗しました: {e}")
+
+        # --- 前処理: 馬プロフィール（breeder, producing_area等）をマージ ---
         if not horse_profiles_df.empty:
-            ped_cols = ['horse_id', 'sire_id', 'damsire_id']
-            ped_cols_to_merge = [col for col in ped_cols if col in horse_profiles_df.columns]
-            if 'horse_id' in ped_cols_to_merge:
-                df = df.merge(horse_profiles_df[ped_cols_to_merge], on='horse_id', how='left')
+            prof_cols = ['horse_id', 'breeder_name', 'producing_area', 'trainer_id', 'owner_name']
+            prof_cols_to_merge = [col for col in prof_cols if col in horse_profiles_df.columns]
+            if 'horse_id' in prof_cols_to_merge:
+                df = df.merge(horse_profiles_df[prof_cols_to_merge], on='horse_id', how='left', suffixes=('', '_profile'))
+
 
         # --- レシピに基づいて特徴量生成メソッドをディスパッチ ---
         if self.recipes.get('basic_features', {}).get('enabled', False):
@@ -161,14 +188,15 @@ class FeatureEngine:
                 except Exception as e:
                     logging.warning(f"騎手×調教師相性特徴量の生成をスキップしました: {e}")
 
-                # 🆕 Phase D: 以下3つの特徴量を新規追加 (ROI向上のため)
+
+                # 🆕 Phase D: 以下の特徴量を新規追加 (ROI向上のため)
                 # 各特徴量は個別にtry-exceptで保護し、エラー時もパイプライン全体は継続
 
                 # 6. コース適性特徴量 (競馬場別・距離別・馬場別成績)
                 try:
                     logging.info("コース適性特徴量を生成中...")
                     df = adv_engine.generate_course_affinity_features(df, results_history_df)
-                    logging.info("✓ コース適性特徴量の生成完了")
+                    logging.info("コース適性特徴量の生成完了")
                 except Exception as e:
                     logging.warning(f"コース適性特徴量の生成をスキップしました: {e}")
 
@@ -176,7 +204,7 @@ class FeatureEngine:
                 try:
                     logging.info("レース条件特徴量を生成中...")
                     df = adv_engine.generate_race_condition_features(df)
-                    logging.info("✓ レース条件特徴量の生成完了")
+                    logging.info("レース条件特徴量の生成完了")
                 except Exception as e:
                     logging.warning(f"レース条件特徴量の生成をスキップしました: {e}")
 
@@ -184,7 +212,7 @@ class FeatureEngine:
                 try:
                     logging.info("レース内相対指標を生成中...")
                     df = adv_engine.calculate_relative_metrics(df)
-                    logging.info("✓ レース内相対指標の生成完了")
+                    logging.info("レース内相対指標の生成完了")
                 except Exception as e:
                     logging.warning(f"レース内相対指標の生成をスキップしました: {e}")
 
@@ -194,7 +222,7 @@ class FeatureEngine:
                 try:
                     logging.info("条件変化特徴量を生成中...")
                     df = adv_engine.generate_condition_change_features(df, results_history_df)
-                    logging.info("✓ 条件変化特徴量の生成完了")
+                    logging.info("条件変化特徴量の生成完了")
                 except Exception as e:
                     logging.warning(f"条件変化特徴量の生成をスキップしました: {e}")
 
@@ -202,7 +230,7 @@ class FeatureEngine:
                 try:
                     logging.info("休養明け特徴量を生成中...")
                     df = adv_engine.generate_rest_period_features(df, results_history_df)
-                    logging.info("✓ 休養明け特徴量の生成完了")
+                    logging.info("休養明け特徴量の生成完了")
                 except Exception as e:
                     logging.warning(f"休養明け特徴量の生成をスキップしました: {e}")
 
@@ -210,7 +238,7 @@ class FeatureEngine:
                 try:
                     logging.info("季節性バイアス特徴量を生成中...")
                     df = adv_engine.generate_seasonal_bias_features(df, results_history_df)
-                    logging.info("✓ 季節性バイアス特徴量の生成完了")
+                    logging.info("季節性バイアス特徴量の生成完了")
                 except Exception as e:
                     logging.warning(f"季節性バイアス特徴量の生成をスキップしました: {e}")
 
@@ -218,7 +246,7 @@ class FeatureEngine:
                 try:
                     logging.info("動的バイアス特徴量を生成中...")
                     df = adv_engine.generate_dynamic_bias_features(df, results_history_df)
-                    logging.info("✓ 動的バイアス特徴量の生成完了")
+                    logging.info("動的バイアス特徴量の生成完了")
                 except Exception as e:
                     logging.warning(f"動的バイアス特徴量の生成をスキップしました: {e}")
 
@@ -227,7 +255,7 @@ class FeatureEngine:
                     if pedigree_df is not None and not pedigree_df.empty:
                         logging.info("基本血統特徴量(Sire/BMS)を生成中...")
                         df = adv_engine.generate_bloodline_features(df, pedigree_df, results_history_df)
-                        logging.info("✓ 基本血統特徴量の生成完了")
+                        logging.info("基本血統特徴量の生成完了")
                 except Exception as e:
                     logging.warning(f"基本血統特徴量の生成をスキップしました: {e}")
 
@@ -236,7 +264,7 @@ class FeatureEngine:
                 #     if not horse_profiles_df.empty:
                 #         logging.info("生産者・産地特徴量を生成中...")
                 #         df = adv_engine.generate_breeder_producing_area_features(df, horse_profiles_df, results_history_df)
-                #         logging.info("✓ 生産者・産地特徴量の生成完了")
+                #         logging.info("生産者・産地特徴量の生成完了")
                 # except Exception as e:
                 #     logging.warning(f"生産者・産地特徴量の生成をスキップしました: {e}")
 
@@ -244,7 +272,7 @@ class FeatureEngine:
                 # try:
                 #     logging.info("騎手・調教師の近走成績を生成中...")
                 #     df = adv_engine.generate_recent_form_features(df, results_history_df)
-                #     logging.info("✓ 近走成績特徴量の生成完了")
+                #     logging.info("近走成績特徴量の生成完了")
                 # except Exception as e:
                 #     logging.warning(f"近走成績特徴量の生成をスキップしました: {e}")
 
@@ -252,9 +280,11 @@ class FeatureEngine:
                 # try:
                 #     logging.info("騎手×競馬場相性特徴量を生成中...")
                 #     df = adv_engine.generate_jockey_venue_affinity(df, results_history_df)
-                #     logging.info("✓ 騎手×競馬場相性特徴量の生成完了")
+                #     logging.info("騎手×競馬場相性特徴量の生成完了")
                 # except Exception as e:
                 #     logging.warning(f"騎手×競馬場相性特徴量の生成をスキップしました: {e}")
+
+
 
 
 
