@@ -14,6 +14,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+import pickle
 
 # Setup logging
 logging.basicConfig(
@@ -238,6 +239,7 @@ class NetkeibaAnalyzer:
         self.reference_df = None
         self.metric_calculator = None
         self.load_reference_data()
+        self.load_stats_lookup()
 
     def init_driver(self):
         """Initializes Selenium WebDriver."""
@@ -320,10 +322,14 @@ class NetkeibaAnalyzer:
                             break
                 
                 if rid and rid.startswith(prefix):
-                    if rid not in race_ids:
-                        race_ids.append(rid)
+                    # Extract Race Name
+                    name = link.get_text(strip=True)
+                    
+                    # Check if already added
+                    if not any(r['id'] == rid for r in race_ids):
+                        race_ids.append({'id': rid, 'name': name})
             
-            race_ids.sort()
+            race_ids.sort(key=lambda x: x['id'])
             logger.info(f"Found {len(race_ids)} races for {self.venue_name} ({self.venue_code}) on {self.target_date}")
             return race_ids
             
@@ -525,7 +531,7 @@ class NetkeibaAnalyzer:
                     'ｺｰｽ': "芝" if "芝" in data[14] else "ダート" if "ダ" in data[14] else "障害" if "障" in data[14] else "",
                     '距離': re.search(r'\d+', data[14]).group() if re.search(r'\d+', data[14]) else "",
                     'R': race_no,
-                    '馬場': data[16], # Corrected
+                    '馬場': data[16],
                     '天気': data[2],
                     '頭数': data[6],
                     '枠番': data[7],
@@ -533,15 +539,15 @@ class NetkeibaAnalyzer:
                     '馬名': "",
                     '斤量': data[13],
                     '騎手': data[12],
-                    '厩舎': trainer, # Populated from lookup
-                    'ﾀｲﾑ': data[18], # Corrected
-                    '着差': data[19], # Corrected
+                    '厩舎': trainer,
+                    'ﾀｲﾑ': data[18],
+                    '着差': data[19],
                     '人気': data[10],
                     'ｵｯｽﾞ': data[9],
-                    '上り': data[23], # Corrected
+                    '上り': data[23],
                     'ﾍﾟｰｽ1': pace1,
                     'ﾍﾟｰｽ2': pace2,
-                    '通過': passing, # Added
+                    '通過': passing,
                     '1C': p1, '2C': p2, '3C': p3, '4C': p4,
                     '着順': data[11],
                     '馬体重': weight,
@@ -559,110 +565,125 @@ class NetkeibaAnalyzer:
             logger.error(f"Error parsing history: {e}")
             return []
 
+    def load_stats_lookup(self):
+        """Load pre-calculated statistics lookup table."""
+        path = r"keibaai\data\processed\stats_lookup.pkl"
+        if os.path.exists(path):
+            try:
+                with open(path, 'rb') as f:
+                    self.stats_lookup = pickle.load(f)
+                logger.info(f"Loaded stats lookup with {len(self.stats_lookup)} conditions.")
+            except Exception as e:
+                logger.error(f"Failed to load stats lookup: {e}")
+                self.stats_lookup = {}
+        else:
+            logger.warning("stats_lookup.pkl not found. Statistical metrics will be empty.")
+            self.stats_lookup = {}
+
     def calculate_metrics(self, history: List[Dict]) -> List[Dict]:
-        """Calculates complex metrics for each race in history using optimized lookups."""
-        if self.metric_calculator is None:
-            return history
+        """Calculates statistical metrics for each race in history."""
+        if not hasattr(self, 'stats_lookup'):
+            self.load_stats_lookup()
 
         for race in history:
+            venue = race.get('場所', '')
+            dist_str = race.get('距離', '')
+            cond = race.get('馬場', '')
+            time_str = race.get('ﾀｲﾑ', '')
+            l3f_str = race.get('上り', '')
+            pace_str = race.get('ﾍﾟｰｽ1', '')
+            
+            # Parse Distance and Surface
+            # '距離' is already just digits (e.g. "1600") from parse_horse_history
+            # 'ｺｰｽ' contains surface (e.g. "芝", "ダート")
+            surface = race.get('ｺｰｽ', '')
+            
             try:
+                distance = int(dist_str) if dist_str.isdigit() else 0
+            except:
+                distance = 0
+            
+            # Parse Time
+            def parse_time(t_str):
                 try:
-                    race_date = pd.to_datetime(race['日付'])
+                    if not t_str: return None
+                    parts = t_str.split(':')
+                    if len(parts) == 2:
+                        return float(parts[0]) * 60 + float(parts[1])
+                    return float(t_str)
                 except:
-                    continue 
-
-                distance = int(race['距離']) if race['距離'].isdigit() else 0
-                surface = "芝" if race['ｺｰｽ'] == "芝" else "ダート" if race['ｺｰｽ'] == "ダート" else ""
-                venue_name = race['場所']
-                
-                if not (distance and surface and venue_name):
-                    continue
-
-                # Parse Time
-                time_str = race['ﾀｲﾑ']
-                seconds = 0.0
-                if time_str and ':' in time_str:
-                    parts = time_str.split(':')
-                    seconds = float(parts[0]) * 60 + float(parts[1])
-                elif time_str and time_str.replace('.', '').isdigit():
-                     seconds = float(time_str)
-                else:
-                    continue
-                
-                # Parse Last 3F
-                last3f = 0.0
-                if race['上り'] and race['上り'].replace('.', '').isdigit():
-                    last3f = float(race['上り'])
-
-                # --- Metric 1: Average Time (平均t) ---
-                avg_time = self.metric_calculator.get_avg_time(venue_name, distance, surface)
-                if avg_time is not None:
-                    race['平均t'] = f"{avg_time:.1f}"
-                    race['平t差'] = f"{avg_time - seconds:+.1f}"
-                
-                # --- Metric 2: Average Condition Time (平均場t) ---
-                cond = race['馬場']
-                cond_map = {"良": "良", "稍": "稍重", "重": "重", "不": "不良"}
-                full_cond = cond_map.get(cond, cond)
-                
-                avg_cond_time = self.metric_calculator.get_avg_cond_time(venue_name, distance, surface, full_cond)
-                if avg_cond_time is not None:
-                    race['平均場t'] = f"{avg_cond_time:.1f}"
-                    race['平場t差'] = f"{avg_cond_time - seconds:+.1f}"
-
-                # --- Metric 3: Standard Time (基準t) ---
-                std_time = self.metric_calculator.get_std_time(venue_name, distance, surface, race_date)
-                if std_time is not None:
-                    race['基準t'] = f"{std_time:.1f}"
-                    race['基t差'] = f"{std_time - seconds:+.1f}"
+                    return None
+            
+            time_sec = parse_time(time_str)
+            l3f_sec = parse_time(l3f_str)
+            
+            # Initialize metrics
+            race['タイム指数'] = ''
+            race['上り指数'] = ''
+            race['馬場差'] = ''
+            race['RPCI'] = ''
+            
+            # Map abbreviated condition to full string
+            cond_map = {"良": "良", "稍": "稍重", "重": "重", "不": "不良"}
+            full_cond = cond_map.get(cond, cond)
+            
+            # Lookup Stats
+            key = (venue, distance, surface, full_cond)
+            stats = self.stats_lookup.get(key)
+            
+            if stats and time_sec:
+                # Time Index: 50 + 10 * (Mean - Time) / Std
+                mean = stats['time_mean']
+                std = stats['time_std']
+                if std > 0:
+                    idx = 50 + 10 * (mean - time_sec) / std
+                    race['タイム指数'] = f"{idx:.1f}"
                     
-                    # Standard 3F (Regression)
-                    # X = (Distance - 600) / (Time - 3F)
-                    # Y = 3F
-                    # Diff = Predicted - Actual (Positive = Good)
-                    pred_3f = self.metric_calculator.predict_std_3f(venue_name, distance, surface, seconds, last3f)
-                    if pred_3f is not None:
-                        race['基準3F'] = f"{pred_3f:.1f}"
-                        race['基3F差'] = f"{pred_3f - last3f:+.1f}"
-                
-                # --- Metric 4: Standard Condition Time (基準場t) ---
-                std_cond_time = self.metric_calculator.get_std_cond_time(venue_name, distance, surface, full_cond, race_date)
-                if std_cond_time is not None:
-                    race['基準場t'] = f"{std_cond_time:.1f}"
-                    race['基場t差'] = f"{std_cond_time - seconds:+.1f}"
-                    
-                    # Standard Condition 3F (Regression)
-                    pred_cond_3f = self.metric_calculator.predict_std_cond_3f(venue_name, distance, surface, full_cond, seconds, last3f)
-                    if pred_cond_3f is not None:
-                        race['基準場3F'] = f"{pred_cond_3f:.1f}"
-                        race['基場3F差'] = f"{pred_cond_3f - last3f:+.1f}"
+            if stats and l3f_sec:
+                # L3F Index
+                mean_3f = stats['l3f_mean']
+                std_3f = stats['l3f_std']
+                if std_3f > 0:
+                    idx_3f = 50 + 10 * (mean_3f - l3f_sec) / std_3f
+                    race['上り指数'] = f"{idx_3f:.1f}"
 
-            except Exception as e:
-                pass
-        
+            # RPCI: (First 3F / Last 3F) * 50
+            if pace_str and l3f_sec:
+                try:
+                    first_3f = float(pace_str)
+                    if first_3f > 0 and l3f_sec > 0:
+                        rpci = (first_3f / l3f_sec) * 50
+                        race['RPCI'] = f"{rpci:.1f}"
+                except:
+                    pass
+                    
         return history
 
     def run(self):
         try:
-            race_ids = self.scrape_race_list()
-            if not race_ids:
+            races = self.scrape_race_list()
+            if not races:
                 logger.error("No races found.")
                 return
 
             all_races_data = {}
 
-            for race_id in race_ids:
-                logger.info(f"Processing Race {race_id}...")
+            for race_info in races:
+                race_id = race_info['id']
+                race_name = race_info['name']
+                
+                # Skip Shinba (New Horse) races EARLY
+                if '新馬' in race_name:
+                    logger.info(f"Skipping Race {race_id} ({race_name}) - New Horse Race (Skipped before scraping)")
+                    continue
+                
+                logger.info(f"Processing Race {race_id} ({race_name})...")
                 shutuba = self.scrape_shutuba(race_id)
                 
                 if not shutuba:
                     continue
-
-                # Skip Shinba (New Horse) races
-                race_name = shutuba[0].get('race_name', '')
-                if '新馬' in race_name:
-                    logger.info(f"Skipping Race {race_id} ({race_name}) - New Horse Race")
-                    continue
+                
+                # --- 1. Collect all history first for Grouping ---
                 
                 # --- 1. Collect all history first for Grouping ---
                 # We need to process all horses to find shared past races
@@ -824,6 +845,7 @@ class NetkeibaAnalyzer:
             'レース名', '性', '年齢', 
             '平均t', '平均場t', '基準t', '基準場t', '基準3F', '基準場3F', 
             '平t差', '平場t差', '基t差', '基場t差', '基3F差', '基場3F差', 
+            'タイム指数', '上り指数', '馬場差', 'RPCI',
             'horse_id', 'race_id'
         ]
         
@@ -839,18 +861,11 @@ class NetkeibaAnalyzer:
                     for hist in h_data['history']:
                         row_vals = [hist.get(col, '') for col in columns]
                         rows.append(row_vals)
-                    
-                    # Optional: Add an empty row between horses for readability? 
-                    # User asked for "flat format", usually implies continuous data.
-                    # But "1行名にカラム、それ以下の行には各馬の情報を途切れさせずに列挙する形式" 
-                    # implies one big table. I will NOT add empty rows between horses to keep it truly flat and filterable.
                 
-                df_sheet = pd.DataFrame(rows)
-                # rows[0] is header, so we can use it as columns for DataFrame or just write as is.
-                # Writing as list of lists is easier with header=False if we included header in rows.
-                df_sheet.to_excel(writer, sheet_name=sheet_name, index=False, header=False)
-
-        logger.info("Excel generation complete.")
+                df_out = pd.DataFrame(rows[1:], columns=rows[0])
+                df_out.to_excel(writer, sheet_name=sheet_name, index=False)
+        
+        logger.info(f"Excel report saved to {output_file}")
 
 def main():
     parser = argparse.ArgumentParser(description="Generate Netkeiba Race Analysis Excel")

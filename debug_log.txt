@@ -1,0 +1,3 @@
+Calling load_stats_lookup from init
+Attempting to load stats lookup from: C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\processed\stats_lookup.pkl
+Failed to load stats lookup: name 'pickle' is not defined
