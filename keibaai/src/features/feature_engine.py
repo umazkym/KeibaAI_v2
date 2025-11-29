@@ -276,20 +276,33 @@ class FeatureEngine:
                 # except Exception as e:
                 #     logging.warning(f"近走成績特徴量の生成をスキップしました: {e}")
 
-                # 16. 騎手×競馬場相性
-                # try:
-                #     logging.info("騎手×競馬場相性特徴量を生成中...")
-                #     df = adv_engine.generate_jockey_venue_affinity(df, results_history_df)
-                #     logging.info("騎手×競馬場相性特徴量の生成完了")
-                # except Exception as e:
-                #     logging.warning(f"騎手×競馬場相性特徴量の生成をスキップしました: {e}")
-
-
-
-
-
             except Exception as e:
                 logging.error(f"高度な特徴量の生成中にエラー: {e}", exc_info=True)
+
+        # --- Phase E: ROI特化型特徴量 (v2.7) ---
+        roi_engine = None
+        try:
+            from features.roi_features import ROIFeatureEngine
+            roi_engine = ROIFeatureEngine()
+        except ImportError:
+            try:
+                from .roi_features import ROIFeatureEngine
+                roi_engine = ROIFeatureEngine()
+                logging.info("相対インポートでROIFeatureEngineを初期化しました")
+            except ImportError:
+                try:
+                    from keibaai.src.features.roi_features import ROIFeatureEngine
+                    roi_engine = ROIFeatureEngine()
+                    logging.info("絶対パスでROIFeatureEngineを初期化しました")
+                except ImportError as e:
+                    logging.warning(f"ROIFeatureEngineのインポートに失敗しました: {e}")
+
+        if roi_engine:
+            try:
+                logging.info("ROIFeatureEngine を使用してROI特化型特徴量を生成します...")
+                df = roi_engine.generate_features(df, results_history_df, pedigree_df)
+            except Exception as e:
+                logging.error(f"ROI特化型特徴量の生成中にエラー: {e}", exc_info=True)
 
         # --- 後処理 ---
         df = self._handle_missing_values(df)

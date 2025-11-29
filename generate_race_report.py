@@ -37,16 +37,21 @@ VENUE_MAP = {
 }
 VENUE_NAME_TO_CODE = {v: k for k, v in VENUE_MAP.items()}
 
+import numpy as np
+
 class MetricCalculator:
     def __init__(self, reference_df: pd.DataFrame):
         self.reference_df = reference_df
         self.avg_time_lookup = {}
         self.avg_cond_time_lookup = {}
-        self.std_3f_lookup = {}
-        self.std_cond_3f_lookup = {}
+        self.std_3f_lookup = {} # Kept for fallback or reference if needed
+        self.std_cond_3f_lookup = {} 
         self.grouped_data = {} # (venue, dist, surf) -> DataFrame
         self.std_time_cache = {} # (venue, dist, surf, date_str) -> val
         self.std_cond_time_cache = {} # (venue, dist, surf, cond, date_str) -> val
+        
+        self.regression_models = {} # (venue, dist, surf) -> (slope, intercept)
+        self.regression_cond_models = {} # (venue, dist, surf, cond) -> (slope, intercept)
         
         self._prepare_lookups()
 
@@ -58,27 +63,60 @@ class MetricCalculator:
         df_top3 = self.reference_df[self.reference_df['finish_position'].isin([1, 2, 3])].copy()
         
         # 1. Static Averages (Venue, Dist, Surf)
-        # Groupby returns a Series with MultiIndex
         avg_time_series = df_top3.groupby(['venue', 'distance_m', 'track_surface'])['finish_time_seconds'].mean()
         self.avg_time_lookup = avg_time_series.to_dict()
-        
-        std_3f_series = df_top3.groupby(['venue', 'distance_m', 'track_surface'])['last_3f_time'].mean()
-        self.std_3f_lookup = std_3f_series.to_dict()
         
         # 2. Static Condition Averages (Venue, Dist, Surf, Cond)
         avg_cond_time_series = df_top3.groupby(['venue', 'distance_m', 'track_surface', 'track_condition'])['finish_time_seconds'].mean()
         self.avg_cond_time_lookup = avg_cond_time_series.to_dict()
         
-        std_cond_3f_series = df_top3.groupby(['venue', 'distance_m', 'track_surface', 'track_condition'])['last_3f_time'].mean()
-        self.std_cond_3f_lookup = std_cond_3f_series.to_dict()
-        
-        # 3. Group Data for Time-Dependent Queries
-        # We group by (Venue, Dist, Surf) so we can quickly access the relevant subset for date filtering
-        # We sort by date within groups for potential binary search (or just faster iteration)
+        # 3. Group Data for Time-Dependent Queries & Regression
         for name, group in df_top3.groupby(['venue', 'distance_m', 'track_surface']):
             self.grouped_data[name] = group.sort_values('race_date')
             
+            # Regression for Standard 3F
+            # X = (Distance - 600) / (Time - 3F)
+            # Y = 3F
+            self._fit_regression(name, group, is_condition_specific=False)
+            
+            # Regression for Standard Condition 3F
+            for cond, sub_group in group.groupby('track_condition'):
+                cond_name = name + (cond,)
+                self._fit_regression(cond_name, sub_group, is_condition_specific=True)
+            
         logger.info("Lookups prepared.")
+
+    def _fit_regression(self, key, group, is_condition_specific):
+        """Fits a linear regression model for 3F prediction."""
+        if len(group) < 2:
+            return
+
+        try:
+            # Calculate X: Average speed of the first part
+            # (Distance - 600) / (Finish Time - Last 3F)
+            # Ensure no division by zero
+            dist_minus_600 = group['distance_m'] - 600
+            time_minus_3f = group['finish_time_seconds'] - group['last_3f_time']
+            
+            valid_mask = (time_minus_3f > 0) & (dist_minus_600 > 0)
+            if not valid_mask.any():
+                return
+
+            X = (dist_minus_600[valid_mask] / time_minus_3f[valid_mask]).values
+            Y = group.loc[valid_mask, 'last_3f_time'].values
+
+            if len(X) < 2:
+                return
+
+            # Linear Regression: Y = aX + b
+            slope, intercept = np.polyfit(X, Y, 1)
+            
+            if is_condition_specific:
+                self.regression_cond_models[key] = (slope, intercept)
+            else:
+                self.regression_models[key] = (slope, intercept)
+        except Exception as e:
+            logger.warning(f"Regression failed for {key}: {e}")
 
     def get_avg_time(self, venue, dist, surf):
         return self.avg_time_lookup.get((venue, dist, surf))
@@ -86,11 +124,46 @@ class MetricCalculator:
     def get_avg_cond_time(self, venue, dist, surf, cond):
         return self.avg_cond_time_lookup.get((venue, dist, surf, cond))
 
-    def get_std_3f(self, venue, dist, surf):
-        return self.std_3f_lookup.get((venue, dist, surf))
+    def predict_std_3f(self, venue, dist, surf, finish_time, last_3f):
+        """Predicts Standard 3F based on regression."""
+        key = (venue, dist, surf)
+        model = self.regression_models.get(key)
+        if not model:
+            return None
+        
+        slope, intercept = model
+        try:
+            # Calculate X for the target horse
+            dist_minus_600 = dist - 600
+            time_minus_3f = finish_time - last_3f
+            if time_minus_3f <= 0:
+                return None
+            
+            X = dist_minus_600 / time_minus_3f
+            predicted_3f = slope * X + intercept
+            return predicted_3f
+        except:
+            return None
 
-    def get_std_cond_3f(self, venue, dist, surf, cond):
-        return self.std_cond_3f_lookup.get((venue, dist, surf, cond))
+    def predict_std_cond_3f(self, venue, dist, surf, cond, finish_time, last_3f):
+        """Predicts Standard Condition 3F based on regression."""
+        key = (venue, dist, surf, cond)
+        model = self.regression_cond_models.get(key)
+        if not model:
+            return None
+        
+        slope, intercept = model
+        try:
+            dist_minus_600 = dist - 600
+            time_minus_3f = finish_time - last_3f
+            if time_minus_3f <= 0:
+                return None
+            
+            X = dist_minus_600 / time_minus_3f
+            predicted_3f = slope * X + intercept
+            return predicted_3f
+        except:
+            return None
 
     def get_std_time(self, venue, dist, surf, date_obj):
         """Calculates Standard Time (Avg of +/- 3 days) with caching."""
@@ -543,11 +616,14 @@ class NetkeibaAnalyzer:
                     race['基準t'] = f"{std_time:.1f}"
                     race['基t差'] = f"{std_time - seconds:+.1f}"
                     
-                    # Standard 3F (Static Lookup)
-                    std_3f = self.metric_calculator.get_std_3f(venue_name, distance, surface)
-                    if std_3f is not None:
-                        race['基準3F'] = f"{std_3f:.1f}"
-                        race['基3F差'] = f"{std_3f - last3f:+.1f}"
+                    # Standard 3F (Regression)
+                    # X = (Distance - 600) / (Time - 3F)
+                    # Y = 3F
+                    # Diff = Predicted - Actual (Positive = Good)
+                    pred_3f = self.metric_calculator.predict_std_3f(venue_name, distance, surface, seconds, last3f)
+                    if pred_3f is not None:
+                        race['基準3F'] = f"{pred_3f:.1f}"
+                        race['基3F差'] = f"{pred_3f - last3f:+.1f}"
                 
                 # --- Metric 4: Standard Condition Time (基準場t) ---
                 std_cond_time = self.metric_calculator.get_std_cond_time(venue_name, distance, surface, full_cond, race_date)
@@ -555,11 +631,11 @@ class NetkeibaAnalyzer:
                     race['基準場t'] = f"{std_cond_time:.1f}"
                     race['基場t差'] = f"{std_cond_time - seconds:+.1f}"
                     
-                    # Standard Condition 3F (Static Lookup)
-                    std_cond_3f = self.metric_calculator.get_std_cond_3f(venue_name, distance, surface, full_cond)
-                    if std_cond_3f is not None:
-                        race['基準場3F'] = f"{std_cond_3f:.1f}"
-                        race['基場3F差'] = f"{std_cond_3f - last3f:+.1f}"
+                    # Standard Condition 3F (Regression)
+                    pred_cond_3f = self.metric_calculator.predict_std_cond_3f(venue_name, distance, surface, full_cond, seconds, last3f)
+                    if pred_cond_3f is not None:
+                        race['基準場3F'] = f"{pred_cond_3f:.1f}"
+                        race['基場3F差'] = f"{pred_cond_3f - last3f:+.1f}"
 
             except Exception as e:
                 pass
@@ -588,39 +664,147 @@ class NetkeibaAnalyzer:
                     logger.info(f"Skipping Race {race_id} ({race_name}) - New Horse Race")
                     continue
                 
-                race_data_list = []
+                # --- 1. Collect all history first for Grouping ---
+                # We need to process all horses to find shared past races
+                race_horses_data = [] # List of (horse_info, history_list)
+                all_history_entries = [] # List of (horse_id, history_row, index_in_history)
                 
                 for horse in shutuba:
                     horse_id = horse.get('horse_id')
-                    horse_name = horse.get('馬名', 'Unknown')
-                    
                     if not horse_id:
                         continue
-                    
+                        
                     history = self.get_horse_history(horse_id)
                     history = self.calculate_metrics(history)
+                    
+                    race_horses_data.append({
+                        'horse_info': horse,
+                        'history': history
+                    })
+                    
+                    for i, h_row in enumerate(history):
+                        # We need to track which horse and which row this is
+                        all_history_entries.append({
+                            'horse_id': horse_id,
+                            'row': h_row,
+                            'date': pd.to_datetime(h_row['日付']),
+                            'venue': h_row['場所'],
+                            'dist': h_row['距離'],
+                            'surf': h_row['馬場'] # This is condition, not surface type. Wait.
+                            # '馬場' in history is Condition (良, 重). 
+                            # We need Surface type (芝, ダ). 
+                            # Usually '距離' string contains it like "芝1600".
+                            # Let's parse '距離' for Surface and Distance.
+                        })
+
+                # --- 2. Calculate GroupNo (Clustering) ---
+                # Group by (Venue, Surface, Distance)
+                # Note: '距離' in history usually looks like "芝1600". 
+                # We should use that string directly as key if it's consistent.
+                
+                # Helper to parse distance string from history
+                def parse_dist_surf(dist_str):
+                    # e.g. "芝1600", "ダ1800"
+                    return dist_str
+                
+                # Group entries by (Venue, DistString)
+                # We use a simple dict to bucket them
+                grouped_entries = {}
+                for entry in all_history_entries:
+                    key = (entry['venue'], entry['dist'])
+                    if key not in grouped_entries:
+                        grouped_entries[key] = []
+                    grouped_entries[key].append(entry)
+                
+                # Assign Group IDs
+                next_group_id = 1
+                
+                # Map (horse_id, date_str) -> group_no
+                # We use date_str to identify the specific race in history
+                history_group_map = {} 
+                
+                for key, entries in grouped_entries.items():
+                    # Sort by date
+                    entries.sort(key=lambda x: x['date'])
+                    
+                    # Cluster by date (within 3 days)
+                    # Simple clustering: if diff > 3 days, start new cluster
+                    if not entries:
+                        continue
+                        
+                    current_cluster = [entries[0]]
+                    
+                    for i in range(1, len(entries)):
+                        prev = entries[i-1]
+                        curr = entries[i]
+                        diff = (curr['date'] - prev['date']).days
+                        
+                        if diff <= 3:
+                            current_cluster.append(curr)
+                        else:
+                            # Process current cluster
+                            unique_horses = set(e['horse_id'] for e in current_cluster)
+                            if len(unique_horses) >= 2:
+                                for e in current_cluster:
+                                    date_str = e['date'].strftime('%Y%m%d') # Use YYYYMMDD for key
+                                    # Actually, we can just modify the row object directly since it's a ref
+                                    e['row']['グループNo'] = next_group_id
+                                next_group_id += 1
+                            current_cluster = [curr]
+                    
+                    # Process last cluster
+                    unique_horses = set(e['horse_id'] for e in current_cluster)
+                    if len(unique_horses) >= 2:
+                        for e in current_cluster:
+                            e['row']['グループNo'] = next_group_id
+                        next_group_id += 1
+
+                # --- 3. Finalize Data & Jockey Change ---
+                race_data_list = []
+                target_date_obj = pd.to_datetime(self.target_date)
+                
+                for item in race_horses_data:
+                    horse = item['horse_info']
+                    history = item['history']
+                    horse_id = horse.get('horse_id')
+                    horse_name = horse.get('馬名', 'Unknown')
+                    current_jockey = horse.get('騎手', '')
+                    
+                    # Find previous race for Jockey Change
+                    prev_jockey = ""
+                    for h_row in history:
+                        h_date = pd.to_datetime(h_row['日付'])
+                        if h_date < target_date_obj:
+                            prev_jockey = h_row.get('騎手', '')
+                            break
+                    
+                    # Logic: "〇" if Current != Previous (Change happened)
+                    # User confirmed: "前走と異なる場合のみ〇" (Only if different)
+                    jockey_change = "〇" if prev_jockey and current_jockey != prev_jockey else "-"
                     
                     for h_row in history:
                         h_row['馬名'] = horse_name
                         h_row['horse_id'] = horse_id
+                        h_row['出走枠番'] = horse.get('枠番', '')
+                        h_row['出走馬番'] = horse.get('馬番', '')
+                        h_row['乗り替わり'] = jockey_change
+                        if 'グループNo' not in h_row:
+                            h_row['グループNo'] = ""
+                        
                         current_sex_age = horse.get('性齢', '')
                         if current_sex_age and len(current_sex_age) >= 2:
                             sex = current_sex_age[0]
                             try:
                                 current_age = int(re.search(r'\d+', current_sex_age).group())
                                 race_date = pd.to_datetime(h_row['日付'])
-                                target_date = pd.to_datetime(self.target_date)
-                                year_diff = target_date.year - race_date.year
+                                year_diff = target_date_obj.year - race_date.year
                                 hist_age = current_age - year_diff
                                 h_row['性'] = sex
                                 h_row['年齢'] = str(hist_age) if hist_age > 0 else ""
                             except:
                                 pass
 
-                    race_data_list.append({
-                        'horse_info': horse,
-                        'history': history
-                    })
+                    race_data_list.append(item)
                 
                 all_races_data[race_id] = race_data_list
             
@@ -633,6 +817,7 @@ class NetkeibaAnalyzer:
         logger.info(f"Generating Excel: {output_file}")
         
         columns = [
+            '出走枠番', '出走馬番', '乗り替わり', 'グループNo',
             '日付', '場所', '回', '日', 'ｺｰｽ', '距離', 'R', '馬場', '天気', '頭数', 
             '枠番', '馬番', '馬名', '斤量', '騎手', '厩舎', 'ﾀｲﾑ', '着差', '人気', 'ｵｯｽﾞ', 
             '上り', 'ﾍﾟｰｽ1', 'ﾍﾟｰｽ2', '通過', '1C', '2C', '3C', '4C', '着順', '馬体重', '増減', 
@@ -647,19 +832,22 @@ class NetkeibaAnalyzer:
                 sheet_name = f"Race_{race_id[-2:]}"
                 rows = []
                 
+                # Header Row
+                rows.append(columns)
+                
                 for h_data in horses_data:
-                    info = h_data['horse_info']
-                    header_str = f"【{info.get('枠番', '')}-{info.get('馬番', '')}】 {info.get('馬名')} ({info.get('性齢')}) 騎手:{info.get('騎手')} 厩舎:{info.get('厩舎')}"
-                    rows.append([header_str] + [''] * (len(columns)-1))
-                    rows.append(columns)
-                    
                     for hist in h_data['history']:
                         row_vals = [hist.get(col, '') for col in columns]
                         rows.append(row_vals)
                     
-                    rows.append([''] * len(columns))
+                    # Optional: Add an empty row between horses for readability? 
+                    # User asked for "flat format", usually implies continuous data.
+                    # But "1行名にカラム、それ以下の行には各馬の情報を途切れさせずに列挙する形式" 
+                    # implies one big table. I will NOT add empty rows between horses to keep it truly flat and filterable.
                 
                 df_sheet = pd.DataFrame(rows)
+                # rows[0] is header, so we can use it as columns for DataFrame or just write as is.
+                # Writing as list of lists is easier with header=False if we included header in rows.
                 df_sheet.to_excel(writer, sheet_name=sheet_name, index=False, header=False)
 
         logger.info("Excel generation complete.")

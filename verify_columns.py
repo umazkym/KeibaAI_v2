@@ -8,37 +8,19 @@ if not os.path.exists(file_path):
     exit(1)
 
 try:
-    xls = pd.ExcelFile(file_path)
-    sheet_name = xls.sheet_names[0] # Check first race
-    df = pd.read_excel(xls, sheet_name=sheet_name, header=None)
-    
-    # Find header row
-    header_row_idx = -1
-    for i, row in df.iterrows():
-        if '馬場' in row.values and 'ﾀｲﾑ' in row.values:
-            header_row_idx = i
-            break
-            
-    if header_row_idx == -1:
-        print("Header row not found.")
-        exit(1)
-        
-    # Set header
-    df.columns = df.iloc[header_row_idx]
-    df = df.iloc[header_row_idx+1:].reset_index(drop=True)
-    
+    # Load Excel Sheet 1 (Flat format, header at row 0)
+    df = pd.read_excel(file_path, sheet_name=0, header=0)
+    print("Loaded Excel Sheet 1")
+    print(df.head(5))
+
     # Check sample rows
-    cols_to_check = ['馬場', 'ﾀｲﾑ', '着差', '上り', 'ﾍﾟｰｽ1', '通過', '1C', '2C', '3C', '4C', '馬体重', '厩舎', '平均t', '基準t']
+    cols_to_check = ['出走枠番', '出走馬番', '乗り替わり', 'グループNo', '基準3F', '基3F差', '通過', '馬場', 'ﾀｲﾑ']
     print(f"Checking columns: {cols_to_check}")
     
     for col in cols_to_check:
         if col in df.columns:
             sample_vals = df[col].dropna().head(5).tolist()
             print(f"{col}: {sample_vals}")
-        else:
-            print(f"{col}: Not found")
-
-    # Check Parquet Date Range
     parquet_path = r"keibaai\data\processed\races.parquet"
     if os.path.exists(parquet_path):
         df_p = pd.read_parquet(parquet_path, columns=['race_date'])
