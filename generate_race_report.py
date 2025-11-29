@@ -615,11 +615,11 @@ class NetkeibaAnalyzer:
             time_sec = parse_time(time_str)
             l3f_sec = parse_time(l3f_str)
             
-            # Initialize metrics
+            # Initialize metrics with None
             for col in ['タイム指数', '上り指数', '馬場差', 'RPCI',
                        '平均t', '平均場t', '基準t', '基準場t', '基準3F', '基準場3F', 
                        '平t差', '平場t差', '基t差', '基場t差', '基3F差', '基場3F差']:
-                race[col] = ""
+                race[col] = None
             
             # Parse Date
             try:
@@ -636,44 +636,42 @@ class NetkeibaAnalyzer:
                 # 1. Average Time (Static)
                 avg_t = self.metric_calculator.get_avg_time(venue, distance, surface)
                 if avg_t:
-                    race['平均t'] = f"{avg_t:.1f}"
-                    race['平t差'] = f"{time_sec - avg_t:.1f}"
+                    race['平均t'] = round(avg_t, 1)
+                    race['平t差'] = round(time_sec - avg_t, 1)
 
                 # 2. Average Condition Time (Static)
                 avg_cond_t = self.metric_calculator.get_avg_cond_time(venue, distance, surface, full_cond)
                 if avg_cond_t:
-                    race['平均場t'] = f"{avg_cond_t:.1f}"
-                    race['平場t差'] = f"{time_sec - avg_cond_t:.1f}"
+                    race['平均場t'] = round(avg_cond_t, 1)
+                    race['平場t差'] = round(time_sec - avg_cond_t, 1)
 
                 # 3. Standard Time (Dynamic - +/- 3 days)
                 std_t = self.metric_calculator.get_std_time(venue, distance, surface, date_obj)
                 if std_t:
-                    race['基準t'] = f"{std_t:.1f}"
-                    race['基t差'] = f"{time_sec - std_t:.1f}"
+                    race['基準t'] = round(std_t, 1)
+                    race['基t差'] = round(time_sec - std_t, 1)
                 
                 # Calculate Track Bias (馬場差) = Standard Time - Average Time
-                # Negative = Fast Track, Positive = Slow Track
                 if avg_t and std_t:
-                    track_bias = std_t - avg_t
-                    race['馬場差'] = f"{track_bias:.1f}"
+                    race['馬場差'] = round(std_t - avg_t, 1)
 
                 # 4. Standard Condition Time (Dynamic)
                 std_cond_t = self.metric_calculator.get_std_cond_time(venue, distance, surface, full_cond, date_obj)
                 if std_cond_t:
-                    race['基準場t'] = f"{std_cond_t:.1f}"
-                    race['基場t差'] = f"{time_sec - std_cond_t:.1f}"
+                    race['基準場t'] = round(std_cond_t, 1)
+                    race['基場t差'] = round(time_sec - std_cond_t, 1)
                 
                 # 5. Standard 3F (Regression)
                 if l3f_sec:
                     std_3f = self.metric_calculator.predict_std_3f(venue, distance, surface, time_sec, l3f_sec)
                     if std_3f:
-                        race['基準3F'] = f"{std_3f:.1f}"
-                        race['基3F差'] = f"{l3f_sec - std_3f:.1f}"
+                        race['基準3F'] = round(std_3f, 1)
+                        race['基3F差'] = round(l3f_sec - std_3f, 1)
                         
                     std_cond_3f = self.metric_calculator.predict_std_cond_3f(venue, distance, surface, full_cond, time_sec, l3f_sec)
                     if std_cond_3f:
-                        race['基準場3F'] = f"{std_cond_3f:.1f}"
-                        race['基場3F差'] = f"{l3f_sec - std_cond_3f:.1f}"
+                        race['基準場3F'] = round(std_cond_3f, 1)
+                        race['基場3F差'] = round(l3f_sec - std_cond_3f, 1)
 
             # Lookup Stats (Time Index, L3F Index, RPCI)
             key = (venue, distance, surface, full_cond)
@@ -685,7 +683,7 @@ class NetkeibaAnalyzer:
                 std = stats['time_std']
                 if std > 0:
                     idx = 50 + 10 * (mean - time_sec) / std
-                    race['タイム指数'] = f"{idx:.1f}"
+                    race['タイム指数'] = round(idx, 1)
                     
             if stats and l3f_sec:
                 # L3F Index
@@ -693,7 +691,7 @@ class NetkeibaAnalyzer:
                 std_3f = stats['l3f_std']
                 if std_3f > 0:
                     idx_3f = 50 + 10 * (mean_3f - l3f_sec) / std_3f
-                    race['上り指数'] = f"{idx_3f:.1f}"
+                    race['上り指数'] = round(idx_3f, 1)
 
             # RPCI: (First 3F / Last 3F) * 50
             if pace_str and l3f_sec:
@@ -701,7 +699,7 @@ class NetkeibaAnalyzer:
                     first_3f = float(pace_str)
                     if first_3f > 0 and l3f_sec > 0:
                         rpci = (first_3f / l3f_sec) * 50
-                        race['RPCI'] = f"{rpci:.1f}"
+                        race['RPCI'] = round(rpci, 1)
                 except:
                     pass
                     
@@ -732,11 +730,8 @@ class NetkeibaAnalyzer:
                     continue
                 
                 # --- 1. Collect all history first for Grouping ---
-                
-                # --- 1. Collect all history first for Grouping ---
-                # We need to process all horses to find shared past races
-                race_horses_data = [] # List of (horse_info, history_list)
-                all_history_entries = [] # List of (horse_id, history_row, index_in_history)
+                race_horses_data = [] 
+                all_history_entries = [] 
                 
                 for horse in shutuba:
                     horse_id = horse.get('horse_id')
@@ -752,32 +747,16 @@ class NetkeibaAnalyzer:
                     })
                     
                     for i, h_row in enumerate(history):
-                        # We need to track which horse and which row this is
                         all_history_entries.append({
                             'horse_id': horse_id,
                             'row': h_row,
                             'date': pd.to_datetime(h_row['日付']),
                             'venue': h_row['場所'],
                             'dist': h_row['距離'],
-                            'surf': h_row['馬場'] # This is condition, not surface type. Wait.
-                            # '馬場' in history is Condition (良, 重). 
-                            # We need Surface type (芝, ダ). 
-                            # Usually '距離' string contains it like "芝1600".
-                            # Let's parse '距離' for Surface and Distance.
+                            'surf': h_row['馬場']
                         })
 
                 # --- 2. Calculate GroupNo (Clustering) ---
-                # Group by (Venue, Surface, Distance)
-                # Note: '距離' in history usually looks like "芝1600". 
-                # We should use that string directly as key if it's consistent.
-                
-                # Helper to parse distance string from history
-                def parse_dist_surf(dist_str):
-                    # e.g. "芝1600", "ダ1800"
-                    return dist_str
-                
-                # Group entries by (Venue, DistString)
-                # We use a simple dict to bucket them
                 grouped_entries = {}
                 for entry in all_history_entries:
                     key = (entry['venue'], entry['dist'])
@@ -785,19 +764,11 @@ class NetkeibaAnalyzer:
                         grouped_entries[key] = []
                     grouped_entries[key].append(entry)
                 
-                # Assign Group IDs
                 next_group_id = 1
                 
-                # Map (horse_id, date_str) -> group_no
-                # We use date_str to identify the specific race in history
-                history_group_map = {} 
-                
                 for key, entries in grouped_entries.items():
-                    # Sort by date
                     entries.sort(key=lambda x: x['date'])
                     
-                    # Cluster by date (within 3 days)
-                    # Simple clustering: if diff > 3 days, start new cluster
                     if not entries:
                         continue
                         
@@ -811,17 +782,13 @@ class NetkeibaAnalyzer:
                         if diff <= 3:
                             current_cluster.append(curr)
                         else:
-                            # Process current cluster
                             unique_horses = set(e['horse_id'] for e in current_cluster)
                             if len(unique_horses) >= 2:
                                 for e in current_cluster:
-                                    date_str = e['date'].strftime('%Y%m%d') # Use YYYYMMDD for key
-                                    # Actually, we can just modify the row object directly since it's a ref
                                     e['row']['グループNo'] = next_group_id
                                 next_group_id += 1
                             current_cluster = [curr]
                     
-                    # Process last cluster
                     unique_horses = set(e['horse_id'] for e in current_cluster)
                     if len(unique_horses) >= 2:
                         for e in current_cluster:
@@ -839,7 +806,6 @@ class NetkeibaAnalyzer:
                     horse_name = horse.get('馬名', 'Unknown')
                     current_jockey = horse.get('騎手', '')
                     
-                    # Find previous race for Jockey Change
                     prev_jockey = ""
                     for h_row in history:
                         h_date = pd.to_datetime(h_row['日付'])
@@ -847,8 +813,6 @@ class NetkeibaAnalyzer:
                             prev_jockey = h_row.get('騎手', '')
                             break
                     
-                    # Logic: "〇" if Current != Previous (Change happened)
-                    # User confirmed: "前走と異なる場合のみ〇" (Only if different)
                     jockey_change = "〇" if prev_jockey and current_jockey != prev_jockey else "-"
                     
                     for h_row in history:
