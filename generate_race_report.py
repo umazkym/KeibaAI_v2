@@ -594,8 +594,6 @@ class NetkeibaAnalyzer:
             pace_str = race.get('ﾍﾟｰｽ1', '')
             
             # Parse Distance and Surface
-            # '距離' is already just digits (e.g. "1600") from parse_horse_history
-            # 'ｺｰｽ' contains surface (e.g. "芝", "ダート")
             surface = race.get('ｺｰｽ', '')
             
             try:
@@ -618,16 +616,66 @@ class NetkeibaAnalyzer:
             l3f_sec = parse_time(l3f_str)
             
             # Initialize metrics
-            race['タイム指数'] = ''
-            race['上り指数'] = ''
-            race['馬場差'] = ''
-            race['RPCI'] = ''
+            for col in ['タイム指数', '上り指数', '馬場差', 'RPCI',
+                       '平均t', '平均場t', '基準t', '基準場t', '基準3F', '基準場3F', 
+                       '平t差', '平場t差', '基t差', '基場t差', '基3F差', '基場3F差']:
+                race[col] = ""
             
+            # Parse Date
+            try:
+                date_obj = pd.to_datetime(race.get('日付', ''))
+            except:
+                date_obj = None
+
             # Map abbreviated condition to full string
             cond_map = {"良": "良", "稍": "稍重", "重": "重", "不": "不良"}
             full_cond = cond_map.get(cond, cond)
-            
-            # Lookup Stats
+
+            # --- Calculate Standard/Average Metrics using MetricCalculator ---
+            if self.metric_calculator and date_obj and distance > 0 and time_sec:
+                # 1. Average Time (Static)
+                avg_t = self.metric_calculator.get_avg_time(venue, distance, surface)
+                if avg_t:
+                    race['平均t'] = f"{avg_t:.1f}"
+                    race['平t差'] = f"{time_sec - avg_t:.1f}"
+
+                # 2. Average Condition Time (Static)
+                avg_cond_t = self.metric_calculator.get_avg_cond_time(venue, distance, surface, full_cond)
+                if avg_cond_t:
+                    race['平均場t'] = f"{avg_cond_t:.1f}"
+                    race['平場t差'] = f"{time_sec - avg_cond_t:.1f}"
+
+                # 3. Standard Time (Dynamic - +/- 3 days)
+                std_t = self.metric_calculator.get_std_time(venue, distance, surface, date_obj)
+                if std_t:
+                    race['基準t'] = f"{std_t:.1f}"
+                    race['基t差'] = f"{time_sec - std_t:.1f}"
+                
+                # Calculate Track Bias (馬場差) = Standard Time - Average Time
+                # Negative = Fast Track, Positive = Slow Track
+                if avg_t and std_t:
+                    track_bias = std_t - avg_t
+                    race['馬場差'] = f"{track_bias:.1f}"
+
+                # 4. Standard Condition Time (Dynamic)
+                std_cond_t = self.metric_calculator.get_std_cond_time(venue, distance, surface, full_cond, date_obj)
+                if std_cond_t:
+                    race['基準場t'] = f"{std_cond_t:.1f}"
+                    race['基場t差'] = f"{time_sec - std_cond_t:.1f}"
+                
+                # 5. Standard 3F (Regression)
+                if l3f_sec:
+                    std_3f = self.metric_calculator.predict_std_3f(venue, distance, surface, time_sec, l3f_sec)
+                    if std_3f:
+                        race['基準3F'] = f"{std_3f:.1f}"
+                        race['基3F差'] = f"{l3f_sec - std_3f:.1f}"
+                        
+                    std_cond_3f = self.metric_calculator.predict_std_cond_3f(venue, distance, surface, full_cond, time_sec, l3f_sec)
+                    if std_cond_3f:
+                        race['基準場3F'] = f"{std_cond_3f:.1f}"
+                        race['基場3F差'] = f"{l3f_sec - std_cond_3f:.1f}"
+
+            # Lookup Stats (Time Index, L3F Index, RPCI)
             key = (venue, distance, surface, full_cond)
             stats = self.stats_lookup.get(key)
             
