@@ -15,6 +15,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import pickle
+import socket
 
 # Setup logging
 logging.basicConfig(
@@ -445,9 +446,12 @@ class NetkeibaAnalyzer:
         if not html_content:
             url = f"https://db.netkeiba.com/horse/result/{horse_id}/"
             try:
-                resp = self.session.get(url)
+                # logger.debug(f"Requesting {url}...")
+                # Add explicit connect/read timeout
+                resp = self.session.get(url, timeout=(5, 15))
                 resp.encoding = 'euc-jp'
                 html_content = resp.content
+                # logger.debug(f"Received {len(html_content)} bytes.")
                 time.sleep(0.5)
             except Exception as e:
                 logger.error(f"Error scraping history for {horse_id}: {e}")
@@ -733,11 +737,14 @@ class NetkeibaAnalyzer:
                 race_horses_data = [] 
                 all_history_entries = [] 
                 
-                for horse in shutuba:
+                total_horses = len(shutuba)
+                for idx, horse in enumerate(shutuba, 1):
                     horse_id = horse.get('horse_id')
+                    horse_name = horse.get('馬名', 'Unknown')
                     if not horse_id:
                         continue
-                        
+                    
+                    logger.info(f"[{idx}/{total_horses}] Fetching history for {horse_name} ({horse_id})...")
                     history = self.get_horse_history(horse_id)
                     history = self.calculate_metrics(history)
                     
@@ -861,6 +868,23 @@ class NetkeibaAnalyzer:
             'horse_id', 'race_id'
         ]
         
+        from openpyxl.chart import ScatterChart, Reference, Series
+        from openpyxl.chart.label import DataLabelList
+        from openpyxl.utils import get_column_letter
+        from openpyxl.styles import PatternFill, Font, Alignment
+
+        # Waku Color Definitions (Standard JRA Colors)
+        WAKU_COLORS = {
+            1: {'bg': 'FFFFFF', 'fg': '000000'}, # White
+            2: {'bg': '000000', 'fg': 'FFFFFF'}, # Black
+            3: {'bg': 'FF0000', 'fg': 'FFFFFF'}, # Red
+            4: {'bg': '0000FF', 'fg': 'FFFFFF'}, # Blue
+            5: {'bg': 'FFFF00', 'fg': '000000'}, # Yellow
+            6: {'bg': '008000', 'fg': 'FFFFFF'}, # Green
+            7: {'bg': 'FFA500', 'fg': '000000'}, # Orange
+            8: {'bg': 'FFC0CB', 'fg': '000000'}  # Pink
+        }
+
         with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
             for race_id, horses_data in all_data.items():
                 sheet_name = f"Race_{race_id[-2:]}"
@@ -876,6 +900,137 @@ class NetkeibaAnalyzer:
                 
                 df_out = pd.DataFrame(rows[1:], columns=rows[0])
                 df_out.to_excel(writer, sheet_name=sheet_name, index=False)
+                
+                # --- Formatting & Charts ---
+                workbook = writer.book
+                worksheet = writer.sheets[sheet_name]
+                
+                # Helper to find column index (1-based)
+                def get_col_idx(name):
+                    try:
+                        return columns.index(name) + 1
+                    except ValueError:
+                        return None
+
+                idx_waku = get_col_idx('出走枠番')
+                idx_umaban = get_col_idx('出走馬番')
+                idx_time = get_col_idx('タイム指数')
+                idx_l3f = get_col_idx('上り指数')
+                idx_bias = get_col_idx('馬場差')
+                
+                # --- Apply Waku Colors ---
+                if idx_waku:
+                    for row in range(2, len(df_out) + 2):
+                        cell = worksheet.cell(row=row, column=idx_waku)
+                        try:
+                            waku_val = int(cell.value)
+                            if waku_val in WAKU_COLORS:
+                                style = WAKU_COLORS[waku_val]
+                                cell.fill = PatternFill(start_color=style['bg'], end_color=style['bg'], fill_type='solid')
+                                cell.font = Font(color=style['fg'], bold=True)
+                                cell.alignment = Alignment(horizontal='center')
+                                
+                                # Apply to Umaban as well if present
+                                if idx_umaban:
+                                    cell_umaban = worksheet.cell(row=row, column=idx_umaban)
+                                    cell_umaban.fill = PatternFill(start_color=style['bg'], end_color=style['bg'], fill_type='solid')
+                                    cell_umaban.font = Font(color=style['fg'], bold=True)
+                                    cell_umaban.alignment = Alignment(horizontal='center')
+                        except:
+                            pass
+
+                # --- Add Charts to Separate Sheet ---
+                if idx_time and idx_l3f and idx_bias:
+                    analysis_sheet_name = f"Analysis_{race_id[-2:]}"
+                    analysis_sheet = workbook.create_sheet(title=analysis_sheet_name)
+                    
+                    # 1. Speed vs Stamina (X=L3F Index, Y=Time Index)
+                    chart1 = ScatterChart()
+                    chart1.title = "スピード vs スタミナ"
+                    chart1.style = 2
+                    chart1.x_axis.title = "上り指数"
+                    chart1.y_axis.title = "タイム指数"
+                    chart1.height = 20
+                    chart1.width = 30
+                    chart1.legend.position = 'r'
+                    
+                    # Restore Gridlines (Default is usually fine, or we can explicitly add ChartLines)
+                    # chart1.x_axis.majorGridlines = None # Removed to show gridlines
+                    # chart1.y_axis.majorGridlines = None # Removed to show gridlines
+
+                    # 2. Track Suitability (X=Track Bias, Y=Time Index)
+                    chart2 = ScatterChart()
+                    chart2.title = "馬場適性"
+                    chart2.style = 2
+                    chart2.x_axis.title = "馬場差"
+                    chart2.y_axis.title = "タイム指数"
+                    chart2.height = 20
+                    chart2.width = 30
+                    chart2.legend.position = 'r'
+                    
+                    # chart2.x_axis.majorGridlines = None
+                    # chart2.y_axis.majorGridlines = None
+
+                    current_row = 2 # Start after header in Data Sheet
+                    
+                    for h_data in horses_data:
+                        hist_len = len(h_data['history'])
+                        if hist_len > 0:
+                            horse_info = h_data['horse_info']
+                            horse_name = horse_info.get('馬名', 'Unknown')
+                            waku = horse_info.get('枠番', '')
+                            umaban = horse_info.get('馬番', '')
+                            
+                            # Legend Name: (Umaban) HorseName
+                            legend_name = f"({umaban}) {horse_name}" if umaban else horse_name
+                            
+                            end_row = current_row + hist_len - 1
+                            
+                            # Determine Color
+                            marker_color = "808080" # Default Gray
+                            try:
+                                waku_int = int(waku)
+                                if waku_int in WAKU_COLORS:
+                                    marker_color = WAKU_COLORS[waku_int]['bg']
+                            except:
+                                pass
+
+                            # Series for Chart 1
+                            values_time = Reference(worksheet, min_col=idx_time, min_row=current_row, max_row=end_row)
+                            values_l3f = Reference(worksheet, min_col=idx_l3f, min_row=current_row, max_row=end_row)
+                            series1 = Series(values_time, values_l3f, title=legend_name)
+                            series1.marker.symbol = "circle"
+                            series1.marker.size = 15
+                            series1.graphicalProperties.line.noFill = True 
+                            series1.marker.graphicalProperties.solidFill = marker_color
+                            series1.marker.graphicalProperties.line.solidFill = "000000" # Black outline
+                            
+                            # No Data Labels as requested
+                            # series1.dLbls = DataLabelList() ...
+                            
+                            chart1.series.append(series1)
+                            
+                            # Series for Chart 2
+                            values_bias = Reference(worksheet, min_col=idx_bias, min_row=current_row, max_row=end_row)
+                            series2 = Series(values_time, values_bias, title=legend_name)
+                            series2.marker.symbol = "circle"
+                            series2.marker.size = 15
+                            series2.graphicalProperties.line.noFill = True
+                            series2.marker.graphicalProperties.solidFill = marker_color
+                            series2.marker.graphicalProperties.line.solidFill = "000000"
+                            
+                            # No Data Labels
+                            
+                            chart2.series.append(series2)
+                            
+                            current_row += hist_len
+
+                    # Position Charts on Analysis Sheet
+                    if len(chart1.series) > 0:
+                        analysis_sheet.add_chart(chart1, "B2")
+                    
+                    if len(chart2.series) > 0:
+                        analysis_sheet.add_chart(chart2, "B45")
         
         logger.info(f"Excel report saved to {output_file}")
 
