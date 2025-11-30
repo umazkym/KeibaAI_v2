@@ -16,6 +16,14 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import pickle
 import socket
+from openpyxl import Workbook
+from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+from openpyxl.chart import ScatterChart, Reference, Series, StockChart
+from openpyxl.chart.axis import DateAxis, ChartLines
+from openpyxl.chart.layout import Layout, ManualLayout
+from openpyxl.chart.shapes import GraphicalProperties
+from openpyxl.chart.updown_bars import UpDownBars
+from openpyxl.drawing.line import LineProperties
 
 # Setup logging
 logging.basicConfig(
@@ -251,9 +259,13 @@ class NetkeibaAnalyzer:
         options.add_argument('--headless')
         options.add_argument('--no-sandbox')
         options.add_argument('--disable-dev-shm-usage')
+        options.add_argument('--disable-gpu')
+        options.add_argument('--disable-extensions')
         options.add_argument("--log-level=3")
+        # Use eager strategy to return as soon as DOM is interactive
+        options.page_load_strategy = 'eager' 
         self.driver = webdriver.Chrome(options=options)
-        self.driver.set_page_load_timeout(30)
+        self.driver.set_page_load_timeout(15) # Reduce timeout to 15s
 
     def close_driver(self):
         if self.driver:
@@ -338,98 +350,74 @@ class NetkeibaAnalyzer:
             logger.error(f"Error scraping race list: {e}")
             return []
 
-    def restart_driver(self):
-        """Restarts the Selenium driver."""
-        logger.info("Restarting Selenium Driver...")
-        self.close_driver()
-        self.init_driver()
-
     def scrape_shutuba(self, race_id: str) -> List[Dict]:
-        """Scrapes the Shutuba table for a given race_id using Selenium."""
-        max_retries = 3
-        for attempt in range(max_retries):
-            try:
-                self.init_driver()
-                url = f"https://race.netkeiba.com/race/shutuba.html?race_id={race_id}"
-                logger.info(f"Scraping shutuba for {race_id} (Attempt {attempt+1}/{max_retries})")
-                
-                try:
-                    self.driver.get(url)
-                except Exception:
-                    # If page load times out, stop loading and try to parse anyway
-                    logger.warning(f"Page load timed out for {race_id}, stopping load and proceeding...")
-                    self.driver.execute_script("window.stop();")
-                
-                # Wait for RaceName first as it should be present
-                WebDriverWait(self.driver, 10).until(
-                    EC.presence_of_element_located((By.CLASS_NAME, "RaceName"))
-                )
-                
-                soup = BeautifulSoup(self.driver.page_source, 'html.parser')
-                
-                race_name_elem = soup.select_one('.RaceName')
-                race_name = race_name_elem.text.strip() if race_name_elem else "Unknown Race"
-                
-                # Check for Shinba (New Horse) immediately
-                if '新馬' in race_name:
-                    logger.info(f"Skipping Race {race_id} ({race_name}) - New Horse Race")
-                    return []
-
-                # Now wait for HorseList
-                WebDriverWait(self.driver, 10).until(
-                    EC.presence_of_element_located((By.CLASS_NAME, "HorseList"))
-                )
-                
-                horses = []
-                rows = soup.select('tr.HorseList')
-                
-                race_meta = soup.select_one('.RaceData01')
-                race_meta_text = race_meta.text.strip() if race_meta else ""
-                course_info = ""
-                if race_meta_text:
-                    course_info = race_meta_text.split('/')[0].strip()
-
-                for row in rows:
-                    horse_data = {
-                        'race_id': race_id,
-                        'race_name': race_name,
-                        'course_info': course_info,
-                        'date': self.target_date
-                    }
-                    
-                    waku_elem = row.select_one('td[class^="Waku"]')
-                    horse_data['枠番'] = waku_elem.text.strip() if waku_elem else ""
-                    
-                    umaban_elem = row.select_one('td[class^="Umaban"]')
-                    horse_data['馬番'] = umaban_elem.text.strip() if umaban_elem else ""
-                    
-                    name_elem = row.select_one('.HorseName a')
-                    if name_elem:
-                        horse_data['馬名'] = name_elem.text.strip()
-                        href = name_elem['href']
-                        if '/horse/' in href:
-                             horse_data['horse_id'] = href.split('/horse/')[-1].replace('/', '')
-                    
-                    jockey_elem = row.select_one('.Jockey a')
-                    horse_data['騎手'] = jockey_elem.text.strip() if jockey_elem else ""
-                    
-                    trainer_elem = row.select_one('.Trainer a')
-                    horse_data['厩舎'] = trainer_elem.text.strip() if trainer_elem else ""
-                    
-                    tds = row.find_all('td')
-                    if len(tds) >= 6:
-                        horse_data['性齢'] = tds[4].text.strip()
-                        horse_data['斤量'] = tds[5].text.strip()
-
-                    horses.append(horse_data)
-                return horses
-
-            except Exception as e:
-                logger.error(f"Error scraping shutuba for {race_id} (Attempt {attempt+1}): {e}")
-                self.restart_driver()
-                time.sleep(2)
+        """Scrapes the Shutuba table for a given race ID using requests (Static HTML)."""
+        url = f"https://race.netkeiba.com/race/shutuba.html?race_id={race_id}"
+        logger.info(f"Scraping shutuba for {race_id}")
         
-        return []
+        try:
+            # Use requests instead of Selenium for stability
+            resp = self.session.get(url, timeout=(5, 15))
+            resp.encoding = 'euc-jp'
+            soup = BeautifulSoup(resp.content, 'html.parser')
+            
+            race_name_elem = soup.select_one('.RaceName')
+            race_name = race_name_elem.text.strip() if race_name_elem else "Unknown Race"
+            
+            # Check for Shinba (New Horse) immediately
+            if '新馬' in race_name:
+                logger.info(f"Skipping Race {race_id} ({race_name}) - New Horse Race")
+                return []
+
+            horses = []
+            rows = soup.select('tr.HorseList')
+            
+            race_meta = soup.select_one('.RaceData01')
+            race_meta_text = race_meta.text.strip() if race_meta else ""
+            course_info = ""
+            if race_meta_text:
+                course_info = race_meta_text.split('/')[0].strip()
+
+            for row in rows:
+                horse_data = {
+                    'race_id': race_id,
+                    'race_name': race_name,
+                    'course_info': course_info,
+                    'date': self.target_date
+                }
+                
+                waku_elem = row.select_one('td[class^="Waku"]')
+                horse_data['枠番'] = waku_elem.text.strip() if waku_elem else ""
+                
+                umaban_elem = row.select_one('td[class^="Umaban"]')
+                horse_data['馬番'] = umaban_elem.text.strip() if umaban_elem else ""
+                
+                name_elem = row.select_one('.HorseName a')
+                if name_elem:
+                    horse_data['馬名'] = name_elem.text.strip()
+                    href = name_elem['href']
+                    if '/horse/' in href:
+                            horse_data['horse_id'] = href.split('/horse/')[-1].replace('/', '')
+                
+                jockey_elem = row.select_one('.Jockey a')
+                horse_data['騎手'] = jockey_elem.text.strip() if jockey_elem else ""
+                
+                trainer_elem = row.select_one('.Trainer a')
+                horse_data['厩舎'] = trainer_elem.text.strip() if trainer_elem else ""
+                
+                tds = row.find_all('td')
+                if len(tds) >= 6:
+                    horse_data['性齢'] = tds[4].text.strip()
+                    horse_data['斤量'] = tds[5].text.strip()
+
+                horses.append(horse_data)
+            
+            time.sleep(1) # Polite delay
+            return horses
+
+        except Exception as e:
+            logger.error(f"Error scraping shutuba for {race_id}: {e}")
+            return []
 
     def get_horse_history(self, horse_id: str) -> List[Dict]:
         """Gets past performance for a horse."""
@@ -437,11 +425,20 @@ class NetkeibaAnalyzer:
         html_content = None
         
         if os.path.exists(local_path):
+            # --- Smart Cache Invalidation ---
+            # If cache is older than 7 days, ignore it to force re-scrape
             try:
-                with open(local_path, 'rb') as f:
-                    html_content = f.read()
+                mtime = os.path.getmtime(local_path)
+                file_time = datetime.fromtimestamp(mtime)
+                if datetime.now() - file_time > timedelta(days=7):
+                    logger.info(f"Cache for {horse_id} is stale ({file_time.strftime('%Y-%m-%d')}). Re-scraping...")
+                    html_content = None # Force re-scrape
+                else:
+                    with open(local_path, 'rb') as f:
+                        html_content = f.read()
             except Exception as e:
-                logger.error(f"Error reading local file {local_path}: {e}")
+                logger.error(f"Error checking/reading local file {local_path}: {e}")
+                html_content = None
         
         if not html_content:
             url = f"https://db.netkeiba.com/horse/result/{horse_id}/"
@@ -469,12 +466,14 @@ class NetkeibaAnalyzer:
             
             history = []
             rows = table.find('tbody').find_all('tr')
-            for row in rows:
+            for i, row in enumerate(rows):
                 cols = row.find_all('td')
                 if len(cols) < 28: # Ensure enough columns
+                    # logger.debug(f"Row {i} skipped: Not enough columns ({len(cols)})")
                     continue
                 
                 data = [c.text.strip() for c in cols]
+                # logger.debug(f"Row {i} Date: {data[0]}, Race: {data[4]}")
                 
                 race_id_full = ""
                 race_link = cols[4].find('a')
@@ -746,6 +745,20 @@ class NetkeibaAnalyzer:
                     
                     logger.info(f"[{idx}/{total_horses}] Fetching history for {horse_name} ({horse_id})...")
                     history = self.get_horse_history(horse_id)
+                    
+                    # --- FILTER: Only keep history from 2024/10/1 onwards ---
+                    filter_date = pd.to_datetime("2024-10-01")
+                    filtered_history = []
+                    for h in history:
+                        try:
+                            h_date = pd.to_datetime(h.get('日付', ''))
+                            if h_date >= filter_date:
+                                filtered_history.append(h)
+                        except:
+                            pass
+                    history = filtered_history
+                    # --------------------------------------------------------
+
                     history = self.calculate_metrics(history)
                     
                     race_horses_data.append({
@@ -868,11 +881,6 @@ class NetkeibaAnalyzer:
             'horse_id', 'race_id'
         ]
         
-        from openpyxl.chart import ScatterChart, Reference, Series
-        from openpyxl.chart.label import DataLabelList
-        from openpyxl.utils import get_column_letter
-        from openpyxl.styles import PatternFill, Font, Alignment
-
         # Waku Color Definitions (Standard JRA Colors)
         WAKU_COLORS = {
             1: {'bg': 'FFFFFF', 'fg': '000000'}, # White
@@ -888,8 +896,14 @@ class NetkeibaAnalyzer:
         with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
             for race_id, horses_data in all_data.items():
                 sheet_name = f"Race_{race_id[-2:]}"
-                rows = []
                 
+                # Sort horses by Umaban for consistent chart order
+                try:
+                    horses_data.sort(key=lambda x: int(x['horse_info'].get('馬番', 999)))
+                except:
+                    pass
+
+                rows = []
                 # Header Row
                 rows.append(columns)
                 
@@ -899,13 +913,93 @@ class NetkeibaAnalyzer:
                         rows.append(row_vals)
                 
                 df_out = pd.DataFrame(rows[1:], columns=rows[0])
+                
+                # Convert numeric columns to numbers (float/int) for sorting/filtering
+                numeric_cols = [
+                    '枠番', '馬番', '斤量', '着順', '馬体重', '増減', '年齢',
+                    '平均t', '平均場t', '基準t', '基準場t', '基準3F', '基準場3F',
+                    '平t差', '平場t差', '基t差', '基場t差', '基3F差', '基場3F差',
+                    'タイム指数', '上り指数', '馬場差', 'RPCI', '上り', 'ﾀｲﾑ', 'ｵｯｽﾞ', '人気',
+                    'ﾍﾟｰｽ1', 'ﾍﾟｰｽ2', '4C'
+                ]
+                
+                for col in numeric_cols:
+                    if col in df_out.columns:
+                        df_out[col] = pd.to_numeric(df_out[col], errors='coerce')
+
                 df_out.to_excel(writer, sheet_name=sheet_name, index=False)
                 
                 # --- Formatting & Charts ---
                 workbook = writer.book
                 worksheet = writer.sheets[sheet_name]
                 
-                # Helper to find column index (1-based)
+                # --- Create Hidden Chart Data Sheet ---
+                # This sheet ensures charts remain stable even if the main sheet is sorted/filtered.
+                chart_sheet_name = f"ChartData_{race_id[-2:]}"
+                chart_sheet = workbook.create_sheet(title=chart_sheet_name)
+                chart_sheet.sheet_state = 'hidden' # Hide from user
+                
+                # Write Header
+                chart_cols = ['馬番', '馬名', 'タイム指数', '上り指数', '馬場差', 'RPCI', 'ﾍﾟｰｽ1', '4C', '枠番']
+                chart_sheet.append(chart_cols)
+                
+                # Write Data (Sorted by Umaban)
+                chart_data_start_row = 2
+                current_chart_row = chart_data_start_row
+                
+                # Track row ranges for each horse to create series
+                horse_row_ranges = {} # {horse_index: (start_row, end_row)}
+                
+                for h_idx, h_data in enumerate(horses_data):
+                    horse_info = h_data['horse_info']
+                    h_name = horse_info.get('馬名', 'Unknown')
+                    umaban = horse_info.get('馬番', '')
+                    waku = horse_info.get('枠番', '')
+                    
+                    start_r = current_chart_row
+                    
+                    for hist in h_data['history']:
+                        # Extract values, ensuring they are numeric
+                        def get_val(key):
+                            val = hist.get(key, '')
+                            try:
+                                return float(val)
+                            except:
+                                return None
+                        
+                        row_vals = [
+                            umaban,
+                            h_name,
+                            get_val('タイム指数'),
+                            get_val('上り指数'),
+                            get_val('馬場差'),
+                            get_val('RPCI'),
+                            get_val('ﾍﾟｰｽ1'),
+                            get_val('4C'),
+                            waku
+                        ]
+                        chart_sheet.append(row_vals)
+                        current_chart_row += 1
+                    
+                    end_r = current_chart_row - 1
+                    if end_r >= start_r:
+                        horse_row_ranges[h_idx] = (start_r, end_r)
+
+                # Helper to find column index in Chart Sheet (1-based)
+                def get_chart_col_idx(name):
+                    try:
+                        return chart_cols.index(name) + 1
+                    except ValueError:
+                        return None
+                
+                idx_c_time = get_chart_col_idx('タイム指数')
+                idx_c_l3f = get_chart_col_idx('上り指数')
+                idx_c_bias = get_chart_col_idx('馬場差')
+                idx_c_rpci = get_chart_col_idx('RPCI')
+                idx_c_pace = get_chart_col_idx('ﾍﾟｰｽ1')
+                idx_c_4c = get_chart_col_idx('4C')
+
+                # Helper to find column index in Main Sheet (for Waku coloring on main sheet)
                 def get_col_idx(name):
                     try:
                         return columns.index(name) + 1
@@ -914,11 +1008,8 @@ class NetkeibaAnalyzer:
 
                 idx_waku = get_col_idx('出走枠番')
                 idx_umaban = get_col_idx('出走馬番')
-                idx_time = get_col_idx('タイム指数')
-                idx_l3f = get_col_idx('上り指数')
-                idx_bias = get_col_idx('馬場差')
                 
-                # --- Apply Waku Colors ---
+                # --- Apply Waku Colors (Main Sheet) ---
                 if idx_waku:
                     for row in range(2, len(df_out) + 2):
                         cell = worksheet.cell(row=row, column=idx_waku)
@@ -940,42 +1031,105 @@ class NetkeibaAnalyzer:
                             pass
 
                 # --- Add Charts to Separate Sheet ---
-                if idx_time and idx_l3f and idx_bias:
+                # Check if we have enough data columns in ChartData sheet
+                if idx_c_time and idx_c_l3f and idx_c_bias:
                     analysis_sheet_name = f"Analysis_{race_id[-2:]}"
                     analysis_sheet = workbook.create_sheet(title=analysis_sheet_name)
                     
+                    # --- Explanatory Text ---
+                    # Helper to add text box
+                    def add_explanation(row, col, title, text):
+                        cell = analysis_sheet.cell(row=row, column=col)
+                        cell.value = title
+                        cell.font = Font(bold=True, size=11)
+                        
+                        desc_cell = analysis_sheet.cell(row=row+1, column=col)
+                        desc_cell.value = text
+                        desc_cell.alignment = Alignment(wrap_text=True, vertical='top')
+                        
+                        # Merge for description
+                        analysis_sheet.merge_cells(start_row=row+1, start_column=col, end_row=row+5, end_column=col+8)
+                        
+                    # Common Chart Setup
+                    def setup_chart(title, x_title, y_title):
+                        chart = ScatterChart()
+                        chart.title = title
+                        chart.style = 2
+                        chart.x_axis.title = x_title
+                        chart.y_axis.title = y_title
+                        chart.height = 10 # cm (Reduced from 15)
+                        chart.width = 16  # cm
+                        chart.legend = None # Remove Legend
+                        
+                        # Gridlines Style (Light Gray)
+                        sp_pr = GraphicalProperties(ln=LineProperties(solidFill="D9D9D9"))
+                        chart.x_axis.majorGridlines = ChartLines(spPr=sp_pr)
+                        chart.y_axis.majorGridlines = ChartLines(spPr=sp_pr)
+                        
+                        return chart
+
                     # 1. Speed vs Stamina (X=L3F Index, Y=Time Index)
-                    chart1 = ScatterChart()
-                    chart1.title = "スピード vs スタミナ"
-                    chart1.style = 2
-                    chart1.x_axis.title = "上り指数"
-                    chart1.y_axis.title = "タイム指数"
-                    chart1.height = 20
-                    chart1.width = 30
-                    chart1.legend.position = 'r'
+                    chart1 = setup_chart("スピード vs スタミナ", "上り指数", "タイム指数")
                     
-                    # Restore Gridlines (Default is usually fine, or we can explicitly add ChartLines)
-                    # chart1.x_axis.majorGridlines = None # Removed to show gridlines
-                    # chart1.y_axis.majorGridlines = None # Removed to show gridlines
+                    # Place Text BELOW Chart 1 (Row 23)
+                    add_explanation(23, 2, "【スピード vs スタミナ】", 
+                                    "・縦軸：走破タイムの優秀さ（上が速い）\n"
+                                    "・横軸：末脚の鋭さ（右が速い）\n"
+                                    "★右上に位置する馬ほど、総合的な能力が高いと言えます。")
 
                     # 2. Track Suitability (X=Track Bias, Y=Time Index)
-                    chart2 = ScatterChart()
-                    chart2.title = "馬場適性"
-                    chart2.style = 2
-                    chart2.x_axis.title = "馬場差"
-                    chart2.y_axis.title = "タイム指数"
-                    chart2.height = 20
-                    chart2.width = 30
-                    chart2.legend.position = 'r'
+                    chart2 = setup_chart("馬場適性", "馬場差", "タイム指数")
                     
-                    # chart2.x_axis.majorGridlines = None
-                    # chart2.y_axis.majorGridlines = None
+                    # Place Text BELOW Chart 2 (Row 51)
+                    add_explanation(51, 2, "【馬場適性】", 
+                                    "・縦軸：走破タイムの優秀さ\n"
+                                    "・横軸：馬場の重さ（右が重い/タフ、左が軽い/高速）\n"
+                                    "★今回の馬場状態（予想）に近い位置で好走している馬を探します。")
 
-                    current_row = 2 # Start after header in Data Sheet
+                    # 3. Pace Suitability (X=Pace, Y=Time Index)
+                    chart3 = setup_chart("ペース適性", "前半3F (秒)", "タイム指数")
                     
-                    for h_data in horses_data:
-                        hist_len = len(h_data['history'])
-                        if hist_len > 0:
+                    # Place Text BELOW Chart 3 (Row 23, Col M=13)
+                    add_explanation(23, 13, "【ペース適性】", 
+                                    "・縦軸：走破タイムの優秀さ\n"
+                                    "・横軸：前半3Fタイム（左がハイペース、右がスロー）\n"
+                                    "★今回の展開予想（H/M/S）に近いペースで好走している馬が狙い目です。")
+
+                    # 4. Running Style (X=4C Pos, Y=L3F Index)
+                    chart4 = setup_chart("脚質・末脚", "4コーナー通過順", "上り指数")
+                    
+                    # Place Text BELOW Chart 4 (Row 51, Col M=13)
+                    add_explanation(51, 13, "【脚質・末脚】", 
+                                    "・縦軸：末脚の鋭さ（上が速い）\n"
+                                    "・横軸：4コーナー位置取り（左が前、右が後）\n"
+                                    "★左上：逃げて速い上がり（最強）\n"
+                                    "★右上：追い込み一気\n"
+                                    "★左下：粘り込み")
+
+                    # 5. Pace Aptitude (X=RPCI, Y=Time Index)
+                    chart5 = setup_chart("展開適性 (RPCI vs タイム)", "RPCI", "タイム指数")
+                    
+                    # Place Text BELOW Chart 5 (Row 79)
+                    add_explanation(79, 2, "【展開適性 (RPCI)】", 
+                                    "・縦軸：走破タイムの優秀さ\n"
+                                    "・横軸：ペース配分（右がスロー/瞬発戦、左がハイ/消耗戦）\n"
+                                    "★50が平均。50以上はハイペース、50以下はスローペース。\n"
+                                    "★今回の展開予想（H/M/S）に合った位置で好走している馬を探します。")
+
+                    # 6. Pace vs L3F (X=RPCI, Y=L3F Index)
+                    chart6 = setup_chart("展開別末脚 (RPCI vs 上り)", "RPCI", "上り指数")
+                    
+                    # Place Text BELOW Chart 6 (Row 79, Col M=13)
+                    add_explanation(79, 13, "【展開別末脚】", 
+                                    "・縦軸：末脚の鋭さ\n"
+                                    "・横軸：ペース配分（右がスロー、左がハイ）\n"
+                                    "★スローなら切れるがハイペースだと不発、などの特性を見抜きます。")
+
+                    # Create Series for each horse using ChartData sheet
+                    for h_idx, h_data in enumerate(horses_data):
+                        if h_idx in horse_row_ranges:
+                            start_row, end_row = horse_row_ranges[h_idx]
+                            
                             horse_info = h_data['horse_info']
                             horse_name = horse_info.get('馬名', 'Unknown')
                             waku = horse_info.get('枠番', '')
@@ -983,8 +1137,6 @@ class NetkeibaAnalyzer:
                             
                             # Legend Name: (Umaban) HorseName
                             legend_name = f"({umaban}) {horse_name}" if umaban else horse_name
-                            
-                            end_row = current_row + hist_len - 1
                             
                             # Determine Color
                             marker_color = "808080" # Default Gray
@@ -995,42 +1147,442 @@ class NetkeibaAnalyzer:
                             except:
                                 pass
 
-                            # Series for Chart 1
-                            values_time = Reference(worksheet, min_col=idx_time, min_row=current_row, max_row=end_row)
-                            values_l3f = Reference(worksheet, min_col=idx_l3f, min_row=current_row, max_row=end_row)
-                            series1 = Series(values_time, values_l3f, title=legend_name)
-                            series1.marker.symbol = "circle"
-                            series1.marker.size = 15
-                            series1.graphicalProperties.line.noFill = True 
-                            series1.marker.graphicalProperties.solidFill = marker_color
-                            series1.marker.graphicalProperties.line.solidFill = "000000" # Black outline
-                            
-                            # No Data Labels as requested
-                            # series1.dLbls = DataLabelList() ...
-                            
-                            chart1.series.append(series1)
-                            
-                            # Series for Chart 2
-                            values_bias = Reference(worksheet, min_col=idx_bias, min_row=current_row, max_row=end_row)
-                            series2 = Series(values_time, values_bias, title=legend_name)
-                            series2.marker.symbol = "circle"
-                            series2.marker.size = 15
-                            series2.graphicalProperties.line.noFill = True
-                            series2.marker.graphicalProperties.solidFill = marker_color
-                            series2.marker.graphicalProperties.line.solidFill = "000000"
-                            
-                            # No Data Labels
-                            
-                            chart2.series.append(series2)
-                            
-                            current_row += hist_len
+                            # Common Series Props
+                            def create_series(x_col, y_col, title, color):
+                                # Reference ChartData sheet
+                                vals_x = Reference(chart_sheet, min_col=x_col, min_row=start_row, max_row=end_row)
+                                vals_y = Reference(chart_sheet, min_col=y_col, min_row=start_row, max_row=end_row)
+                                s = Series(vals_y, vals_x, title=title)
+                                s.marker.symbol = "circle"
+                                s.marker.size = 10
+                                s.graphicalProperties.line.noFill = True 
+                                s.marker.graphicalProperties.solidFill = color
+                                s.marker.graphicalProperties.line.solidFill = "000000"
+                                return s
 
-                    # Position Charts on Analysis Sheet
-                    if len(chart1.series) > 0:
-                        analysis_sheet.add_chart(chart1, "B2")
+                            # Chart 1: L3F vs Time
+                            chart1.series.append(create_series(idx_c_l3f, idx_c_time, legend_name, marker_color))
+                            
+                            # Chart 2: Bias vs Time
+                            chart2.series.append(create_series(idx_c_bias, idx_c_time, legend_name, marker_color))
+                            
+                            # Chart 3: Pace vs Time
+                            if idx_c_pace:
+                                chart3.series.append(create_series(idx_c_pace, idx_c_time, legend_name, marker_color))
+                                
+                            # Chart 4: 4C vs L3F
+                            if idx_c_4c:
+                                chart4.series.append(create_series(idx_c_4c, idx_c_l3f, legend_name, marker_color))
+
+                            # Chart 5: RPCI vs Time
+                            if idx_c_rpci:
+                                chart5.series.append(create_series(idx_c_rpci, idx_c_time, legend_name, marker_color))
+                                
+                            # Chart 6: RPCI vs L3F
+                            if idx_c_rpci:
+                                chart6.series.append(create_series(idx_c_rpci, idx_c_l3f, legend_name, marker_color))
                     
-                    if len(chart2.series) > 0:
-                        analysis_sheet.add_chart(chart2, "B45")
+                    # Position Charts on Analysis Sheet
+                    if len(chart1.series) > 0: analysis_sheet.add_chart(chart1, "B2")
+                    if len(chart3.series) > 0: analysis_sheet.add_chart(chart3, "M2")
+                    if len(chart2.series) > 0: analysis_sheet.add_chart(chart2, "B30")
+                    if len(chart4.series) > 0: analysis_sheet.add_chart(chart4, "M30")
+                    if len(chart5.series) > 0: analysis_sheet.add_chart(chart5, "B58")
+                    if len(chart6.series) > 0: analysis_sheet.add_chart(chart6, "M58")
+
+                    # --- Chart 7: Time Index Distribution (Box Plot Proxy using Stacked Bar + Error Bars) ---
+                    
+                    # Write Data for Chart (Hidden area, e.g., Col Z)
+                    stock_data_col = 26 # Z
+                    stock_data_row = 2
+                    
+                    # Headers
+                    analysis_sheet.cell(row=stock_data_row, column=stock_data_col, value="Horse")
+                    analysis_sheet.cell(row=stock_data_row, column=stock_data_col+1, value="Base(Q1)")
+                    analysis_sheet.cell(row=stock_data_row, column=stock_data_col+2, value="Box(IQR)")
+                    analysis_sheet.cell(row=stock_data_row, column=stock_data_col+3, value="ErrPlus(Max-Q3)")
+                    analysis_sheet.cell(row=stock_data_row, column=stock_data_col+4, value="ErrMinus(Q1-Min)")
+                    
+                    stock_data_row += 1
+                    start_data_row = stock_data_row
+                    
+                    # Iterate through ALL horses to ensure X-axis is complete
+                    for h_data in horses_data:
+                        horse_info = h_data['horse_info']
+                        horse_name = horse_info.get('馬名', 'Unknown')
+                        umaban = horse_info.get('馬番', '')
+                        label = f"{umaban}" if umaban else horse_name[:3]
+                        
+                        time_indices = []
+                        for h in h_data['history']:
+                            if h.get('タイム指数'):
+                                try:
+                                    time_indices.append(float(h['タイム指数']))
+                                except:
+                                    pass
+                        
+                        q1 = 0
+                        iqr = 0
+                        err_plus = 0
+                        err_minus = 0
+                        
+                        if len(time_indices) >= 3:
+                            import statistics
+                            try:
+                                quantiles = statistics.quantiles(time_indices, n=4)
+                                q1 = quantiles[0]
+                                q3 = quantiles[2]
+                                min_val = min(time_indices)
+                                max_val = max(time_indices)
+                                
+                                iqr = q3 - q1
+                                err_plus = max_val - q3
+                                err_minus = q1 - min_val
+                            except:
+                                pass
+                        
+                        # Write to sheet (Always write, even if 0)
+                        analysis_sheet.cell(row=stock_data_row, column=stock_data_col, value=label)
+                        analysis_sheet.cell(row=stock_data_row, column=stock_data_col+1, value=q1)      # Base
+                        analysis_sheet.cell(row=stock_data_row, column=stock_data_col+2, value=iqr)     # Box
+                        analysis_sheet.cell(row=stock_data_row, column=stock_data_col+3, value=err_plus) # Top Whisker
+                        analysis_sheet.cell(row=stock_data_row, column=stock_data_col+4, value=err_minus)# Bottom Whisker
+                        
+                        stock_data_row += 1
+
+                    end_data_row = stock_data_row - 1
+                    
+                    from openpyxl.chart import BarChart
+                    from openpyxl.chart.error_bar import ErrorBars
+                    from openpyxl.chart.data_source import NumDataSource, NumRef
+                    from openpyxl.utils import get_column_letter
+                    
+                    # Create Stacked Bar Chart
+                    chart7 = BarChart()
+                    chart7.type = "col"
+                    chart7.grouping = "stacked"
+                    chart7.title = "タイム指数 分布 (箱ひげ図)"
+                    chart7.height = 10
+                    chart7.width = 30
+                    
+                    # Categories (X)
+                    cats = Reference(analysis_sheet, min_col=stock_data_col, min_row=start_data_row, max_row=end_data_row)
+                    chart7.set_categories(cats)
+                    
+                    # Series 1: Base (Q1)
+                    base_data = Reference(analysis_sheet, min_col=stock_data_col+1, min_row=start_data_row, max_row=end_data_row)
+                    s1 = Series(base_data, title="Base")
+                    s1.graphicalProperties.noFill = True # Invisible
+                    s1.graphicalProperties.line.noFill = True
+                    
+                    # Add Minus Error Bar to Base (Bottom Whisker)
+                    minus_col_letter = get_column_letter(stock_data_col+4) # AD
+                    minus_ref = f"'Analysis_{race_id}'!${minus_col_letter}${start_data_row}:${minus_col_letter}${end_data_row}"
+                    
+                    # Create Zero Column for Plus direction (to avoid unwanted whiskers)
+                    zero_col = stock_data_col + 5
+                    analysis_sheet.cell(row=start_data_row-1, column=zero_col, value="Zero")
+                    for r in range(start_data_row, end_data_row+1):
+                        analysis_sheet.cell(row=r, column=zero_col, value=0)
+                    zero_col_letter = get_column_letter(zero_col)
+                    zero_ref = f"'Analysis_{race_id}'!${zero_col_letter}${start_data_row}:${zero_col_letter}${end_data_row}"
+
+                    s1.errBars = ErrorBars(errDir='y', errValType='cust', 
+                                           minus=NumDataSource(numRef=NumRef(f=minus_ref)),
+                                           plus=NumDataSource(numRef=NumRef(f=zero_ref)))
+                    # Explicitly set line color to Black
+                    s1.errBars.spPr = GraphicalProperties(ln=LineProperties(solidFill="000000", w=12700)) # 1pt width
+                    
+                    chart7.series.append(s1)
+                    
+                    # Series 2: Box (IQR)
+                    box_data = Reference(analysis_sheet, min_col=stock_data_col+2, min_row=start_data_row, max_row=end_data_row)
+                    s2 = Series(box_data, title="Box")
+                    s2.graphicalProperties.solidFill = "CCCCCC" # Gray Box
+                    s2.graphicalProperties.line.solidFill = "000000" # Black Border
+                    
+                    # S2 Error Bars (Plus Only)
+                    plus_col_letter = get_column_letter(stock_data_col+3) # AC
+                    plus_ref = f"'Analysis_{race_id}'!${plus_col_letter}${start_data_row}:${plus_col_letter}${end_data_row}"
+                    
+                    s2.errBars = ErrorBars(errDir='y', errValType='cust',
+                                           plus=NumDataSource(numRef=NumRef(f=plus_ref)),
+                                           minus=NumDataSource(numRef=NumRef(f=zero_ref)))
+                    # Explicitly set line color to Black
+                    s2.errBars.spPr = GraphicalProperties(ln=LineProperties(solidFill="000000", w=12700))
+                    
+                    chart7.series.append(s2)
+                    
+                    # Axis Titles
+                    chart7.y_axis.title = "タイム指数"
+                    chart7.x_axis.title = "馬番"
+                    
+                    # Add to sheet
+                    analysis_sheet.add_chart(chart7, "B86")
+                    
+                    add_explanation(107, 2, "【タイム指数分布】", 
+                                    "・各馬のタイム指数のバラつきを表示（箱ひげ図）。\n"
+                                    "・箱（グレー）: 指数の中心的な範囲（Q1〜Q3）。\n"
+                                    "・ヒゲ（上下の線）: 最大値と最小値。\n"
+                                    "★箱が高い位置にあり、かつ小さい（安定している）馬が信頼できます。")
+
+                    # --- 3. Time Matchup Table (Grouped by Condition & Period) ---
+                    # Goal: Compare horses in similar conditions (Same Venue, Dist, Surf, Date +/- 3 days)
+                    
+                    # 1. Collect all history entries
+                    all_entries = []
+                    for h_data in horses_data:
+                        horse_info = h_data['horse_info']
+                        h_name = horse_info.get('馬名', 'Unknown')
+                        umaban = horse_info.get('馬番', '')
+                        display_name = f"({umaban}) {h_name}" if umaban else h_name
+                        waku = horse_info.get('枠番', '')
+                        
+                        for hist in h_data['history']:
+                            # Parse Date
+                            try:
+                                d_str = hist.get('日付', '')
+                                # Format: 2024/10/20
+                                date_obj = datetime.strptime(d_str, '%Y/%m/%d')
+                            except:
+                                continue
+                                
+                            entry = {
+                                'horse_name': display_name,
+                                'waku': waku,
+                                'date': date_obj,
+                                'date_str': d_str,
+                                'place': hist.get('場所', ''),
+                                'course': hist.get('ｺｰｽ', ''), # e.g. 芝
+                                'dist': hist.get('距離', ''),   # e.g. 2000
+                                'cond': hist.get('馬場', ''),
+                                'race_name': hist.get('レース名', ''),
+                                'rank': hist.get('着順', 99),
+                                'time': hist.get('ﾀｲﾑ', ''),
+                                'diff': hist.get('着差', ''),
+                                '3f': hist.get('上り', ''),
+                                'passing': hist.get('通過', '')
+                            }
+                            try:
+                                entry['rank'] = int(entry['rank'])
+                            except:
+                                entry['rank'] = 99
+                                
+                            # Parse Time to Seconds
+                            try:
+                                t_str = entry['time']
+                                if t_str:
+                                    parts = t_str.split(':')
+                                    if len(parts) == 2:
+                                        entry['time_sec'] = float(parts[0]) * 60 + float(parts[1])
+                                    else:
+                                        entry['time_sec'] = float(t_str)
+                                else:
+                                    entry['time_sec'] = None
+                            except:
+                                entry['time_sec'] = None
+                                
+                            all_entries.append(entry)
+                    
+                    # 2. Group by (Place, Dist, Course)
+                    grouped_candidates = {}
+                    for e in all_entries:
+                        key = (e['place'], e['dist'], e['course'])
+                        if key not in grouped_candidates:
+                            grouped_candidates[key] = []
+                        grouped_candidates[key].append(e)
+                        
+                    # 3. Cluster by Date (within 3 days) -> Assign GroupNo
+                    valid_groups = []
+                    
+                    for key, entries in grouped_candidates.items():
+                        # Sort by date
+                        entries.sort(key=lambda x: x['date'])
+                        
+                        current_cluster = []
+                        
+                        for e in entries:
+                            if not current_cluster:
+                                current_cluster.append(e)
+                            else:
+                                # Check date diff with first element of cluster
+                                # (Assuming cluster spans small range)
+                                diff = (e['date'] - current_cluster[0]['date']).days
+                                if diff <= 3:
+                                    current_cluster.append(e)
+                                else:
+                                    # Finalize current cluster
+                                    # Check if >= 2 unique horses
+                                    unique_horses = set(x['horse_name'] for x in current_cluster)
+                                    if len(unique_horses) >= 2:
+                                        valid_groups.append({
+                                            'key': key,
+                                            'entries': current_cluster
+                                        })
+                                    # Start new cluster
+                                    current_cluster = [e]
+                        
+                        # Check last cluster
+                        if current_cluster:
+                            unique_horses = set(x['horse_name'] for x in current_cluster)
+                            if len(unique_horses) >= 2:
+                                valid_groups.append({
+                                    'key': key,
+                                    'entries': current_cluster
+                                })
+
+                    # Sort groups by Date (Newest first)
+                    valid_groups.sort(key=lambda x: x['entries'][0]['date'], reverse=True)
+
+                    if valid_groups:
+                        matchup_sheet_name = f"Matchups_{race_id[-2:]}"
+                        matchup_sheet = workbook.create_sheet(title=matchup_sheet_name)
+                        current_row = 1
+                        
+                        # --- A. Win/Loss Matrix ---
+                        # Identify all horses involved in valid groups
+                        involved_horses = set()
+                        for g in valid_groups:
+                            for e in g['entries']:
+                                involved_horses.add(e['horse_name'])
+                        
+                        # Sort by Umaban (extract number from "(N) Name")
+                        def get_umaban_sort(name):
+                            try:
+                                return int(name.split(')')[0].replace('(', ''))
+                            except:
+                                return 999
+                        
+                        sorted_horses = sorted(list(involved_horses), key=get_umaban_sort)
+                        
+                        # Calculate Wins/Losses
+                        # matrix[A][B] = {'win': 0, 'loss': 0}
+                        matrix_scores = {h: {h2: {'win': 0, 'loss': 0} for h2 in sorted_horses} for h in sorted_horses}
+                        
+                        for g in valid_groups:
+                            ents = g['entries']
+                            # Pairwise comparison in this group
+                            for i in range(len(ents)):
+                                for j in range(i + 1, len(ents)):
+                                    h1 = ents[i]
+                                    h2 = ents[j]
+                                    
+                                    if h1['horse_name'] == h2['horse_name']: continue
+                                    
+                                    # Compare Time (Faster is better)
+                                    t1 = h1.get('time_sec')
+                                    t2 = h2.get('time_sec')
+                                    
+                                    if t1 is not None and t2 is not None:
+                                        if t1 < t2:
+                                            # h1 wins (faster)
+                                            matrix_scores[h1['horse_name']][h2['horse_name']]['win'] += 1
+                                            matrix_scores[h2['horse_name']][h1['horse_name']]['loss'] += 1
+                                        elif t1 > t2:
+                                            # h2 wins (faster)
+                                            matrix_scores[h1['horse_name']][h2['horse_name']]['loss'] += 1
+                                            matrix_scores[h2['horse_name']][h1['horse_name']]['win'] += 1
+                                    else:
+                                        # Fallback to Rank if Time is missing (shouldn't happen often)
+                                        if h1['rank'] < h2['rank']:
+                                            matrix_scores[h1['horse_name']][h2['horse_name']]['win'] += 1
+                                            matrix_scores[h2['horse_name']][h1['horse_name']]['loss'] += 1
+                                        elif h1['rank'] > h2['rank']:
+                                            matrix_scores[h1['horse_name']][h2['horse_name']]['loss'] += 1
+                                            matrix_scores[h2['horse_name']][h1['horse_name']]['win'] += 1
+                        
+                        # Draw Matrix Header
+                        matchup_sheet.cell(row=current_row, column=1, value="対戦マトリクス (表\\裏)")
+                        for col_idx, h_name in enumerate(sorted_horses, 2):
+                            # Vertical Text for Header
+                            c = matchup_sheet.cell(row=current_row, column=col_idx, value=h_name)
+                            c.alignment = Alignment(textRotation=90, horizontal='center', vertical='center')
+                            c.font = Font(bold=True)
+                        
+                        current_row += 1
+                        
+                        # Draw Matrix Rows
+                        for h_row in sorted_horses:
+                            # Row Header
+                            c = matchup_sheet.cell(row=current_row, column=1, value=h_row)
+                            c.font = Font(bold=True)
+                            
+                            for col_idx, h_col in enumerate(sorted_horses, 2):
+                                cell = matchup_sheet.cell(row=current_row, column=col_idx)
+                                cell.alignment = Alignment(horizontal='center')
+                                
+                                if h_row == h_col:
+                                    cell.value = "-"
+                                    cell.fill = PatternFill(start_color="EEEEEE", end_color="EEEEEE", fill_type="solid")
+                                else:
+                                    record = matrix_scores[h_row][h_col]
+                                    wins = record['win']
+                                    losses = record['loss']
+                                    
+                                    if wins == 0 and losses == 0:
+                                        cell.value = ""
+                                    else:
+                                        cell.value = f"{wins}勝{losses}敗"
+                                        if wins > losses:
+                                            cell.font = Font(color="FF0000", bold=True) # Red for Winning Record
+                                        elif losses > wins:
+                                            cell.font = Font(color="0000FF") # Blue for Losing Record
+                                        else:
+                                            cell.font = Font(color="000000") # Black for Even
+
+                            current_row += 1
+                        
+                        current_row += 2 # Spacer
+                        
+                        # --- B. Detailed List by Group ---
+                        header_fill = PatternFill(start_color="DDDDDD", end_color="DDDDDD", fill_type="solid")
+                        bold_font = Font(bold=True)
+                        
+                        for g_idx, group in enumerate(valid_groups, 1):
+                            entries = group['entries']
+                            first = entries[0]
+                            # Header: [Date] [Place] [Course] [Dist] [Cond] (Group N)
+                            # Note: Date might be a range if clustered, but usually same day or close.
+                            d_str = first['date_str']
+                            header_text = f"Group {g_idx}: {d_str} {first['place']} {first['course']}{first['dist']} ({first['cond']})"
+                            
+                            cell = matchup_sheet.cell(row=current_row, column=1, value=header_text)
+                            cell.font = bold_font
+                            cell.fill = header_fill
+                            matchup_sheet.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=7)
+                            current_row += 1
+                            
+                            # Cols
+                            cols = ["着順", "馬名", "レース名", "タイム", "着差", "上り", "通過"]
+                            for c_idx, col_name in enumerate(cols, 1):
+                                cell = matchup_sheet.cell(row=current_row, column=c_idx, value=col_name)
+                                cell.font = bold_font
+                                cell.alignment = Alignment(horizontal='center')
+                            current_row += 1
+                            
+                            # Sort by Rank
+                            entries.sort(key=lambda x: x['rank'])
+                            
+                            for e in entries:
+                                matchup_sheet.cell(row=current_row, column=1, value=e['rank'])
+                                
+                                name_cell = matchup_sheet.cell(row=current_row, column=2, value=e['horse_name'])
+                                try:
+                                    w_int = int(e['waku'])
+                                    if w_int in WAKU_COLORS:
+                                        s = WAKU_COLORS[w_int]
+                                        name_cell.font = Font(color=s['bg'], bold=True)
+                                except:
+                                    pass
+                                
+                                matchup_sheet.cell(row=current_row, column=3, value=e['race_name'])
+                                matchup_sheet.cell(row=current_row, column=4, value=e['time'])
+                                matchup_sheet.cell(row=current_row, column=5, value=e['diff'])
+                                matchup_sheet.cell(row=current_row, column=6, value=e['3f'])
+                                matchup_sheet.cell(row=current_row, column=7, value=e['passing'])
+                                current_row += 1
+                            
+                            current_row += 1
         
         logger.info(f"Excel report saved to {output_file}")
 
