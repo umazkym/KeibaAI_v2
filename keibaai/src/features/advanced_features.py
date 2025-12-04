@@ -163,6 +163,7 @@ class AdvancedFeatureEngine:
         historical_df: pd.DataFrame
     ) -> pd.DataFrame:
         """騎手・調教師の相性特徴量"""
+        self.logger.info(f"騎手×調教師相性特徴量を生成中... (データ数: {len(historical_df):,}行)")
         
         # IDカラムを文字列型に統一
         for col in ['jockey_id', 'trainer_id']:
@@ -180,7 +181,7 @@ class AdvancedFeatureEngine:
         # is_winがない場合は作成
         if 'is_win' not in historical_df.columns and 'finish_position' in historical_df.columns:
             historical_df = historical_df.copy()
-            historical_df['is_win'] = (historical_df['finish_position'] == 1).astype(int)
+            historical_df['is_win'] = (historical_df['finish_position'] == 1).fillna(False).astype(int)
 
         if 'popularity' in historical_df.columns:
             agg_dict['popularity'] = 'mean'
@@ -201,228 +202,171 @@ class AdvancedFeatureEngine:
             'finish_position_count': 'combo_races',
             'is_win_mean': 'combo_win_rate'
         }
-        if 'popularity' in historical_df.columns:
+        if 'popularity_mean' in combo_stats.columns:
             rename_map['popularity_mean'] = 'combo_avg_popularity'
-        if 'morning_odds' in historical_df.columns:
+        if 'morning_odds_mean' in combo_stats.columns:
             rename_map['morning_odds_mean'] = 'combo_avg_odds'
             
         combo_stats = combo_stats.rename(columns=rename_map)
-        
-        # 期待値を上回る度合い
+
+        # 期待値超え率 (Overperform)
         if 'combo_avg_popularity' in combo_stats.columns:
             combo_stats['combo_overperform'] = \
                 combo_stats['combo_avg_popularity'] - combo_stats['combo_avg_finish']
-        
-        # マージ前に型を確認
-        combo_stats['jockey_id'] = combo_stats['jockey_id'].astype(str)
-        combo_stats['trainer_id'] = combo_stats['trainer_id'].astype(str)
 
+        # マージ
         df = df.merge(combo_stats, on=['jockey_id', 'trainer_id'], how='left')
         
+        self.logger.info("騎手×調教師相性特徴量の生成完了")
         return df
 
     def generate_bloodline_features(
         self,
         df: pd.DataFrame,
         pedigree_df: pd.DataFrame,
-        performance_df: pd.DataFrame
+        historical_df: pd.DataFrame
     ) -> pd.DataFrame:
-        """血統特徴量の生成"""
-        
+        """基本血統特徴量 (Sire/BMS成績)"""
+        self.logger.info(f"基本血統特徴量(Sire/BMS)を生成中... (血統データ数: {len(pedigree_df):,}行)")
+
+        # 1. 血統データの準備
+        # 父 (generation=1)
+        sire_df = pedigree_df[pedigree_df['generation'] == 1][['horse_id', 'ancestor_id']].copy()
+        sire_df.columns = ['horse_id', 'sire_id']
+        sire_df = sire_df.drop_duplicates(subset=['horse_id'])
+
+        # 母父 (generation=2, 3番目)
+        # groupby().nth(2) を使用して正確に母父を抽出
+        damsire_df = pedigree_df[pedigree_df['generation'] == 2].copy()
+        # horse_idごとにグループ化し、各グループの3番目の要素(index 2)を取得
+        # ancestor_idの順序が保証されている前提 (父父, 父母, 母父, 母母)
+        damsire_df = damsire_df.groupby('horse_id', as_index=False).nth(2)[['horse_id', 'ancestor_id']]
+        damsire_df.columns = ['horse_id', 'damsire_id']
+
         # ID型変換
-        if 'horse_id' in df.columns:
-            df['horse_id'] = df['horse_id'].astype(str)
-        
-        # pedigree_df, performance_dfのIDも文字列化
-        pedigree_df = pedigree_df.copy()
-        performance_df = performance_df.copy()
-        
-        for col in ['horse_id', 'ancestor_id']:
-            if col in pedigree_df.columns:
-                pedigree_df[col] = pedigree_df[col].astype(str)
-        
-        if 'horse_id' in performance_df.columns:
-            performance_df['horse_id'] = performance_df['horse_id'].astype(str)
+        sire_df['horse_id'] = sire_df['horse_id'].astype(str)
+        sire_df['sire_id'] = sire_df['sire_id'].astype(str)
+        damsire_df['horse_id'] = damsire_df['horse_id'].astype(str)
+        damsire_df['damsire_id'] = damsire_df['damsire_id'].astype(str)
 
-        # 父系の成績集計
-        perf_with_sire = performance_df.merge(
-            pedigree_df[pedigree_df['generation'] == 1][['horse_id', 'ancestor_id']],
-            on='horse_id'
-        )
-
-        agg_dict = {
-            'finish_position': ['mean', 'std'],
-            'distance_m': 'mean'
-        }
-        if 'morning_odds' in perf_with_sire.columns:
-            agg_dict['morning_odds'] = 'mean'
-
-        sire_stats = perf_with_sire.groupby('ancestor_id', observed=True).agg(agg_dict).reset_index()
-
-        if 'morning_odds' in perf_with_sire.columns:
-            sire_stats.columns = ['sire_id', 'sire_avg_finish', 'sire_std_finish',
-                                 'sire_avg_distance', 'sire_avg_odds']
-        else:
-            sire_stats.columns = ['sire_id', 'sire_avg_finish', 'sire_std_finish',
-                                 'sire_avg_distance']
+        # dfにマージ
+        if 'sire_id' not in df.columns:
+            df = df.merge(sire_df, on='horse_id', how='left')
+        if 'damsire_id' not in df.columns:
+            df = df.merge(damsire_df, on='horse_id', how='left')
         
-        df = df.merge(sire_stats, left_on='sire_id', right_on='sire_id', how='left')
+        # 履歴データにもマージ（集計用）
+        if 'sire_id' not in historical_df.columns:
+            historical_df = historical_df.merge(sire_df, on='horse_id', how='left')
+        if 'damsire_id' not in historical_df.columns:
+            historical_df = historical_df.merge(damsire_df, on='horse_id', how='left')
 
-        # 母父の成績集計 (BMS)
-        damsires = pedigree_df[(pedigree_df['generation'] == 2) & (pedigree_df['ancestor_name'].str.contains('母', na=False))][['horse_id', 'ancestor_id']].rename(columns={'ancestor_id': 'damsire_id'})
+        # is_winがない場合は作成
+        if 'is_win' not in historical_df.columns and 'finish_position' in historical_df.columns:
+            historical_df = historical_df.copy()
+            historical_df['is_win'] = (historical_df['finish_position'] == 1).fillna(False).astype(int)
+
+        # 2. 種牡馬成績の集計
+        sire_stats = historical_df.groupby('sire_id', observed=True).agg({
+            'finish_position': ['mean', 'count'],
+            'is_win': 'mean'
+        }).reset_index()
+        sire_stats.columns = ['sire_id', 'sire_avg_finish', 'sire_races', 'sire_win_rate']
         
-        if not damsires.empty:
-            perf_with_damsire = performance_df.merge(damsires, on='horse_id')
-            
-            agg_dict_bms = {
-                'finish_position': ['mean', 'std'],
-                'distance_m': 'mean'
-            }
-            if 'morning_odds' in perf_with_damsire.columns:
-                agg_dict_bms['morning_odds'] = 'mean'
-                
-            bms_stats = perf_with_damsire.groupby('damsire_id', observed=True).agg(agg_dict_bms).reset_index()
-            
-            if 'morning_odds' in perf_with_damsire.columns:
-                bms_stats.columns = ['damsire_id', 'bms_avg_finish', 'bms_std_finish', 'bms_avg_distance', 'bms_avg_odds']
-            else:
-                bms_stats.columns = ['damsire_id', 'bms_avg_finish', 'bms_std_finish', 'bms_avg_distance']
-            
-            # メインDFに母父IDがない場合はマージしてから
-            if 'damsire_id' not in df.columns:
-                df = df.merge(damsires, on='horse_id', how='left')
-            
-            df = df.merge(bms_stats, on='damsire_id', how='left')
+        # 信頼度フィルタ
+        sire_stats.loc[sire_stats['sire_races'] < 10, ['sire_avg_finish', 'sire_win_rate']] = np.nan
+
+        # 3. BMS (母父) 成績の集計
+        damsire_stats = historical_df.groupby('damsire_id', observed=True).agg({
+            'finish_position': ['mean', 'count'],
+            'is_win': 'mean'
+        }).reset_index()
+        damsire_stats.columns = ['damsire_id', 'bms_avg_finish', 'bms_races', 'bms_win_rate']
         
+        damsire_stats.loc[damsire_stats['bms_races'] < 10, ['bms_avg_finish', 'bms_win_rate']] = np.nan
+
+        # マージ
+        df = df.merge(sire_stats[['sire_id', 'sire_avg_finish', 'sire_win_rate']], on='sire_id', how='left')
+        df = df.merge(damsire_stats[['damsire_id', 'bms_avg_finish', 'bms_win_rate']], on='damsire_id', how='left')
+
+        self.logger.info("基本血統特徴量の生成完了")
         return df
 
     def generate_deep_pedigree_features(
         self,
         df: pd.DataFrame,
         pedigree_df: pd.DataFrame,
-        performance_df: pd.DataFrame
+        historical_df: pd.DataFrame
     ) -> pd.DataFrame:
-        """詳細な血統特徴量（ニックス、コース適性）"""
+        """詳細血統特徴量 (ニックス・コース適性)"""
+        self.logger.info("詳細血統特徴量(Deep)を生成中...")
 
-        try:
+        # ID確保 (generate_bloodline_featuresで付与されているはずだが念のため)
+        # historical_dfにも必要なので、どちらかに無ければ再取得・マージを行う
+        if 'sire_id' not in df.columns or 'damsire_id' not in df.columns or \
+           'sire_id' not in historical_df.columns or 'damsire_id' not in historical_df.columns:
+            # 簡易的に再取得
+            sire_df = pedigree_df[pedigree_df['generation'] == 1][['horse_id', 'ancestor_id']].drop_duplicates(subset=['horse_id'])
+            sire_df.columns = ['horse_id', 'sire_id']
+            
+            damsire_df = pedigree_df[pedigree_df['generation'] == 2].groupby('horse_id', as_index=False).nth(2)[['horse_id', 'ancestor_id']]
+            damsire_df.columns = ['horse_id', 'damsire_id']
+            
             # ID型変換
-            if 'horse_id' in df.columns:
-                df['horse_id'] = df['horse_id'].astype(str)
+            sire_df['horse_id'] = sire_df['horse_id'].astype(str)
+            sire_df['sire_id'] = sire_df['sire_id'].astype(str)
+            damsire_df['horse_id'] = damsire_df['horse_id'].astype(str)
+            damsire_df['damsire_id'] = damsire_df['damsire_id'].astype(str)
             
-            pedigree_df = pedigree_df.copy()
-            performance_df = performance_df.copy()
-            
-            for col in ['horse_id', 'ancestor_id']:
-                if col in pedigree_df.columns:
-                    pedigree_df[col] = pedigree_df[col].astype(str)
-            
-            if 'horse_id' in performance_df.columns:
-                performance_df['horse_id'] = performance_df['horse_id'].astype(str)
+            if 'sire_id' not in df.columns:
+                df = df.merge(sire_df, on='horse_id', how='left')
+            if 'damsire_id' not in df.columns:
+                df = df.merge(damsire_df, on='horse_id', how='left')
+                
+            # historical_dfにも
+            if 'sire_id' not in historical_df.columns:
+                historical_df = historical_df.merge(sire_df, on='horse_id', how='left')
+            if 'damsire_id' not in historical_df.columns:
+                historical_df = historical_df.merge(damsire_df, on='horse_id', how='left')
 
-            # 1. ニックス（父×母父）
-            sires = pedigree_df[pedigree_df['generation'] == 1][['horse_id', 'ancestor_id']].rename(columns={'ancestor_id': 'sire_id'})
-            damsires = pedigree_df[(pedigree_df['generation'] == 2) & (pedigree_df['ancestor_name'].str.contains('母', na=False))][['horse_id', 'ancestor_id']].rename(columns={'ancestor_id': 'damsire_id'})
+        # is_winがない場合は作成
+        if 'is_win' not in historical_df.columns and 'finish_position' in historical_df.columns:
+            historical_df = historical_df.copy()
+            historical_df['is_win'] = (historical_df['finish_position'] == 1).fillna(False).astype(int)
 
-            if sires.empty or damsires.empty:
-                self.logger.warning("血統データ（父または母父）が見つかりません。血統特徴量をスキップします。")
-                return df
+        # 1. ニックス (Sire x Damsire)
+        nicks_stats = historical_df.groupby(['sire_id', 'damsire_id'], observed=True).agg({
+            'finish_position': ['mean', 'count'],
+            'is_win': 'mean'
+        }).reset_index()
+        nicks_stats.columns = ['sire_id', 'damsire_id', 'nicks_avg_finish', 'nicks_races', 'nicks_win_rate']
+        
+        # 信頼度フィルタ
+        nicks_stats.loc[nicks_stats['nicks_races'] < 5, ['nicks_avg_finish', 'nicks_win_rate']] = np.nan
+        
+        df = df.merge(nicks_stats[['sire_id', 'damsire_id', 'nicks_avg_finish', 'nicks_win_rate']], on=['sire_id', 'damsire_id'], how='left')
 
-            horse_pedigree = sires.merge(damsires, on='horse_id', how='inner')
+        # 2. 種牡馬 x コース適性 (Sire x Venue/Surface/Distance)
+        # ここでは代表して Sire x Track Surface (芝/ダート) を実装
+        sire_surface_stats = historical_df.groupby(['sire_id', 'track_surface'], observed=True).agg({
+            'finish_position': ['mean', 'count'],
+            'is_win': 'mean'
+        }).reset_index()
+        sire_surface_stats.columns = ['sire_id', 'track_surface', 'sire_course_avg_finish', 'sire_course_races', 'sire_course_win_rate']
+        
+        sire_surface_stats.loc[sire_surface_stats['sire_course_races'] < 10, ['sire_course_avg_finish', 'sire_course_win_rate']] = np.nan
+        
+        df = df.merge(sire_surface_stats[['sire_id', 'track_surface', 'sire_course_avg_finish', 'sire_course_win_rate']], on=['sire_id', 'track_surface'], how='left')
 
-            if horse_pedigree.empty:
-                self.logger.warning("父×母父の組み合わせが見つかりません。血統特徴量をスキップします。")
-                return df
-
-            perf_ped = performance_df.merge(horse_pedigree, on='horse_id', how='inner')
-
-            if perf_ped.empty or 'sire_id' not in perf_ped.columns or 'damsire_id' not in perf_ped.columns:
-                self.logger.warning("血統情報のマージに失敗しました。血統特徴量をスキップします。")
-                return df
-
-            agg_dict = {
-                'finish_position': ['mean', 'count', 'std']
-            }
-            if 'morning_odds' in perf_ped.columns:
-                agg_dict['morning_odds'] = 'mean'
-
-            nicks_stats = perf_ped.groupby(['sire_id', 'damsire_id'], observed=True).agg(agg_dict).reset_index()
-
-            if 'morning_odds' in perf_ped.columns:
-                nicks_stats.columns = ['sire_id', 'damsire_id', 'nicks_avg_finish', 'nicks_count', 'nicks_std_finish', 'nicks_avg_odds']
-            else:
-                nicks_stats.columns = ['sire_id', 'damsire_id', 'nicks_avg_finish', 'nicks_count', 'nicks_std_finish']
-
-            nicks_stats = nicks_stats[nicks_stats['nicks_count'] >= 5]
-
-            if 'sire_id' not in df.columns or 'damsire_id' not in df.columns:
-                 df = df.merge(horse_pedigree, on='horse_id', how='left')
-
-            df = df.merge(nicks_stats, on=['sire_id', 'damsire_id'], how='left')
-
-            # 2. 種牡馬×コース適性
-            if 'distance_m' not in perf_ped.columns:
-                self.logger.warning("distance_mカラムがありません。種牡馬×コース適性をスキップします。")
-                return df
-
-            perf_ped['distance_category'] = pd.cut(
-                perf_ped['distance_m'],
-                bins=[0, 1400, 1800, 2200, 3000, 4000],
-                labels=['sprint', 'mile', 'intermediate', 'long', 'extreme_long']
-            )
-
-            required_cols = ['sire_id', 'venue', 'distance_category', 'track_surface']
-            missing_cols = [col for col in required_cols if col not in perf_ped.columns]
-            if missing_cols:
-                self.logger.warning(f"種牡馬×コース適性に必要なカラムがありません: {missing_cols}")
-                return df
-
-            agg_dict = {'finish_position': 'mean'}
-            if 'morning_odds' in perf_ped.columns:
-                agg_dict['morning_odds'] = 'mean'
-
-            sire_course_stats = perf_ped.groupby(['sire_id', 'venue', 'distance_category', 'track_surface'], observed=True).agg(agg_dict).reset_index()
-
-            if 'morning_odds' in perf_ped.columns:
-                sire_course_stats.columns = ['sire_id', 'venue', 'distance_category', 'track_surface', 'sire_course_avg_finish', 'sire_course_avg_odds']
-            else:
-                sire_course_stats.columns = ['sire_id', 'venue', 'distance_category', 'track_surface', 'sire_course_avg_finish']
-
-            if 'distance_category' not in df.columns:
-                 if 'distance_m' in df.columns:
-                     df['distance_category'] = pd.cut(
-                        df['distance_m'],
-                        bins=[0, 1400, 1800, 2200, 3000, 4000],
-                        labels=['sprint', 'mile', 'intermediate', 'long', 'extreme_long']
-                    )
-                 else:
-                     self.logger.warning("distance_mカラムがないため、distance_categoryを生成できません。")
-                     return df
-
-            df = df.merge(sire_course_stats, on=['sire_id', 'venue', 'distance_category', 'track_surface'], how='left')
-
-            return df
-
-        except Exception as e:
-            self.logger.error(f"血統特徴量の生成中にエラー: {e}", exc_info=True)
-            return df
+        self.logger.info("詳細血統特徴量の生成完了")
+        return df
 
     def generate_course_bias_features(
         self,
         df: pd.DataFrame,
         performance_df: pd.DataFrame
     ) -> pd.DataFrame:
-        """コースバイアス（枠順など）"""
-        
-        required_cols = ['venue', 'distance_m', 'track_surface', 'bracket_number', 'finish_position']
-        missing_cols = [col for col in required_cols if col not in performance_df.columns]
-        if missing_cols:
-            self.logger.warning(f"コースバイアス特徴量に必要なカラムがありません: {missing_cols}")
-            return df
-
-        if len(performance_df) < 100:
-            self.logger.warning(f"コースバイアス特徴量: データ数が少なすぎます（{len(performance_df)}行）。スキップします。")
-            return df
-
+        """コースバイアス特徴量 (枠順有利不利など)"""
         self.logger.info(f"コースバイアス特徴量を生成中... (データ数: {len(performance_df):,}行)")
 
         performance_df['distance_category'] = pd.cut(

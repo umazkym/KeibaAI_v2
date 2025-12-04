@@ -312,7 +312,11 @@ class FeatureEngine:
         target_variables = [
             'finish_position', 'finish_time_seconds', 'is_win',
             'prize_money', 'odds', 'win_odds', 'popularity',
-            'margin_seconds', 'finish_time_str', 'margin_str'
+            'margin_seconds', 'finish_time_str', 'margin_str',
+            'last3f_rank', 'popularity_finish_diff', # ★ 追加: 未来情報リーク
+            'position_change_2_3', 'position_change_3_4', 'relative_odds',
+            'running_style', 'time_deviation', # ★ 追加: 潜在的リーク
+            'combo_avg_popularity' # ★ 追加: リーク検出
         ]
         
         # self.feature_names_からターゲット変数を除外

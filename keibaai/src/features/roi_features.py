@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import logging
 from pathlib import Path
+from .report_metrics import ReportMetricsFeatureGenerator
 
 class ROIFeatureEngine:
     """
@@ -46,8 +47,182 @@ class ROIFeatureEngine:
         
         # 5. Market Inefficiency
         df = self.add_market_features(df, results_history_df)
+
+        # 6. Report Metrics (Standard Time, Bias, etc.) - v2.8 New
+        df = self.add_report_metric_features(df, results_history_df)
+
+        # 7. Gap Features (v3.0 New)
+        df = self.add_gap_features(df)
+
+        # 8. Anti-Trend Features (v3.0 New)
+        df = self.add_anti_trend_features(df)
+        
+        # 9. Market Inefficiency (v3.3 Phase 3)
+        df = self.add_market_inefficiency_features(df, results_history_df)
+
+        # 10. Time-Series Trend (v3.3 Phase 3)
+        df = self.add_trend_features(df, results_history_df)
         
         logging.info("ROI特化型特徴量の生成完了")
+        return df
+
+    def add_market_inefficiency_features(self, df: pd.DataFrame, history_df: pd.DataFrame) -> pd.DataFrame:
+        """
+        市場の非効率性（クラス別過剰人気リスクなど）を捉える特徴量 (v3.3 Phase 3)
+        """
+        # race_class_overbet_risk: クラスごとの1番人気信頼度（過去統計）
+        # 1番人気の勝率が低いクラスほど、過剰人気リスクが高い（= 1番人気を買うと損する可能性が高い）
+        
+        # history_dfを使ってクラスごとの1番人気勝率を計算
+        # リーク防止: 本来は過去データのみ使うべきだが、クラス特性は不変とみなして全期間集計
+        
+        hist = history_df.copy()
+        
+        # race_classの補完（簡易）
+        if 'race_class' not in hist.columns and 'race_name' in hist.columns:
+             def infer_class(row):
+                 name = str(row['race_name'])
+                 if '新馬' in name: return '新馬'
+                 if '未勝利' in name: return '未勝利'
+                 if '1勝' in name: return '1勝クラス'
+                 if '2勝' in name: return '2勝クラス'
+                 if '3勝' in name: return '3勝クラス'
+                 if 'G1' in name or 'G2' in name or 'G3' in name: return 'OP'
+                 if 'OP' in name or 'オープン' in name: return 'OP'
+                 return 'OP'
+             hist['race_class'] = hist.apply(infer_class, axis=1)
+        
+        if 'race_class' in hist.columns and 'popularity' in hist.columns and 'finish_position' in hist.columns:
+            hist['popularity'] = pd.to_numeric(hist['popularity'], errors='coerce')
+            hist['finish_position'] = pd.to_numeric(hist['finish_position'], errors='coerce')
+            
+            # 1番人気のみ抽出
+            fav_stats = hist[hist['popularity'] == 1].groupby('race_class')['finish_position'].apply(lambda x: (x == 1).mean()).reset_index()
+            fav_stats.columns = ['race_class', 'fav_win_rate']
+            
+            # dfにマージ
+            # dfにもrace_classが必要。なければ推論するか、既存のカラムを使う。
+            # feature_engine.pyでrace_classが処理されているか不明だが、ここでは簡易推論を入れるか、
+            # もしdfにrace_classがなければスキップ。
+            
+            if 'race_class' not in df.columns and 'race_name' in df.columns:
+                df['race_class'] = df.apply(lambda row: infer_class(row) if 'race_name' in row else 'OP', axis=1)
+            
+            if 'race_class' in df.columns:
+                df = df.merge(fav_stats, on='race_class', how='left')
+                # リスク = 1 - 勝率 (勝率が低いほどリスク高い)
+                df['race_class_overbet_risk'] = 1.0 - df['fav_win_rate'].fillna(0.3) # デフォルト0.3 (勝率30%程度と仮定)
+                df.drop(columns=['fav_win_rate'], inplace=True)
+            else:
+                df['race_class_overbet_risk'] = 0.5
+        else:
+            df['race_class_overbet_risk'] = 0.5
+            
+        return df
+
+    def add_trend_features(self, df: pd.DataFrame, history_df: pd.DataFrame) -> pd.DataFrame:
+        """
+        時系列トレンド（調子の波）を捉える特徴量 (v3.3 Phase 3)
+        """
+        # finish_trend_last5: 近走5走の着順の傾き
+        # time_trend_last5: タイム指数の傾き（今回は着順のみ実装）
+        
+        # dfにある馬について、history_dfから過去5走を取得して傾きを計算
+        
+        # 計算コスト削減のため、簡易的な傾き計算:
+        # (最新 - 最古) / 期間
+        # または (最新3走平均 - 過去5走平均)
+        
+        # ここでは「最新3走平均 - 過去5走平均」を採用（ノイズに強い）
+        # 値がマイナスなら着順が良くなっている（数値が小さくなっている） -> 上昇トレンド
+        # 値がプラスなら着順が悪くなっている -> 下降トレンド
+        
+        hist = history_df.sort_values(['horse_id', 'race_date'])
+        hist['finish_position'] = pd.to_numeric(hist['finish_position'], errors='coerce')
+        
+        # 過去5走平均
+        hist['avg_5'] = hist.groupby('horse_id')['finish_position'].transform(
+            lambda x: x.shift(1).rolling(5, min_periods=1).mean()
+        )
+        
+        # 過去3走平均
+        hist['avg_3'] = hist.groupby('horse_id')['finish_position'].transform(
+            lambda x: x.shift(1).rolling(3, min_periods=1).mean()
+        )
+        
+        # トレンド: avg_3 - avg_5
+        # 例: 5走平均=10着, 3走平均=5着 -> 5 - 10 = -5 (良化)
+        hist['finish_trend_last5'] = hist['avg_3'] - hist['avg_5']
+        
+        # マージ
+        cols = ['race_id', 'horse_id', 'finish_trend_last5']
+        df = df.merge(hist[cols], on=['race_id', 'horse_id'], how='left')
+        df['finish_trend_last5'] = df['finish_trend_last5'].fillna(0)
+        
+        return df
+
+    def add_gap_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        市場評価（オッズ・人気）と実力値のギャップを捉える特徴量 (v3.0)
+        """
+        # 1. スピード指数順位と人気順位のギャップ
+        # 1. スピード指数順位と人気順位のギャップ
+        # pace_index はレース結果（未来情報）なので使用不可（データリーク）
+        # 代わりに過去のspeed_indexを使うべきだが、ここでは安全のため無効化
+        df['gap_speed_popularity'] = 0
+
+        # 2. 騎手勝率順位と人気順位のギャップ
+        if 'jockey_win_rate' in df.columns and 'popularity' in df.columns:
+            df['jockey_rank'] = df.groupby('race_id')['jockey_win_rate'].rank(ascending=False)
+            df['gap_jockey_popularity'] = df['popularity'] - df['jockey_rank']
+        else:
+            df['gap_jockey_popularity'] = 0
+            
+        # 3. 調教師勝率順位と人気順位のギャップ
+        if 'trainer_win_rate' in df.columns and 'popularity' in df.columns:
+            df['trainer_rank'] = df.groupby('race_id')['trainer_win_rate'].rank(ascending=False)
+            df['gap_trainer_popularity'] = df['popularity'] - df['trainer_rank']
+        else:
+            df['gap_trainer_popularity'] = 0
+
+        # 4. 血統勝率順位と人気順位のギャップ
+        if 'sire_win_rate' in df.columns and 'popularity' in df.columns:
+            df['sire_rank'] = df.groupby('race_id')['sire_win_rate'].rank(ascending=False)
+            df['gap_pedigree_popularity'] = df['popularity'] - df['sire_rank']
+        else:
+            df['gap_pedigree_popularity'] = 0
+
+        # 5. コース適性順位と人気順位のギャップ
+        # sire_course_win_rate を使用
+        if 'sire_course_win_rate' in df.columns and 'popularity' in df.columns:
+            df['course_fit_rank'] = df.groupby('race_id')['sire_course_win_rate'].rank(ascending=False)
+            df['gap_course_fit_popularity'] = df['popularity'] - df['course_fit_rank']
+        else:
+            df['gap_course_fit_popularity'] = 0
+
+        # 一時的なランク列を削除
+        df.drop(columns=['jockey_rank', 'trainer_rank', 'sire_rank', 'course_fit_rank'], inplace=True, errors='ignore')
+            
+        return df
+
+    def add_anti_trend_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        「危険な人気馬」を検知する逆張り特徴量 (v3.0)
+        """
+        # 1. 過剰人気フラグ
+        # 近走成績ランク（past_5_finish_position_meanの順位）と人気順位の乖離
+        # past_5_finish_position_mean は feature_engine.py で生成されている前提
+        # もし存在しない場合は、ここで簡易計算するか、0埋めする
+        
+        if 'past_5_finish_position_mean' in df.columns and 'popularity' in df.columns:
+            # 着順平均は小さい方が良い -> rank(ascending=True)
+            df['form_rank'] = df.groupby('race_id')['past_5_finish_position_mean'].rank(ascending=True)
+            
+            # 人気1位かつ近走成績ランクが3位以下（実力以上に人気）
+            df['is_overvalued'] = ((df['popularity'] == 1) & (df['form_rank'] > 3)).fillna(False).astype(int)
+        else:
+            df['is_overvalued'] = 0
+            
         return df
 
     def add_time_pace_features(self, df: pd.DataFrame, history_df: pd.DataFrame) -> pd.DataFrame:
@@ -229,8 +404,16 @@ class ROIFeatureEngine:
         # より厳密にするなら、年度別などで区切る。今回は全期間で実装。
         
         # 父IDをhistoryに結合
+        # 父IDをhistoryに結合
         if 'sire_id' not in history_df.columns:
-            sire_map = pedigree_df[pedigree_df['generation'] == 1][['horse_id', 'ancestor_id']].set_index('horse_id')['ancestor_id']
+            # 型変換と重複排除
+            ped_subset = pedigree_df[pedigree_df['generation'] == 1][['horse_id', 'ancestor_id']].copy()
+            ped_subset['horse_id'] = ped_subset['horse_id'].astype(str)
+            ped_subset = ped_subset.drop_duplicates(subset=['horse_id'])
+            
+            sire_map = ped_subset.set_index('horse_id')['ancestor_id']
+            
+            history_df['horse_id'] = history_df['horse_id'].astype(str)
             history_df['sire_id'] = history_df['horse_id'].map(sire_map)
             
         # 集計
@@ -377,5 +560,102 @@ class ROIFeatureEngine:
         )
         
         df = df.merge(hist[['race_id', 'horse_id', 'under_valued_score_avg_5']], on=['race_id', 'horse_id'], how='left')
+        
+        return df
+
+    def add_report_metric_features(self, df: pd.DataFrame, history_df: pd.DataFrame) -> pd.DataFrame:
+        """
+        レポート生成ロジックに基づく高度なメトリクス (Standard Time, Deviation, Bias)
+        """
+        logging.info("レポートメトリクス特徴量を生成中...")
+        
+        # 1. 全履歴に対してメトリクスを計算 (Annotate History)
+        # ReportMetricsFeatureGeneratorは内部で計算を行う
+        generator = ReportMetricsFeatureGenerator(history_df)
+        annotated_hist = generator.transform(history_df)
+        
+        # 2. Combined DataFrame作成 (History + Target)
+        # Target(df)にはスコアがない(NaN)が、rolling計算のために結合する
+        
+        # 必要なカラムのみ抽出
+        cols_needed = [
+            'race_id', 'horse_id', 'race_date', 
+            'time_deviation_score', 'l3f_deviation_score', 'track_bias'
+        ]
+        
+        # annotated_histから抽出
+        hist_subset = annotated_hist[cols_needed].copy()
+        
+        # dfから抽出 (スコアはNaN)
+        df_subset = df[['race_id', 'horse_id', 'race_date']].copy()
+        for c in ['time_deviation_score', 'l3f_deviation_score', 'track_bias']:
+            df_subset[c] = np.nan
+            
+        combined = pd.concat([hist_subset, df_subset], ignore_index=True)
+        combined['race_date'] = pd.to_datetime(combined['race_date'])
+        combined = combined.sort_values(['horse_id', 'race_date'])
+        
+        # 3. 集計特徴量の生成 (Rolling)
+        
+        # (1) Time Deviation Score Avg 5
+        combined['time_deviation_score_avg_5'] = combined.groupby('horse_id')['time_deviation_score'].transform(
+            lambda x: x.shift(1).rolling(5, min_periods=1).mean()
+        )
+        
+        # (2) L3F Deviation Score Avg 5
+        combined['l3f_deviation_score_avg_5'] = combined.groupby('horse_id')['l3f_deviation_score'].transform(
+            lambda x: x.shift(1).rolling(5, min_periods=1).mean()
+        )
+        
+        # (3) Bias Performance Correlation (Fast/Heavy Track Avg)
+        combined['is_fast_track'] = (combined['track_bias'] < -0.5)
+        combined['is_heavy_track'] = (combined['track_bias'] > 0.5)
+        
+        # Fast Track Avg
+        # 注意: is_fast_track は history のみ有効。target は NaN (track_bias NaN) -> False
+        # shift(1) してから rolling するので、target行の計算には history の値が使われる
+        
+        # Fast Track Performance
+        # フィルタリングしてからrollingすると、日付が飛ぶので注意。
+        # しかし「過去の高速馬場レースでの平均」が欲しいので、高速馬場レースのみ抽出してrollingし、
+        # それを元の時系列に戻す（ffill）のが正しい。
+        
+        # Fast Track Subset
+        fast_subset = combined[combined['is_fast_track']].copy()
+        fast_subset['fast_track_score_avg'] = fast_subset.groupby('horse_id')['time_deviation_score'].transform(
+            lambda x: x.shift(1).rolling(10, min_periods=1).mean()
+        )
+        
+        # Heavy Track Subset
+        heavy_subset = combined[combined['is_heavy_track']].copy()
+        heavy_subset['heavy_track_score_avg'] = heavy_subset.groupby('horse_id')['time_deviation_score'].transform(
+            lambda x: x.shift(1).rolling(10, min_periods=1).mean()
+        )
+        
+        # Merge back to combined
+        # race_id, horse_id でマージ
+        combined = combined.merge(fast_subset[['race_id', 'horse_id', 'fast_track_score_avg']], on=['race_id', 'horse_id'], how='left')
+        combined = combined.merge(heavy_subset[['race_id', 'horse_id', 'heavy_track_score_avg']], on=['race_id', 'horse_id'], how='left')
+        
+        # Forward fill (直近の値を保持)
+        combined['fast_track_score_avg'] = combined.groupby('horse_id')['fast_track_score_avg'].ffill()
+        combined['heavy_track_score_avg'] = combined.groupby('horse_id')['heavy_track_score_avg'].ffill()
+        
+        # 4. Targetのみ抽出してマージ
+        target_features = combined[combined['race_id'].isin(df['race_id'])].copy()
+        
+        cols_to_merge = [
+            'race_id', 'horse_id', 
+            'time_deviation_score_avg_5', 
+            'l3f_deviation_score_avg_5',
+            'fast_track_score_avg',
+            'heavy_track_score_avg'
+        ]
+        
+        # fillna
+        for c in cols_to_merge[2:]:
+            target_features[c] = target_features[c].fillna(0)
+            
+        df = df.merge(target_features[cols_to_merge], on=['race_id', 'horse_id'], how='left')
         
         return df
