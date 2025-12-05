@@ -1,0 +1,142 @@
+{
+  "A_full": {
+    "name": "v3.3_full",
+    "feature_count": 156,
+    "valid_roi": 0.8399122807017544,
+    "test_roi": 0.7779471010684884,
+    "gap": 0.06196517963326598,
+    "best_params": {
+      "num_leaves": 93,
+      "lambda_l1": 0.02632952332121055,
+      "lambda_l2": 0.6795912911810444,
+      "min_child_samples": 22,
+      "learning_rate": 0.08991728008547015,
+      "feature_fraction": 0.5830008248276602,
+      "bagging_fraction": 0.6178514232085702,
+      "bagging_freq": 4,
+      "max_depth": 8,
+      "objective": "lambdarank",
+      "metric": "ndcg",
+      "eval_at": [
+        1,
+        3,
+        5
+      ],
+      "boosting_type": "gbdt",
+      "verbose": -1,
+      "random_state": 42
+    },
+    "top_features": [
+      [
+        "gap_jockey_popularity",
+        38
+      ],
+      [
+        "gap_pedigree_popularity",
+        29
+      ],
+      [
+        "jockey_芝_win_rate",
+        23
+      ],
+      [
+        "sire_course_win_rate",
+        19
+      ],
+      [
+        "age_zscore",
+        16
+      ],
+      [
+        "jockey_ダート_win_rate",
+        15
+      ],
+      [
+        "jockey_intermediate_win_rate",
+        13
+      ],
+      [
+        "trainer_新潟_win_rate",
+        13
+      ],
+      [
+        "combo_overperform",
+        11
+      ],
+      [
+        "past_10_finish_position_mean",
+        11
+      ]
+    ]
+  },
+  "B_no_gap": {
+    "name": "v3.3_no_gap",
+    "feature_count": 150,
+    "valid_roi": 0.8491854636591479,
+    "test_roi": 0.7589945699772288,
+    "gap": 0.09019089368191913,
+    "best_params": {
+      "num_leaves": 87,
+      "lambda_l1": 1.4967835837984877,
+      "lambda_l2": 0.47674815640246043,
+      "min_child_samples": 53,
+      "learning_rate": 0.06706254051115891,
+      "feature_fraction": 0.8221032506799071,
+      "bagging_fraction": 0.7682299300203463,
+      "bagging_freq": 6,
+      "max_depth": 6,
+      "objective": "lambdarank",
+      "metric": "ndcg",
+      "eval_at": [
+        1,
+        3,
+        5
+      ],
+      "boosting_type": "gbdt",
+      "verbose": -1,
+      "random_state": 42
+    },
+    "top_features": [
+      [
+        "horse_weight_zscore",
+        89
+      ],
+      [
+        "time_deviation_score_avg_5",
+        81
+      ],
+      [
+        "past_1_finish_position_max",
+        79
+      ],
+      [
+        "form_rank",
+        74
+      ],
+      [
+        "age_zscore",
+        71
+      ],
+      [
+        "combo_overperform",
+        59
+      ],
+      [
+        "sire_course_avg_finish",
+        54
+      ],
+      [
+        "combo_avg_finish",
+        53
+      ],
+      [
+        "trainer_新潟_win_rate",
+        53
+      ],
+      [
+        "jockey_ダート_win_rate",
+        52
+      ]
+    ]
+  }
+}
