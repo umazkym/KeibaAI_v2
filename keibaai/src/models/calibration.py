@@ -107,6 +107,54 @@ class IsotonicCalibrator:
         result[nan_mask] = 0.5
             
         return result.reshape(original_shape)
+    
+    def get_calibration_stats(self, y_true: np.ndarray, y_pred: np.ndarray, 
+                                bins: int = 10) -> dict:
+        """
+        確率帯別の較正統計を取得
+        
+        Args:
+            y_true: 正解ラベル (0 or 1)
+            y_pred: 予測確率 (0.0 to 1.0)
+            bins: ビン数
+            
+        Returns:
+            dict: {
+                'bin_edges': [...], 
+                'mean_pred': [...], 
+                'actual_rate': [...], 
+                'counts': [...]
+            }
+        """
+        # NaN除去
+        mask = ~np.isnan(y_true) & ~np.isnan(y_pred)
+        y_true_clean = np.array(y_true)[mask]
+        y_pred_clean = np.array(y_pred)[mask]
+        
+        bin_edges = np.linspace(0, 1, bins + 1)
+        mean_preds = []
+        actual_rates = []
+        counts = []
+        
+        for i in range(bins):
+            low, high = bin_edges[i], bin_edges[i + 1]
+            bin_mask = (y_pred_clean >= low) & (y_pred_clean < high)
+            
+            if bin_mask.sum() > 0:
+                mean_preds.append(y_pred_clean[bin_mask].mean())
+                actual_rates.append(y_true_clean[bin_mask].mean())
+                counts.append(int(bin_mask.sum()))
+            else:
+                mean_preds.append(np.nan)
+                actual_rates.append(np.nan)
+                counts.append(0)
+        
+        return {
+            'bin_edges': bin_edges.tolist(),
+            'mean_pred': mean_preds,
+            'actual_rate': actual_rates,
+            'counts': counts
+        }
 
     def save(self, path: Union[str, Path]):
         """モデルを保存"""

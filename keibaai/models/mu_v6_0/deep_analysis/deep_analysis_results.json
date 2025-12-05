@@ -1,0 +1,65 @@
+{
+  "analysis_date": "2025-12-06T00:25:17.016467",
+  "ev_threshold_15": {
+    "count": 294,
+    "hit_count": 37,
+    "hit_rate": 0.12585034013605442,
+    "roi": 0.8142857142857144
+  },
+  "edge_results": [
+    {
+      "threshold": -0.05,
+      "roi": 0.7847416413373861,
+      "investment_ratio": 0.5762830618321948,
+      "n_bets": 3290,
+      "hit_rate": 0.2133738601823708
+    },
+    {
+      "threshold": 0.0,
+      "roi": 0.7711453744493392,
+      "investment_ratio": 0.3976177964617271,
+      "n_bets": 2270,
+      "hit_rate": 0.19383259911894274
+    },
+    {
+      "threshold": 0.02,
+      "roi": 0.7612432432432433,
+      "investment_ratio": 0.3240497460150639,
+      "n_bets": 1850,
+      "hit_rate": 0.1854054054054054
+    },
+    {
+      "threshold": 0.05,
+      "roi": 0.7111111111111111,
+      "investment_ratio": 0.2207041513399895,
+      "n_bets": 1260,
+      "hit_rate": 0.16428571428571428
+    },
+    {
+      "threshold": 0.08,
+      "roi": 0.7319205298013244,
+      "investment_ratio": 0.13224732877912068,
+      "n_bets": 755,
+      "hit_rate": 0.16688741721854305
+    },
+    {
+      "threshold": 0.1,
+      "roi": 0.7210626185958255,
+      "investment_ratio": 0.09231038710807497,
+      "n_bets": 527,
+      "hit_rate": 0.16888045540796964
+    },
+    {
+      "threshold": 0.15,
+      "roi": 1.1201030927835052,
+      "investment_ratio": 0.033981432825363464,
+      "n_bets": 194,
+      "hit_rate": 0.24742268041237114
+    }
+  ],
+  "calibration_check": {
+    "moved_up_count": 3378,
+    "moved_up_actual_win_rate": 0.15689757252812314,
+    "moved_up_predicted_win_rate": 0.22658582319385961
+  }
+}

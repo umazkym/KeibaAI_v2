@@ -145,6 +145,30 @@ class TestIsotonicCalibrator:
         # 単調増加をチェック
         assert np.all(np.diff(calibrated) >= 0), "較正後の確率が単調増加ではありません"
     
+    def test_get_calibration_stats(self):
+        """較正統計取得のテスト"""
+        y_true = np.array([0, 0, 0, 1, 1, 1, 0, 1, 1, 0])
+        y_pred = np.array([0.1, 0.15, 0.2, 0.6, 0.7, 0.8, 0.25, 0.85, 0.9, 0.3])
+        
+        calibrator = IsotonicCalibrator()
+        calibrator.fit(y_true, y_pred)
+        
+        stats = calibrator.get_calibration_stats(y_true, y_pred, bins=5)
+        
+        # 必要なキーが存在すること
+        assert 'bin_edges' in stats
+        assert 'mean_pred' in stats
+        assert 'actual_rate' in stats
+        assert 'counts' in stats
+        
+        # ビン数が正しいこと
+        assert len(stats['mean_pred']) == 5
+        assert len(stats['actual_rate']) == 5
+        assert len(stats['counts']) == 5
+        
+        # 合計件数が元データ数と一致
+        assert sum(stats['counts']) == len(y_true)
+    
     def test_repr(self):
         """__repr__のテスト"""
         calibrator = IsotonicCalibrator()
