@@ -1,0 +1,19 @@
+{
+  "standard_strategy": {
+    "accuracy": 0.30811000175162023,
+    "roi": 0.7739709231038712,
+    "bet_count": 5709
+  },
+  "ev_strategy": {
+    "roi": 0.770437698552771,
+    "bet_count": 5666,
+    "total_races": 5709,
+    "bet_ratio": 0.9924680329304607
+  },
+  "top5_recall": 0.8214722853645742,
+  "ev_params": {
+    "ev_threshold": 0.21466945921583658,
+    "min_odds": 4.995481026540357,
+    "max_odds": 64.27675167739564
+  }
+}

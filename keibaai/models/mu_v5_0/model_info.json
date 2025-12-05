@@ -1,0 +1,30 @@
+{
+  "version": "v5.0",
+  "description": "Phase 5: 馬特徴量追加",
+  "valid_roi": 1.225062656641604,
+  "test_roi": 0.877176388159047,
+  "valid_test_gap": 0.3478862684825571,
+  "target_achieved": true,
+  "best_params": {
+    "num_leaves": 73,
+    "lambda_l1": 0.5105146816440209,
+    "lambda_l2": 1.3725402744714494,
+    "min_child_samples": 101,
+    "learning_rate": 0.03740390969041204,
+    "feature_fraction": 0.7198929309583874,
+    "bagging_fraction": 0.8066208962432987,
+    "bagging_freq": 3,
+    "max_depth": 9,
+    "objective": "lambdarank",
+    "metric": "ndcg",
+    "eval_at": [
+      1,
+      3,
+      5
+    ],
+    "boosting_type": "gbdt",
+    "verbose": -1,
+    "random_state": 42
+  },
+  "created_at": "2025-12-05T01:54:48.768039"
+}

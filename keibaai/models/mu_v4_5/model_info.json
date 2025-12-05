@@ -1,0 +1,30 @@
+{
+  "version": "v4.5",
+  "description": "ラストダンス版（規制緩和）",
+  "valid_roi": 0.8656328320802005,
+  "test_roi": 0.801453844806446,
+  "valid_test_gap": 0.06417898727375448,
+  "target_achieved": false,
+  "best_params": {
+    "num_leaves": 68,
+    "lambda_l1": 2.092576532019374,
+    "lambda_l2": 4.370385009027869,
+    "min_child_samples": 106,
+    "learning_rate": 0.06359272621714038,
+    "feature_fraction": 0.7571718695158302,
+    "bagging_fraction": 0.8167664469401544,
+    "bagging_freq": 5,
+    "max_depth": 10,
+    "objective": "lambdarank",
+    "metric": "ndcg",
+    "eval_at": [
+      1,
+      3,
+      5
+    ],
+    "boosting_type": "gbdt",
+    "verbose": -1,
+    "random_state": 42
+  },
+  "created_at": "2025-12-05T01:42:43.364378"
+}

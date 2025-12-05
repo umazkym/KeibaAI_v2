@@ -1,0 +1,662 @@
+[
+  {
+    "feature": "gap_form_popularity",
+    "importance": 58
+  },
+  {
+    "feature": "gap_ability_popularity",
+    "importance": 57
+  },
+  {
+    "feature": "horse_number",
+    "importance": 35
+  },
+  {
+    "feature": "horse_weight_zscore",
+    "importance": 33
+  },
+  {
+    "feature": "trainer_新潟_win_rate",
+    "importance": 32
+  },
+  {
+    "feature": "gap_weight_popularity",
+    "importance": 22
+  },
+  {
+    "feature": "gap_pedigree_popularity",
+    "importance": 20
+  },
+  {
+    "feature": "trainer_中京_win_rate",
+    "importance": 19
+  },
+  {
+    "feature": "gap_jockey_popularity",
+    "importance": 19
+  },
+  {
+    "feature": "trainer_札幌_win_rate",
+    "importance": 19
+  },
+  {
+    "feature": "gap_course_fit_popularity",
+    "importance": 18
+  },
+  {
+    "feature": "leader_ratio",
+    "importance": 18
+  },
+  {
+    "feature": "combo_avg_finish",
+    "importance": 18
+  },
+  {
+    "feature": "past_1_finish_position_max",
+    "importance": 17
+  },
+  {
+    "feature": "age_zscore",
+    "importance": 17
+  },
+  {
+    "feature": "past_5_last_3f_time_std",
+    "importance": 16
+  },
+  {
+    "feature": "gap_combo_popularity",
+    "importance": 16
+  },
+  {
+    "feature": "trainer_小倉_win_rate",
+    "importance": 16
+  },
+  {
+    "feature": "trainer_中山_win_rate",
+    "importance": 16
+  },
+  {
+    "feature": "sire_win_rate",
+    "importance": 16
+  },
+  {
+    "feature": "jockey_芝_win_rate",
+    "importance": 15
+  },
+  {
+    "feature": "sire_avg_finish",
+    "importance": 15
+  },
+  {
+    "feature": "sire_course_avg_finish",
+    "importance": 14
+  },
+  {
+    "feature": "trainer_福島_win_rate",
+    "importance": 14
+  },
+  {
+    "feature": "past_10_margin_seconds_std",
+    "importance": 14
+  },
+  {
+    "feature": "form_rank",
+    "importance": 14
+  },
+  {
+    "feature": "race_class_overbet_risk",
+    "importance": 14
+  },
+  {
+    "feature": "trainer_win_rate",
+    "importance": 14
+  },
+  {
+    "feature": "bracket_avg_finish",
+    "importance": 14
+  },
+  {
+    "feature": "jockey_long_win_rate",
+    "importance": 13
+  },
+  {
+    "feature": "time_deviation_score_avg_5",
+    "importance": 13
+  },
+  {
+    "feature": "pace_fit_score",
+    "importance": 13
+  },
+  {
+    "feature": "finish_cv_last3",
+    "importance": 12
+  },
+  {
+    "feature": "trainer_阪神_win_rate",
+    "importance": 12
+  },
+  {
+    "feature": "jockey_ダート_win_rate",
+    "importance": 12
+  },
+  {
+    "feature": "jockey_mile_win_rate",
+    "importance": 12
+  },
+  {
+    "feature": "surface_avg_last3f",
+    "importance": 11
+  },
+  {
+    "feature": "basis_weight_zscore",
+    "importance": 11
+  },
+  {
+    "feature": "bms_avg_finish",
+    "importance": 11
+  },
+  {
+    "feature": "gap_pace_popularity",
+    "importance": 11
+  },
+  {
+    "feature": "past_5_margin_seconds_mean",
+    "importance": 11
+  },
+  {
+    "feature": "combo_overperform",
+    "importance": 11
+  },
+  {
+    "feature": "past_3_passing_order_4_mean",
+    "importance": 11
+  },
+  {
+    "feature": "bms_win_rate",
+    "importance": 11
+  },
+  {
+    "feature": "sire_course_win_rate",
+    "importance": 10
+  },
+  {
+    "feature": "jockey_福島_win_rate",
+    "importance": 10
+  },
+  {
+    "feature": "past_3_margin_seconds_std",
+    "importance": 10
+  },
+  {
+    "feature": "jockey_新潟_win_rate",
+    "importance": 10
+  },
+  {
+    "feature": "past_3_passing_order_1_std",
+    "importance": 10
+  },
+  {
+    "feature": "combo_races",
+    "importance": 10
+  },
+  {
+    "feature": "past_10_finish_position_mean",
+    "importance": 10
+  },
+  {
+    "feature": "gap_trainer_popularity",
+    "importance": 9
+  },
+  {
+    "feature": "sire_wet_boost",
+    "importance": 9
+  },
+  {
+    "feature": "jockey_小倉_win_rate",
+    "importance": 9
+  },
+  {
+    "feature": "past_3_last_3f_time_std",
+    "importance": 9
+  },
+  {
+    "feature": "jockey_中京_win_rate",
+    "importance": 9
+  },
+  {
+    "feature": "past_3_last_3f_time_max",
+    "importance": 9
+  },
+  {
+    "feature": "nicks_avg_finish",
+    "importance": 9
+  },
+  {
+    "feature": "past_5_passing_order_1_mean",
+    "importance": 8
+  },
+  {
+    "feature": "dist_avg_time",
+    "importance": 8
+  },
+  {
+    "feature": "sire_course_place_rate",
+    "importance": 8
+  },
+  {
+    "feature": "jockey_東京_win_rate",
+    "importance": 8
+  },
+  {
+    "feature": "past_3_finish_position_std",
+    "importance": 8
+  },
+  {
+    "feature": "heavy_track_score_avg",
+    "importance": 8
+  },
+  {
+    "feature": "trainer_函館_win_rate",
+    "importance": 8
+  },
+  {
+    "feature": "past_10_passing_order_1_std",
+    "importance": 8
+  },
+  {
+    "feature": "jockey_札幌_win_rate",
+    "importance": 8
+  },
+  {
+    "feature": "past_10_finish_position_std",
+    "importance": 7
+  },
+  {
+    "feature": "jockey_win_rate",
+    "importance": 7
+  },
+  {
+    "feature": "jockey_sprint_win_rate",
+    "importance": 7
+  },
+  {
+    "feature": "past_10_last_3f_time_std",
+    "importance": 7
+  },
+  {
+    "feature": "avg_finish_last10",
+    "importance": 7
+  },
+  {
+    "feature": "finish_cv_last5",
+    "importance": 7
+  },
+  {
+    "feature": "jockey_intermediate_win_rate",
+    "importance": 7
+  },
+  {
+    "feature": "past_5_last_3f_time_mean",
+    "importance": 6
+  },
+  {
+    "feature": "past_5_finish_position_mean",
+    "importance": 6
+  },
+  {
+    "feature": "trainer_京都_win_rate",
+    "importance": 6
+  },
+  {
+    "feature": "l3f_deviation_score_avg_5",
+    "importance": 6
+  },
+  {
+    "feature": "past_5_passing_order_4_std",
+    "importance": 6
+  },
+  {
+    "feature": "past_3_passing_order_4_std",
+    "importance": 6
+  },
+  {
+    "feature": "jockey_中山_win_rate",
+    "importance": 6
+  },
+  {
+    "feature": "past_5_margin_seconds_std",
+    "importance": 6
+  },
+  {
+    "feature": "trainer_東京_win_rate",
+    "importance": 6
+  },
+  {
+    "feature": "jockey_阪神_win_rate",
+    "importance": 6
+  },
+  {
+    "feature": "past_10_passing_order_4_std",
+    "importance": 6
+  },
+  {
+    "feature": "bias_seasonal_score",
+    "importance": 6
+  },
+  {
+    "feature": "past_10_passing_order_1_mean",
+    "importance": 6
+  },
+  {
+    "feature": "past_10_last_3f_time_mean",
+    "importance": 6
+  },
+  {
+    "feature": "nicks_win_rate",
+    "importance": 6
+  },
+  {
+    "feature": "dist_avg_finish",
+    "importance": 6
+  },
+  {
+    "feature": "finish_std_last10",
+    "importance": 6
+  },
+  {
+    "feature": "horse_weight_change",
+    "importance": 5
+  },
+  {
+    "feature": "venue_avg_finish",
+    "importance": 5
+  },
+  {
+    "feature": "past_10_last_3f_time_median",
+    "importance": 5
+  },
+  {
+    "feature": "past_5_passing_order_1_median",
+    "importance": 5
+  },
+  {
+    "feature": "past_5_finish_position_max",
+    "importance": 5
+  },
+  {
+    "feature": "finish_std_last3",
+    "importance": 5
+  },
+  {
+    "feature": "past_3_margin_seconds_mean",
+    "importance": 5
+  },
+  {
+    "feature": "past_1_last_3f_time_max",
+    "importance": 4
+  },
+  {
+    "feature": "past_10_last_3f_time_max",
+    "importance": 4
+  },
+  {
+    "feature": "days_since_last_race",
+    "importance": 4
+  },
+  {
+    "feature": "combo_win_rate",
+    "importance": 4
+  },
+  {
+    "feature": "past_10_margin_seconds_mean",
+    "importance": 4
+  },
+  {
+    "feature": "past_10_margin_seconds_median",
+    "importance": 4
+  },
+  {
+    "feature": "bracket_is_outer",
+    "importance": 4
+  },
+  {
+    "feature": "avg_finish_last5",
+    "importance": 4
+  },
+  {
+    "feature": "finish_std_last5",
+    "importance": 4
+  },
+  {
+    "feature": "past_3_margin_seconds_median",
+    "importance": 4
+  },
+  {
+    "feature": "place_rate_last10",
+    "importance": 4
+  },
+  {
+    "feature": "past_5_finish_position_std",
+    "importance": 4
+  },
+  {
+    "feature": "past_3_margin_seconds_max",
+    "importance": 4
+  },
+  {
+    "feature": "past_5_last_3f_time_median",
+    "importance": 4
+  },
+  {
+    "feature": "past_5_passing_order_4_mean",
+    "importance": 4
+  },
+  {
+    "feature": "past_5_last_3f_time_max",
+    "importance": 4
+  },
+  {
+    "feature": "prev_distance_m",
+    "importance": 4
+  },
+  {
+    "feature": "past_3_last_3f_time_median",
+    "importance": 4
+  },
+  {
+    "feature": "past_3_passing_order_1_mean",
+    "importance": 4
+  },
+  {
+    "feature": "past_1_passing_order_1_max",
+    "importance": 4
+  },
+  {
+    "feature": "past_3_passing_order_1_median",
+    "importance": 3
+  },
+  {
+    "feature": "sex_牡",
+    "importance": 3
+  },
+  {
+    "feature": "past_5_margin_seconds_median",
+    "importance": 3
+  },
+  {
+    "feature": "distance_change",
+    "importance": 3
+  },
+  {
+    "feature": "dist_races",
+    "importance": 3
+  },
+  {
+    "feature": "past_3_finish_position_mean",
+    "importance": 3
+  },
+  {
+    "feature": "n_leaders",
+    "importance": 3
+  },
+  {
+    "feature": "jockey_unknown_win_rate",
+    "importance": 3
+  },
+  {
+    "feature": "surface_avg_finish",
+    "importance": 3
+  },
+  {
+    "feature": "past_10_finish_position_median",
+    "importance": 3
+  },
+  {
+    "feature": "fast_track_score_avg",
+    "importance": 3
+  },
+  {
+    "feature": "past_3_passing_order_1_max",
+    "importance": 3
+  },
+  {
+    "feature": "is_overvalued",
+    "importance": 3
+  },
+  {
+    "feature": "surface_races",
+    "importance": 3
+  },
+  {
+    "feature": "finish_cv_last10",
+    "importance": 3
+  },
+  {
+    "feature": "avg_finish_last3",
+    "importance": 3
+  },
+  {
+    "feature": "past_10_passing_order_1_median",
+    "importance": 3
+  },
+  {
+    "feature": "past_10_passing_order_4_max",
+    "importance": 3
+  },
+  {
+    "feature": "day_of_meeting",
+    "importance": 2
+  },
+  {
+    "feature": "past_1_margin_seconds_max",
+    "importance": 2
+  },
+  {
+    "feature": "jockey_京都_win_rate",
+    "importance": 2
+  },
+  {
+    "feature": "jockey_函館_win_rate",
+    "importance": 2
+  },
+  {
+    "feature": "past_5_passing_order_1_std",
+    "importance": 2
+  },
+  {
+    "feature": "past_1_last_3f_time_mean",
+    "importance": 2
+  },
+  {
+    "feature": "past_3_finish_position_max",
+    "importance": 2
+  },
+  {
+    "feature": "past_1_passing_order_4_max",
+    "importance": 2
+  },
+  {
+    "feature": "past_10_margin_seconds_max",
+    "importance": 2
+  },
+  {
+    "feature": "race_month",
+    "importance": 2
+  },
+  {
+    "feature": "past_10_passing_order_4_mean",
+    "importance": 2
+  },
+  {
+    "feature": "round_of_year",
+    "importance": 2
+  },
+  {
+    "feature": "win_rate_last5",
+    "importance": 2
+  },
+  {
+    "feature": "age",
+    "importance": 1
+  },
+  {
+    "feature": "venue_races",
+    "importance": 1
+  },
+  {
+    "feature": "past_5_finish_position_median",
+    "importance": 1
+  },
+  {
+    "feature": "past_3_passing_order_4_max",
+    "importance": 1
+  },
+  {
+    "feature": "past_3_last_3f_time_mean",
+    "importance": 1
+  },
+  {
+    "feature": "past_10_passing_order_1_max",
+    "importance": 1
+  },
+  {
+    "feature": "past_10_finish_position_max",
+    "importance": 1
+  },
+  {
+    "feature": "bracket_is_middle",
+    "importance": 1
+  },
+  {
+    "feature": "jockey_marathon_win_rate",
+    "importance": 0
+  },
+  {
+    "feature": "past_5_passing_order_4_median",
+    "importance": 0
+  },
+  {
+    "feature": "past_5_margin_seconds_max",
+    "importance": 0
+  },
+  {
+    "feature": "past_3_finish_position_median",
+    "importance": 0
+  },
+  {
+    "feature": "past_10_passing_order_4_median",
+    "importance": 0
+  },
+  {
+    "feature": "distance_m",
+    "importance": 0
+  },
+  {
+    "feature": "bracket_is_inner",
+    "importance": 0
+  },
+  {
+    "feature": "past_3_passing_order_4_median",
+    "importance": 0
+  }
+]

@@ -1,0 +1,30 @@
+{
+  "version": "v5.3",
+  "description": "正則化緩和版+horse_best_nr",
+  "valid_roi": 0.8410087719298246,
+  "test_roi": 0.863303555789105,
+  "valid_test_gap": 0.02229478385928041,
+  "target_achieved": true,
+  "best_params": {
+    "num_leaves": 79,
+    "lambda_l1": 2.553620113546699,
+    "lambda_l2": 0.01661787261585972,
+    "min_child_samples": 24,
+    "learning_rate": 0.035868882473187404,
+    "feature_fraction": 0.6624113482799832,
+    "bagging_fraction": 0.9352382618326395,
+    "bagging_freq": 2,
+    "max_depth": 10,
+    "objective": "lambdarank",
+    "metric": "ndcg",
+    "eval_at": [
+      1,
+      3,
+      5
+    ],
+    "boosting_type": "gbdt",
+    "verbose": -1,
+    "random_state": 42
+  },
+  "created_at": "2025-12-05T10:26:00.011983"
+}

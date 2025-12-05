@@ -1,0 +1,8 @@
+{
+  "version": "v4.4",
+  "description": "ファイナルチューニング版（一般化強化）",
+  "valid_roi": 0.8266290726817043,
+  "test_roi": 0.7965668243124892,
+  "valid_test_gap": 0.030062248369215117,
+  "feature_count": 164,
+  "target_achieved": 

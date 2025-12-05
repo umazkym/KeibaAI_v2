@@ -1,0 +1,30 @@
+{
+  "n_models": 5,
+  "total_races": 5709,
+  "agreement_analysis": [
+    {
+      "min_agreement": 2,
+      "n_bets": 5709,
+      "bet_ratio": 1.0,
+      "roi": 0.7834471886495009
+    },
+    {
+      "min_agreement": 3,
+      "n_bets": 5552,
+      "bet_ratio": 0.9724995620949378,
+      "roi": 0.7826909221902018
+    },
+    {
+      "min_agreement": 4,
+      "n_bets": 4505,
+      "bet_ratio": 0.789104922052899,
+      "roi": 0.7843507214206438
+    },
+    {
+      "min_agreement": 5,
+      "n_bets": 3056,
+      "bet_ratio": 0.535295148011911,
+      "roi": 0.7831806282722512
+    }
+  ]
+}
