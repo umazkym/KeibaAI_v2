@@ -1,0 +1,17 @@
+{
+  "model_version": "v7.0",
+  "train_date": "2025-12-06T11:35:42.006570",
+  "n_features": 175,
+  "new_features": [
+    "horse_avg_gap_4c",
+    "horse_front_rate",
+    "first_half",
+    "second_half",
+    "pace_diff",
+    "horse_high_pace_avg"
+  ],
+  "test_roi": 0.7891925030653354,
+  "test_hit_rate": 0.2727272727272727,
+  "n_bets": 5709,
+  "vs_v54": -0.005107496934664613
+}

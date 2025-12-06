@@ -1,0 +1,25 @@
+{
+  "model_version": "v8.1",
+  "train_date": "2025-12-06T12:37:46.498194",
+  "n_features": 182,
+  "new_features": [
+    "horse_avg_position_pct",
+    "horse_avg_gap_zscore",
+    "is_escape",
+    "is_front",
+    "is_chaser",
+    "is_closer",
+    "horse_high_pace_aptitude",
+    "horse_slow_pace_aptitude",
+    "horse_closing_ability",
+    "gap_x_closer",
+    "gap_x_escape",
+    "escape_x_high_aptitude",
+    "closer_x_slow_aptitude"
+  ],
+  "test_roi": 2.5307759677701878,
+  "test_hit_rate": 0.4659309861622,
+  "n_bets": 5709,
+  "vs_v54": 1.7364759677701878,
+  "leak_status": "CLEAN"
+}
