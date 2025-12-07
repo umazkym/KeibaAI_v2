@@ -1,0 +1,15 @@
+{
+  "version": "v10.6",
+  "valid_roi": 0.9032894736842105,
+  "test_roi": 0.8034857242949729,
+  "gap": 0.09980374938923764,
+  "leak_free": true,
+  "recovered": [
+    "sire_win_rate_fixed",
+    "bms_win_rate_fixed",
+    "combo_win_rate_lf",
+    "combo_avg_finish_lf",
+    "gap_sire_pop_lf"
+  ],
+  "created_at": "2025-12-07T10:32:54.421782"
+}

@@ -1,0 +1,13 @@
+{
+  "version": "v10.5",
+  "valid_roi": 0.8866541353383458,
+  "test_roi": 0.8177088807146611,
+  "gap": 0.06894525462368473,
+  "leak_free": true,
+  "new_features": [
+    "avg_margin_lf",
+    "avg_c4_position_lf",
+    "avg_c4_gap_lf"
+  ],
+  "created_at": "2025-12-07T10:15:57.652550"
+}
