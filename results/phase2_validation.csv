@@ -1,0 +1,4 @@
+model,spearman,spearman_p,auc,go,error
+PaceScenarioModel,-0.4266392999809989,1.7906084883227267e-286,0.6876815137395257,True,
+PedigreeAptitudeModel,-0.05505318025612936,8.755494215561303e-06,0.5351218401381173,True,
+ConditionChangeModel,,,,False,'>' not supported between instances of 'NoneType' and 'int'
