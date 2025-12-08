@@ -129,21 +129,12 @@ class LeakFreeFeatureEngineerV7:
         df['is_win'] = df['_unique_key'].map(hist_lookup['is_win'])
         df['is_top3'] = df['_unique_key'].map(hist_lookup['is_top3'])
         
-        # 新規データ（履歴にないもの）は実際のfinish_positionから計算
-        # ただしfinish_positionがNaN（予測時）の場合のみNaNに
+        # 新規データ（履歴にないもの）は is_win/is_top3 を NaN に設定
+        # 【重要】finish_positionからis_winを計算すると、累積統計にリークが発生するため
+        # 新規データの結果情報は累積統計に含めない
         new_mask = df['_unique_key'].isin(new_keys)
-        if 'finish_position' in df.columns:
-            # 実際のfinish_positionがある場合は使用（バックテスト時）
-            df.loc[new_mask, 'is_win'] = (df.loc[new_mask, 'finish_position'] == 1).astype(float)
-            df.loc[new_mask, 'is_top3'] = (df.loc[new_mask, 'finish_position'] <= 3).astype(float)
-            # finish_positionがNaNの行はis_win/is_top3もNaN
-            fp_nan_mask = new_mask & df['finish_position'].isna()
-            df.loc[fp_nan_mask, 'is_win'] = np.nan
-            df.loc[fp_nan_mask, 'is_top3'] = np.nan
-        else:
-            # finish_positionがない場合（純粋な予測時）はNaN
-            df.loc[new_mask, 'is_win'] = np.nan
-            df.loc[new_mask, 'is_top3'] = np.nan
+        df.loc[new_mask, 'is_win'] = np.nan
+        df.loc[new_mask, 'is_top3'] = np.nan
         
         # 履歴から重複を除外
         hist_no_dup = hist[~hist['_unique_key'].isin(target_keys)]
