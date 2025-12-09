@@ -1,0 +1,2 @@
+timestamp,version,train_roi,test_roi,gap,n_features,best_params
+2025-12-09T10:04:40.512948,V14_optuna,127.41289501099664,88.02709274053491,39.385802270461724,51,"{'objective': 'binary', 'metric': 'auc', 'boosting_type': 'gbdt', 'verbosity': -1, 'learning_rate': 0.07387431519687859, 'num_leaves': 30, 'max_depth': 3, 'min_child_samples': 159, 'reg_alpha': 3.2472404606665224, 'reg_lambda': 7.688844000628803, 'bagging_fraction': 0.5758200395205905, 'bagging_freq': 2, 'feature_fraction': 0.8077660411093178}"
