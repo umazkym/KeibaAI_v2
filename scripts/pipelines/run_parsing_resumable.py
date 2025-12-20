@@ -17,11 +17,11 @@ from tqdm import tqdm
 import argparse
 
 # プロジェクトルートをsys.pathに追加
-project_root = Path(__file__).resolve().parent.parent.parent / 'keibaai'
-sys.path.append(str(project_root))
+project_root = Path(__file__).resolve().parent.parent.parent
+sys.path.append(str(project_root / 'keibaai'))
 
 from src import pipeline_core
-from keibaai.src.modules.parsers import results_parser, shutuba_parser, horse_info_parser, pedigree_parser
+from src.modules.parsers import results_parser, shutuba_parser, horse_info_parser, pedigree_parser
 
 
 def load_config():
@@ -30,7 +30,8 @@ def load_config():
     with open(config_path / "default.yaml", "r", encoding="utf-8") as f:
         default_cfg = yaml.safe_load(f)
 
-    data_root = Path(__file__).resolve().parent / "keibaai" / default_cfg['data_path']
+    # data_pathは 'keibaai/data' なので、project_rootと直接結合
+    data_root = project_root / default_cfg['data_path']
     default_cfg['raw_data_path'] = str(data_root / 'raw')
     default_cfg['parsed_data_path'] = str(data_root / 'parsed')
     default_cfg['database']['path'] = str(data_root / 'metadata' / 'db.sqlite3')
@@ -502,10 +503,16 @@ def parse_phase_pedigrees(cfg, conn, skip_existing: bool = False, retry_errors: 
             if skip_existing and output_path.exists():
                 existing_df = pd.read_parquet(output_path)
                 final_pedigrees_df = pd.concat([existing_df, new_pedigrees_df], ignore_index=True)
-                # 血統データは1頭に対して複数レコード（5世代分）があるので、horse_id + generation + position で重複判定
-                if 'generation' in final_pedigrees_df.columns and 'position' in final_pedigrees_df.columns:
+                # 血統データは1頭に対して複数レコード（5世代分）があるので、horse_id + generation + ancestor_id で重複判定
+                # 修正: positionカラムはパーサーから出力されないため、ancestor_idを使用
+                if 'generation' in final_pedigrees_df.columns and 'ancestor_id' in final_pedigrees_df.columns:
                     final_pedigrees_df = final_pedigrees_df.drop_duplicates(
-                        subset=['horse_id', 'generation', 'position'], keep='last'
+                        subset=['horse_id', 'generation', 'ancestor_id'], keep='last'
+                    )
+                elif 'generation' in final_pedigrees_df.columns:
+                    # ancestor_idがない場合はgenerationと組み合わせ（フォールバック）
+                    final_pedigrees_df = final_pedigrees_df.drop_duplicates(
+                        subset=['horse_id', 'generation'], keep='last'
                     )
                 else:
                     final_pedigrees_df = final_pedigrees_df.drop_duplicates(subset='horse_id', keep='last')

@@ -1,0 +1,822 @@
+# JRAコースマスターデータ
+# 競馬場×馬場×距離×内外の全組み合わせに対するコース特徴量
+#
+# 各コースの特徴:
+# - corner_count: コーナー通過回数
+# - start_to_corner_m: スタートから最初のコーナーまでの距離(m)
+# - final_straight_m: 最終コーナーからゴールまでの直線距離(m)
+# - slope_percent: 最終直線の坂勾配率(%)
+# - course_type: inner(内), outer(外), none(区分なし), straight(直線)
+
+札幌:
+  芝:
+    1000:
+      default:
+        course_type: none
+        corner_count: 2
+        start_to_corner_m: 205
+        final_straight_m: 266.1
+        slope_percent: 0.00
+    1200:
+      default:
+        course_type: none
+        corner_count: 2
+        start_to_corner_m: 405
+        final_straight_m: 266.1
+        slope_percent: 0.00
+    1500:
+      default:
+        course_type: none
+        corner_count: 3
+        start_to_corner_m: 170
+        final_straight_m: 266.1
+        slope_percent: 0.00
+    1800:
+      default:
+        course_type: none
+        corner_count: 4
+        start_to_corner_m: 185
+        final_straight_m: 266.1
+        slope_percent: 0.00
+    2000:
+      default:
+        course_type: none
+        corner_count: 4
+        start_to_corner_m: 385
+        final_straight_m: 266.1
+        slope_percent: 0.00
+    2600:
+      default:
+        course_type: none
+        corner_count: 6
+        start_to_corner_m: 164
+        final_straight_m: 266.1
+        slope_percent: 0.00
+  ダート:
+    1000:
+      default:
+        course_type: none
+        corner_count: 2
+        start_to_corner_m: 284
+        final_straight_m: 264.3
+        slope_percent: 0.00
+    1700:
+      default:
+        course_type: none
+        corner_count: 4
+        start_to_corner_m: 240
+        final_straight_m: 264.3
+        slope_percent: 0.00
+    2400:
+      default:
+        course_type: none
+        corner_count: 6
+        start_to_corner_m: 197
+        final_straight_m: 264.3
+        slope_percent: 0.00
+
+函館:
+  芝:
+    1000:
+      default:
+        course_type: none
+        corner_count: 2
+        start_to_corner_m: 489
+        final_straight_m: 262.1
+        slope_percent: 0.00
+    1200:
+      default:
+        course_type: none
+        corner_count: 2
+        start_to_corner_m: 275
+        final_straight_m: 262.1
+        slope_percent: 0.00
+    1800:
+      default:
+        course_type: none
+        corner_count: 4
+        start_to_corner_m: 475
+        final_straight_m: 262.1
+        slope_percent: 0.00
+    2000:
+      default:
+        course_type: none
+        corner_count: 4
+        start_to_corner_m: 262
+        final_straight_m: 262.1
+        slope_percent: 0.00
+    2600:
+      default:
+        course_type: none
+        corner_count: 6
+        start_to_corner_m: 289
+        final_straight_m: 262.1
+        slope_percent: 0.00
+  ダート:
+    1000:
+      default:
+        course_type: none
+        corner_count: 2
+        start_to_corner_m: 366
+        final_straight_m: 260.3
+        slope_percent: 0.00
+    1700:
+      default:
+        course_type: none
+        corner_count: 4
+        start_to_corner_m: 328
+        final_straight_m: 260.3
+        slope_percent: 0.00
+    2400:
+      default:
+        course_type: none
+        corner_count: 6
+        start_to_corner_m: 290
+        final_straight_m: 260.3
+        slope_percent: 0.00
+
+福島:
+  芝:
+    1200:
+      default:
+        course_type: none
+        corner_count: 2
+        start_to_corner_m: 411
+        final_straight_m: 292
+        slope_percent: 0.96
+    1700:
+      default:
+        course_type: none
+        corner_count: 2
+        start_to_corner_m: 205
+        final_straight_m: 292
+        slope_percent: 0.96
+    1800:
+      default:
+        course_type: none
+        corner_count: 4
+        start_to_corner_m: 305
+        final_straight_m: 292
+        slope_percent: 0.96
+    2000:
+      default:
+        course_type: none
+        corner_count: 4
+        start_to_corner_m: 505
+        final_straight_m: 292
+        slope_percent: 0.96
+    2600:
+      default:
+        course_type: none
+        corner_count: 6
+        start_to_corner_m: 211
+        final_straight_m: 292
+        slope_percent: 0.96
+  ダート:
+    1000:
+      default:
+        course_type: none
+        corner_count: 2
+        start_to_corner_m: 334
+        final_straight_m: 295.7
+        slope_percent: 0.96
+    1150:
+      default:
+        course_type: none
+        corner_count: 2
+        start_to_corner_m: 480
+        final_straight_m: 295.7
+        slope_percent: 0.96
+    1700:
+      default:
+        course_type: none
+        corner_count: 4
+        start_to_corner_m: 338
+        final_straight_m: 295.7
+        slope_percent: 0.96
+    2400:
+      default:
+        course_type: none
+        corner_count: 6
+        start_to_corner_m: 325
+        final_straight_m: 295.7
+        slope_percent: 0.96
+
+新潟:
+  芝:
+    1000:
+      default:
+        course_type: straight  # 直線1000m
+        corner_count: 0
+        start_to_corner_m: 1000
+        final_straight_m: 1000
+        slope_percent: 0.00
+    1200:
+      default:
+        course_type: inner
+        corner_count: 2
+        start_to_corner_m: 444
+        final_straight_m: 358.7
+        slope_percent: 0.00
+    1400:
+      default:
+        course_type: inner
+        corner_count: 2
+        start_to_corner_m: 635
+        final_straight_m: 358.7
+        slope_percent: 0.00
+    1600:
+      default:
+        course_type: outer
+        corner_count: 2
+        start_to_corner_m: 547
+        final_straight_m: 658.7
+        slope_percent: 0.00
+    1800:
+      default:
+        course_type: outer
+        corner_count: 2
+        start_to_corner_m: 747
+        final_straight_m: 658.7
+        slope_percent: 0.00
+    2000:
+      # ★内外混在コース
+      inner:
+        course_type: inner
+        corner_count: 4
+        start_to_corner_m: 436
+        final_straight_m: 358.7
+        slope_percent: 0.00
+      outer:
+        course_type: outer
+        corner_count: 2
+        start_to_corner_m: 947
+        final_straight_m: 658.7
+        slope_percent: 0.00
+    2200:
+      default:
+        course_type: inner
+        corner_count: 4
+        start_to_corner_m: 636
+        final_straight_m: 358.7
+        slope_percent: 0.00
+    2400:
+      default:
+        course_type: inner
+        corner_count: 4
+        start_to_corner_m: 836
+        final_straight_m: 358.7
+        slope_percent: 0.00
+  ダート:
+    1200:
+      default:
+        course_type: none
+        corner_count: 2
+        start_to_corner_m: 525
+        final_straight_m: 353.9
+        slope_percent: 0.00
+    1800:
+      default:
+        course_type: none
+        corner_count: 4
+        start_to_corner_m: 389
+        final_straight_m: 353.9
+        slope_percent: 0.00
+
+東京:
+  芝:
+    1400:
+      default:
+        course_type: none
+        corner_count: 2
+        start_to_corner_m: 342
+        final_straight_m: 525.9
+        slope_percent: 1.26
+    1600:
+      default:
+        course_type: none
+        corner_count: 2
+        start_to_corner_m: 542
+        final_straight_m: 525.9
+        slope_percent: 1.26
+    1800:
+      default:
+        course_type: none
+        corner_count: 3
+        start_to_corner_m: 156
+        final_straight_m: 525.9
+        slope_percent: 1.26
+    2000:
+      default:
+        course_type: none
+        corner_count: 3
+        start_to_corner_m: 126
+        final_straight_m: 525.9
+        slope_percent: 1.26
+    2300:
+      default:
+        course_type: none
+        corner_count: 4
+        start_to_corner_m: 249
+        final_straight_m: 525.9
+        slope_percent: 1.26
+    2400:
+      default:
+        course_type: none
+        corner_count: 4
+        start_to_corner_m: 536
+        final_straight_m: 525.9
+        slope_percent: 1.26
+    2500:
+      default:
+        course_type: none
+        corner_count: 4
+        start_to_corner_m: 449
+        final_straight_m: 525.9
+        slope_percent: 1.26
+    3400:
+      default:
+        course_type: none
+        corner_count: 6
+        start_to_corner_m: 259
+        final_straight_m: 525.9
+        slope_percent: 1.26
+  ダート:
+    1300:
+      default:
+        course_type: none
+        corner_count: 2
+        start_to_corner_m: 340
+        final_straight_m: 501.6
+        slope_percent: 1.26
+    1400:
+      default:
+        course_type: none
+        corner_count: 2
+        start_to_corner_m: 440
+        final_straight_m: 501.6
+        slope_percent: 1.26
+    1600:
+      default:
+        course_type: none
+        corner_count: 2
+        start_to_corner_m: 650
+        final_straight_m: 501.6
+        slope_percent: 1.26
+    2100:
+      default:
+        course_type: none
+        corner_count: 4
+        start_to_corner_m: 240
+        final_straight_m: 501.6
+        slope_percent: 1.26
+    2400:
+      default:
+        course_type: none
+        corner_count: 4
+        start_to_corner_m: 536
+        final_straight_m: 501.6
+        slope_percent: 1.26
+
+中山:
+  芝:
+    1200:
+      default:
+        course_type: outer
+        corner_count: 2
+        start_to_corner_m: 275
+        final_straight_m: 310
+        slope_percent: 2.03
+    1600:
+      default:
+        course_type: outer
+        corner_count: 3
+        start_to_corner_m: 240
+        final_straight_m: 310
+        slope_percent: 2.03
+    1800:
+      default:
+        course_type: inner
+        corner_count: 4
+        start_to_corner_m: 205
+        final_straight_m: 310
+        slope_percent: 2.03
+    2000:
+      default:
+        course_type: inner
+        corner_count: 4
+        start_to_corner_m: 405
+        final_straight_m: 310
+        slope_percent: 2.03
+    2200:
+      default:
+        course_type: outer
+        corner_count: 4
+        start_to_corner_m: 432
+        final_straight_m: 310
+        slope_percent: 2.03
+    2500:
+      default:
+        course_type: inner
+        corner_count: 6
+        start_to_corner_m: 192
+        final_straight_m: 310
+        slope_percent: 2.03
+    3600:
+      default:
+        course_type: inner
+        corner_count: 8
+        start_to_corner_m: 340
+        final_straight_m: 310
+        slope_percent: 2.03
+  ダート:
+    1200:
+      default:
+        course_type: none
+        corner_count: 2
+        start_to_corner_m: 502
+        final_straight_m: 308
+        slope_percent: 2.03
+    1800:
+      default:
+        course_type: none
+        corner_count: 4
+        start_to_corner_m: 375
+        final_straight_m: 308
+        slope_percent: 2.03
+    2400:
+      default:
+        course_type: none
+        corner_count: 6
+        start_to_corner_m: 209
+        final_straight_m: 308
+        slope_percent: 2.03
+    2500:
+      default:
+        course_type: none
+        corner_count: 6
+        start_to_corner_m: 309
+        final_straight_m: 308
+        slope_percent: 2.03
+
+中京:
+  芝:
+    1200:
+      default:
+        course_type: none
+        corner_count: 2
+        start_to_corner_m: 315
+        final_straight_m: 412.5
+        slope_percent: 2.00
+    1400:
+      default:
+        course_type: none
+        corner_count: 2
+        start_to_corner_m: 515
+        final_straight_m: 412.5
+        slope_percent: 2.00
+    1600:
+      default:
+        course_type: none
+        corner_count: 3
+        start_to_corner_m: 199
+        final_straight_m: 412.5
+        slope_percent: 2.00
+    2000:
+      default:
+        course_type: none
+        corner_count: 4
+        start_to_corner_m: 314
+        final_straight_m: 412.5
+        slope_percent: 2.00
+    2200:
+      default:
+        course_type: none
+        corner_count: 4
+        start_to_corner_m: 514
+        final_straight_m: 412.5
+        slope_percent: 2.00
+  ダート:
+    1200:
+      default:
+        course_type: none
+        corner_count: 2
+        start_to_corner_m: 407
+        final_straight_m: 410.7
+        slope_percent: 2.00
+    1400:
+      default:
+        course_type: none
+        corner_count: 2
+        start_to_corner_m: 607
+        final_straight_m: 410.7
+        slope_percent: 2.00
+    1800:
+      default:
+        course_type: none
+        corner_count: 4
+        start_to_corner_m: 291
+        final_straight_m: 410.7
+        slope_percent: 2.00
+    1900:
+      default:
+        course_type: none
+        corner_count: 4
+        start_to_corner_m: 391
+        final_straight_m: 410.7
+        slope_percent: 2.00
+
+京都:
+  芝:
+    1200:
+      default:
+        course_type: inner
+        corner_count: 2
+        start_to_corner_m: 316
+        final_straight_m: 328.4
+        slope_percent: 0.00
+    1400:
+      # ★内外混在コース
+      inner:
+        course_type: inner
+        corner_count: 2
+        start_to_corner_m: 516
+        final_straight_m: 328.4
+        slope_percent: 0.00
+      outer:
+        course_type: outer
+        corner_count: 2
+        start_to_corner_m: 511
+        final_straight_m: 473.6
+        slope_percent: 0.00
+    1600:
+      # ★内外混在コース
+      inner:
+        course_type: inner
+        corner_count: 2
+        start_to_corner_m: 716
+        final_straight_m: 328.4
+        slope_percent: 0.00
+      outer:
+        course_type: outer
+        corner_count: 2
+        start_to_corner_m: 711
+        final_straight_m: 473.6
+        slope_percent: 0.00
+    1800:
+      default:
+        course_type: outer
+        corner_count: 2
+        start_to_corner_m: 644
+        final_straight_m: 473.6
+        slope_percent: 0.00
+    2000:
+      default:
+        course_type: inner
+        corner_count: 4
+        start_to_corner_m: 308
+        final_straight_m: 328.4
+        slope_percent: 0.00
+    2200:
+      default:
+        course_type: outer
+        corner_count: 4
+        start_to_corner_m: 397
+        final_straight_m: 473.6
+        slope_percent: 0.00
+    2400:
+      default:
+        course_type: outer
+        corner_count: 4
+        start_to_corner_m: 597
+        final_straight_m: 473.6
+        slope_percent: 0.00
+    3000:
+      default:
+        course_type: outer
+        corner_count: 6
+        start_to_corner_m: 217
+        final_straight_m: 473.6
+        slope_percent: 0.00
+    3200:
+      default:
+        course_type: outer
+        corner_count: 6
+        start_to_corner_m: 417
+        final_straight_m: 473.6
+        slope_percent: 0.00
+  ダート:
+    1200:
+      default:
+        course_type: none
+        corner_count: 2
+        start_to_corner_m: 410
+        final_straight_m: 329.1
+        slope_percent: 0.00
+    1400:
+      default:
+        course_type: none
+        corner_count: 2
+        start_to_corner_m: 610
+        final_straight_m: 329.1
+        slope_percent: 0.00
+    1800:
+      default:
+        course_type: none
+        corner_count: 4
+        start_to_corner_m: 286
+        final_straight_m: 329.1
+        slope_percent: 0.00
+    1900:
+      default:
+        course_type: none
+        corner_count: 4
+        start_to_corner_m: 386
+        final_straight_m: 329.1
+        slope_percent: 0.00
+
+阪神:
+  芝:
+    1200:
+      default:
+        course_type: inner
+        corner_count: 2
+        start_to_corner_m: 258
+        final_straight_m: 356.5
+        slope_percent: 1.50
+    1400:
+      default:
+        course_type: inner
+        corner_count: 2
+        start_to_corner_m: 458
+        final_straight_m: 356.5
+        slope_percent: 1.50
+    1600:
+      default:
+        course_type: outer
+        corner_count: 2
+        start_to_corner_m: 444
+        final_straight_m: 473.6
+        slope_percent: 1.50
+    1800:
+      default:
+        course_type: outer
+        corner_count: 2
+        start_to_corner_m: 644
+        final_straight_m: 473.6
+        slope_percent: 1.50
+    2000:
+      default:
+        course_type: inner
+        corner_count: 4
+        start_to_corner_m: 330
+        final_straight_m: 356.5
+        slope_percent: 1.50
+    2200:
+      default:
+        course_type: inner
+        corner_count: 4
+        start_to_corner_m: 530
+        final_straight_m: 356.5
+        slope_percent: 1.50
+    2400:
+      default:
+        course_type: outer
+        corner_count: 4
+        start_to_corner_m: 309
+        final_straight_m: 473.6
+        slope_percent: 1.50
+    2600:
+      default:
+        course_type: outer
+        corner_count: 4
+        start_to_corner_m: 525
+        final_straight_m: 473.6
+        slope_percent: 1.50
+    3000:
+      default:
+        course_type: inner
+        corner_count: 6
+        start_to_corner_m: 369
+        final_straight_m: 356.5
+        slope_percent: 1.50
+  ダート:
+    1200:
+      default:
+        course_type: none
+        corner_count: 2
+        start_to_corner_m: 343
+        final_straight_m: 352.7
+        slope_percent: 1.50
+    1400:
+      default:
+        course_type: none
+        corner_count: 2
+        start_to_corner_m: 543
+        final_straight_m: 352.7
+        slope_percent: 1.50
+    1800:
+      default:
+        course_type: none
+        corner_count: 4
+        start_to_corner_m: 303
+        final_straight_m: 352.7
+        slope_percent: 1.50
+    2000:
+      default:
+        course_type: none
+        corner_count: 4
+        start_to_corner_m: 500
+        final_straight_m: 352.7
+        slope_percent: 1.50
+
+小倉:
+  芝:
+    1000:
+      default:
+        course_type: none
+        corner_count: 2
+        start_to_corner_m: 280
+        final_straight_m: 293
+        slope_percent: 0.00
+    1200:
+      default:
+        course_type: none
+        corner_count: 2
+        start_to_corner_m: 480
+        final_straight_m: 293
+        slope_percent: 0.00
+    1700:
+      default:
+        course_type: none
+        corner_count: 4
+        start_to_corner_m: 172
+        final_straight_m: 293
+        slope_percent: 0.00
+    1800:
+      default:
+        course_type: none
+        corner_count: 4
+        start_to_corner_m: 272
+        final_straight_m: 293
+        slope_percent: 0.00
+    2000:
+      default:
+        course_type: none
+        corner_count: 4
+        start_to_corner_m: 472
+        final_straight_m: 293
+        slope_percent: 0.00
+    2600:
+      default:
+        course_type: none
+        corner_count: 6
+        start_to_corner_m: 244
+        final_straight_m: 293
+        slope_percent: 0.00
+  ダート:
+    1000:
+      default:
+        course_type: none
+        corner_count: 2
+        start_to_corner_m: 365
+        final_straight_m: 291.3
+        slope_percent: 0.00
+    1700:
+      default:
+        course_type: none
+        corner_count: 4
+        start_to_corner_m: 343
+        final_straight_m: 291.3
+        slope_percent: 0.00
+    2400:
+      default:
+        course_type: none
+        corner_count: 6
+        start_to_corner_m: 320
+        final_straight_m: 291.3
+        slope_percent: 0.00
+
+# 競馬場メタ情報（回り方向のみ、ユーザー提供データより）
+venue_meta:
+  札幌:
+    turn_direction: right
+  函館:
+    turn_direction: right
+  福島:
+    turn_direction: right
+  新潟:
+    turn_direction: left
+  東京:
+    turn_direction: left
+  中山:
+    turn_direction: right
+  中京:
+    turn_direction: left
+  京都:
+    turn_direction: right
+  阪神:
+    turn_direction: right
+  小倉:
+    turn_direction: right
+

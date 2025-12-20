@@ -38,8 +38,8 @@ USER_AGENTS = [
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
 ]
 
-MIN_SLEEP_SECONDS = 2.5
-MAX_SLEEP_SECONDS = 5.0
+MIN_SLEEP_SECONDS = 1.5
+MAX_SLEEP_SECONDS = 3.0
 REQUESTS_RETRIES = 5
 REQUESTS_BACKOFF_FACTOR = 0.5
 REQUESTS_STATUS_FORCELIST = (500, 502, 503, 504, 429)
@@ -514,6 +514,10 @@ def scrape_html_horse(horse_id_list: List[str], skip: bool = True, cache_ttl_day
 
     # キャッシュログを読み込む
     cache_df = _load_horse_cache()
+    
+    # キャッシュ書き込み頻度（100件ごと）
+    CACHE_SAVE_INTERVAL = 100
+    processed_count = 0
 
     for horse_id in tqdm(horse_id_list, desc="馬情報HTML取得", unit="頭"):
         # --- 1. プロフィール (不変データ) ---
@@ -581,9 +585,14 @@ def scrape_html_horse(horse_id_list: List[str], skip: bool = True, cache_ttl_day
                     updated_paths.append(perf_filename)
                     logger.info(f'保存 (過去成績): {perf_filename}')
 
-                    # キャッシュログを更新（逐次保存で中断時も安全）
+                    # キャッシュログを更新（メモリ上のみ）
                     cache_df.loc[horse_id, 'last_updated'] = datetime.now()
-                    _save_horse_cache(cache_df)
+                    processed_count += 1
+                    
+                    # 100件ごとにキャッシュを保存
+                    if processed_count % CACHE_SAVE_INTERVAL == 0:
+                        _save_horse_cache(cache_df)
+                        logger.info(f'キャッシュ保存 ({processed_count}件処理済み)')
                 else:
                     logger.warning(f"AJAX取得失敗 (Status: {response.status_code}): {horse_id}_perf")
                     
@@ -591,6 +600,11 @@ def scrape_html_horse(horse_id_list: List[str], skip: bool = True, cache_ttl_day
                 logger.error(f'AJAX取得エラー: {horse_id}_perf - {e}')
         else:
             logger.debug(f'スキップ (過去成績キャッシュ有効): {perf_filename}')
+
+    # ループ終了時に最終保存
+    if processed_count > 0:
+        _save_horse_cache(cache_df)
+        logger.info(f'最終キャッシュ保存 (合計{processed_count}件処理)')
 
     return updated_paths
 

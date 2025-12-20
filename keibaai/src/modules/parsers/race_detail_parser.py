@@ -218,69 +218,101 @@ def parse_corners_raw(soup: BeautifulSoup, race_id: str) -> List[Dict]:
 
 
 def _parse_corner_order(race_id: str, corner: int, corner_str: str) -> List[Dict]:
-    """コーナー通過順位テキストを馬身差付きデータに変換"""
+    """コーナー通過順位テキストを馬身差付きデータに変換
+    
+    対応フォーマット:
+    - 通常: 1,2(3,4)-5=6
+    - 空白区切り離れ馬: 1(2,7)(9,3,11)   15  （末尾に大きく離れた馬）
+    - アスタリスク付き: (*9,13)(1,5,14)...
+    """
+    # 空白で区切られた部分を分離（大きく離れた馬の処理用）
+    # 例: "1(2,7)(9,3,11)   15" -> ["1(2,7)(9,3,11)", "15"]
+    parts = re.split(r'\s{2,}', corner_str.strip())  # 2つ以上の連続スペースで分割
+    
     rows = []
     position = 1
     current_gap = 0.0
-    i = 0
-    prev_symbol = None
     
-    while i < len(corner_str):
-        char = corner_str[i]
-        
-        if char in [',', '-', '=']:
-            prev_symbol = char
-            i += 1
+    for part_idx, part in enumerate(parts):
+        if not part.strip():
             continue
+            
+        # 後続パートは大きく離れている（15馬身以上のギャップ）
+        if part_idx > 0:
+            current_gap += 15.0
         
-        if char == '(':
-            end_idx = corner_str.find(')', i)
-            if end_idx == -1:
+        i = 0
+        prev_symbol = None
+        
+        while i < len(part):
+            char = part[i]
+            
+            # 記号処理
+            if char in [',', '-', '=']:
+                prev_symbol = char
                 i += 1
                 continue
             
-            pack_str = corner_str[i+1:end_idx]
-            horses = re.findall(r'\d+', pack_str)
+            # スペース（1文字）はスキップ
+            if char == ' ':
+                i += 1
+                continue
             
-            if position > 1:
-                current_gap += GAP_INCREMENT.get(prev_symbol, 1.0)
+            # アスタリスク（逃げ馬表示）はスキップ
+            if char == '*':
+                i += 1
+                continue
             
-            for horse in horses:
+            # カッコ内の馬群処理
+            if char == '(':
+                end_idx = part.find(')', i)
+                if end_idx == -1:
+                    i += 1
+                    continue
+                
+                pack_str = part[i+1:end_idx]
+                horses = re.findall(r'\d+', pack_str)
+                
+                if position > 1:
+                    current_gap += GAP_INCREMENT.get(prev_symbol, 1.0)
+                
+                for horse in horses:
+                    rows.append({
+                        'race_id': race_id,
+                        'corner': corner,
+                        'horse_number': int(horse),
+                        'position': position,
+                        'gap_from_leader': round(current_gap, 1)
+                    })
+                
+                position += len(horses)
+                i = end_idx + 1
+                prev_symbol = "pack"
+                continue
+            
+            # 単独馬番処理
+            if char.isdigit():
+                horse_num = ""
+                while i < len(part) and part[i].isdigit():
+                    horse_num += part[i]
+                    i += 1
+                
+                if position > 1:
+                    current_gap += GAP_INCREMENT.get(prev_symbol, 1.0)
+                
                 rows.append({
                     'race_id': race_id,
                     'corner': corner,
-                    'horse_number': int(horse),
+                    'horse_number': int(horse_num),
                     'position': position,
                     'gap_from_leader': round(current_gap, 1)
                 })
+                
+                position += 1
+                prev_symbol = None
+                continue
             
-            position += len(horses)
-            i = end_idx + 1
-            prev_symbol = "pack"
-            continue
-        
-        if char.isdigit():
-            horse_num = ""
-            while i < len(corner_str) and corner_str[i].isdigit():
-                horse_num += corner_str[i]
-                i += 1
-            
-            if position > 1:
-                current_gap += GAP_INCREMENT.get(prev_symbol, 1.0)
-            
-            rows.append({
-                'race_id': race_id,
-                'corner': corner,
-                'horse_number': int(horse_num),
-                'position': position,
-                'gap_from_leader': round(current_gap, 1)
-            })
-            
-            position += 1
-            prev_symbol = None
-            continue
-        
-        i += 1
+            i += 1
     
     return rows
 

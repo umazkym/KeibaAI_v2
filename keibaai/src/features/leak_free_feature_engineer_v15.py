@@ -38,6 +38,7 @@ from dataclasses import dataclass
 import logging
 
 from .leak_free_feature_engineer_v14 import LeakFreeFeatureEngineerV14, FeatureConfigV14
+from ..utils.course_feature_provider import CourseFeatureProvider
 
 logger = logging.getLogger(__name__)
 
@@ -72,12 +73,27 @@ class LeakFreeFeatureEngineerV15(LeakFreeFeatureEngineerV14):
         'horse_c4_gap_avg',             # 過去C4馬身差平均
         'post_style_conflict',          # 馬番×脚質不適合スコア
         'front_runner_competition',     # 逃げ競合スコア
+        # コース特徴量
+        'course_corner_count',          # コーナー通過回数
+        'course_start_to_corner_m',     # スタートから最初のコーナーまでの距離
+        'course_final_straight_m',      # 最終直線距離
+        'course_slope_percent',         # 坂勾配率
+        'course_is_outer',              # 外回りフラグ
+        'course_turn_direction',        # 回り方向(0=左, 1=右)
+        # 交互作用・派生特徴量
+        'straight_ratio',               # 直線比率(直線距離/全距離)
+        'is_long_straight',             # 長い直線フラグ(>450m)
+        # 脚質×コース交互作用特徴量
+        'style_straight_match',         # 差し馬×長直線マッチ度
+        'front_slope_disadvantage',     # 先行馬×坂不利度
+        'closer_long_straight_advantage', # 差し馬×長直線アドバンテージ
     ]
     
     def __init__(self, config: Optional[FeatureConfigV15] = None):
         super().__init__(config or FeatureConfigV15())
         self._horse_c4_gap_stats: Dict = {}
         self._horse_relative_c4_stats: Dict = {}
+        self._course_provider = CourseFeatureProvider()
     
     def fit(self, races_df: pd.DataFrame, pedigrees_df=None, corners_df=None, 
             race_details_df=None, returns_df=None, horses_df=None):
@@ -174,6 +190,9 @@ class LeakFreeFeatureEngineerV15(LeakFreeFeatureEngineerV14):
         result = self._calc_post_style_conflict(result)
         result = self._calc_race_front_runner_features(result)
         
+        # 3. コース特徴量の追加
+        result = self._calc_course_features(result)
+        
         logger.info("LeakFreeFeatureEngineerV15: transform完了")
         return result
     
@@ -264,6 +283,106 @@ class LeakFreeFeatureEngineerV15(LeakFreeFeatureEngineerV14):
         
         logger.info(f"    race_front_runner_count平均: {df['race_front_runner_count'].mean():.2f}")
         logger.info(f"    front_runner_competition平均: {df['front_runner_competition'].mean():.2f}")
+        
+        return df
+    
+    def _calc_course_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        コース特徴量を付与
+        
+        【追加特徴量】
+        - course_corner_count: コーナー通過回数
+        - course_start_to_corner_m: スタートから最初のコーナーまでの距離
+        - course_final_straight_m: 最終直線距離
+        - course_slope_percent: 坂勾配率
+        - course_is_outer: 外回りフラグ
+        - straight_ratio: 直線比率(直線距離/全距離)
+        - is_long_straight: 長い直線フラグ(>450m)
+        
+        【リーク対策】
+        - コース情報はレース開催時点で確定しているため、リークなし
+        """
+        logger.info("  コース特徴量を付与中...")
+        
+        df = df.copy()
+        
+        # CourseFeatureProviderで特徴量を付与
+        features_list = []
+        
+        for idx, row in df.iterrows():
+            venue = row.get('venue', '')
+            surface = row.get('track_surface', '')
+            distance = row.get('distance_m', 0)
+            is_outer = row.get('is_outer_course')  # パーサーから追加されたカラム
+            
+            # マスターデータから特徴量を取得
+            if venue and surface and distance:
+                features = self._course_provider.get_course_features(
+                    venue=venue,
+                    surface=surface,
+                    distance=int(distance) if pd.notna(distance) else 0,
+                    is_outer=is_outer
+                )
+            else:
+                features = {
+                    'corner_count': None,
+                    'start_to_corner_m': None,
+                    'final_straight_m': None,
+                    'slope_percent': None,
+                    'course_type': None,
+                    'turn_direction': None,
+                }
+            features_list.append(features)
+        
+        # DataFrameに変換
+        features_df = pd.DataFrame(features_list, index=df.index)
+        
+        # カラム名のリネームと付与
+        df['course_corner_count'] = features_df['corner_count']
+        df['course_start_to_corner_m'] = features_df['start_to_corner_m']
+        df['course_final_straight_m'] = features_df['final_straight_m']
+        df['course_slope_percent'] = features_df['slope_percent']
+        df['course_is_outer'] = (features_df['course_type'] == 'outer').astype(float)
+        # 回り方向 (right=1, left=0)
+        df['course_turn_direction'] = (features_df['turn_direction'] == 'right').astype(float)
+        
+        # 派生特徴量を計算
+        # 直線比率 = 直線距離 / 全距離
+        df['straight_ratio'] = df['course_final_straight_m'] / df['distance_m']
+        df['straight_ratio'] = df['straight_ratio'].fillna(0)
+        
+        # 長い直線フラグ (450m以上)
+        df['is_long_straight'] = (df['course_final_straight_m'] > 450).astype(float)
+        
+        # ===== 脚質×コース交互作用特徴量 =====
+        # horse_front_runner_rate は V14 で既に計算済み（shift適用済みでリークなし）
+        fr_rate = df['horse_front_runner_rate'].fillna(0.5)  # デフォルトは平均的
+        
+        # 1. style_straight_match: 差し馬×長直線マッチ度
+        #    (1 - 逃げ率) × 直線比率 → 差し馬×長い直線で高値
+        df['style_straight_match'] = (1 - fr_rate) * df['straight_ratio']
+        
+        # 2. front_slope_disadvantage: 先行馬×坂不利度
+        #    逃げ率 × 坂勾配率 → 先行馬×急坂で高値（不利を表す）
+        slope = df['course_slope_percent'].fillna(0)
+        df['front_slope_disadvantage'] = fr_rate * slope
+        
+        # 3. closer_long_straight_advantage: 差し馬×長直線アドバンテージ
+        #    (逃げ率 < 0.3) × 長い直線フラグ → 差し馬かつ長い直線で1
+        is_closer = (fr_rate < 0.3).astype(float)
+        df['closer_long_straight_advantage'] = is_closer * df['is_long_straight']
+        
+        # ログ出力
+        non_null = df['course_final_straight_m'].notna().sum()
+        logger.info(f"    course_final_straight_m非NaN: {non_null:,}/{len(df):,} ({non_null/len(df)*100:.1f}%)")
+        outer_count = df['course_is_outer'].sum()
+        logger.info(f"    course_is_outer=True: {int(outer_count):,}件")
+        long_straight = df['is_long_straight'].sum()
+        logger.info(f"    is_long_straight=True: {int(long_straight):,}件")
+        
+        # 交互作用特徴量のログ
+        closers_advantage = df['closer_long_straight_advantage'].sum()
+        logger.info(f"    closer_long_straight_advantage=1: {int(closers_advantage):,}件")
         
         return df
     

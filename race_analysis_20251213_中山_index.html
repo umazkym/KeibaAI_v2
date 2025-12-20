@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>レース分析 - race_analysis_20251213_中山</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: white;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 24px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        .race-list {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+        }
+        .race-card {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            text-align: center;
+            text-decoration: none;
+            color: #333;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            transition: all 0.3s ease;
+        }
+        .race-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.3);
+        }
+        .race-card:active {
+            transform: translateY(-2px);
+        }
+        .race-num {
+            font-size: 28px;
+            font-weight: bold;
+            color: #667eea;
+        }
+        .race-label {
+            font-size: 12px;
+            color: #888;
+            margin-top: 5px;
+        }
+        .footer {
+            text-align: center;
+            color: white;
+            margin-top: 30px;
+            font-size: 12px;
+            opacity: 0.8;
+        }
+        .instruction {
+            background: rgba(255,255,255,0.2);
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+            color: white;
+            font-size: 14px;
+        }
+        .instruction h2 {
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+        .instruction ul {
+            padding-left: 20px;
+        }
+        .instruction li {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏇 20251213 中山</h1>
+        
+        <div class="instruction">
+            <h2>📱 使い方</h2>
+            <ul>
+                <li>レースをタップでチャート表示</li>
+                <li>プロットをタップで馬情報表示</li>
+                <li>凡例タップで馬の表示/非表示</li>
+                <li>ピンチでズーム可能</li>
+            </ul>
+        </div>
+        
+        <div class="race-list">
+            <a href="race_analysis_20251213_中山_01R.html" class="race-card">
+                <div class="race-num">1R</div>
+                <div class="race-label">チャート表示</div>
+            </a>
+            <a href="race_analysis_20251213_中山_02R.html" class="race-card">
+                <div class="race-num">2R</div>
+                <div class="race-label">チャート表示</div>
+            </a>
+            <a href="race_analysis_20251213_中山_03R.html" class="race-card">
+                <div class="race-num">3R</div>
+                <div class="race-label">チャート表示</div>
+            </a>
+            <a href="race_analysis_20251213_中山_04R.html" class="race-card">
+                <div class="race-num">4R</div>
+                <div class="race-label">チャート表示</div>
+            </a>
+            <a href="race_analysis_20251213_中山_07R.html" class="race-card">
+                <div class="race-num">7R</div>
+                <div class="race-label">チャート表示</div>
+            </a>
+            <a href="race_analysis_20251213_中山_08R.html" class="race-card">
+                <div class="race-num">8R</div>
+                <div class="race-label">チャート表示</div>
+            </a>
+            <a href="race_analysis_20251213_中山_09R.html" class="race-card">
+                <div class="race-num">9R</div>
+                <div class="race-label">チャート表示</div>
+            </a>
+            <a href="race_analysis_20251213_中山_10R.html" class="race-card">
+                <div class="race-num">10R</div>
+                <div class="race-label">チャート表示</div>
+            </a>
+            <a href="race_analysis_20251213_中山_11R.html" class="race-card">
+                <div class="race-num">11R</div>
+                <div class="race-label">チャート表示</div>
+            </a>
+            <a href="race_analysis_20251213_中山_12R.html" class="race-card">
+                <div class="race-num">12R</div>
+                <div class="race-label">チャート表示</div>
+            </a>
+        </div>
+        
+        <div class="footer">
+            生成: KeibaAI_v2
+        </div>
+    </div>
+</body>
+</html>

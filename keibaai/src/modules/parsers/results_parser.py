@@ -148,7 +148,8 @@ def extract_race_metadata_enhanced(soup: BeautifulSoup) -> Dict:
         'prize_1st': None, 'prize_2nd': None, 'prize_3rd': None, 
         'prize_4th': None, 'prize_5th': None,
         'venue': None, 'day_of_meeting': None, 'round_of_year': None,
-        'race_class': None, 'age_restriction': None
+        'race_class': None, 'age_restriction': None,
+        'course_direction': None, 'is_outer_course': None  # 追加: 回りと内/外
     }
     
     # レース基本情報の抽出を強化
@@ -174,18 +175,47 @@ def extract_race_metadata_enhanced(soup: BeautifulSoup) -> Dict:
     # メタデータテキストから情報を抽出
     if metadata_text:
         # 距離と馬場（改善版 - 複数パターン対応）
-        # パターン1: 「芝1800m」「ダ1800m」「障3300m」「芝右 外1800m」
-        distance_match = re.search(r'(芝|ダ|障)\s*(?:右|左|直|外|内)?\s*(?:右|左|直|外|内)?\s*(\d+)m', metadata_text)
-        if distance_match:
-            surface_map = {'芝': '芝', 'ダ': 'ダート', '障': '障害'}
-            metadata['track_surface'] = surface_map.get(distance_match.group(1))
-            metadata['distance_m'] = int(distance_match.group(2))
+        # パターン1: 障害レース「障芝 外-内2890m」「障ダ 外-内2800m」形式
+        obstacle_match = re.search(r'障(芝|ダ)\s*(?:外-内|内-外|外|内)?\s*(\d+)m', metadata_text)
+        if obstacle_match:
+            # 障害レースは track_surface='障害' で統一
+            metadata['track_surface'] = '障害'
+            metadata['distance_m'] = int(obstacle_match.group(2))
         else:
-            # パターン2: 「馬場 ：1800m」（芝/ダート表記なし）
-            distance_match2 = re.search(r'馬場\s*[：:]\s*(\d+)m', metadata_text)
-            if distance_match2:
-                metadata['distance_m'] = int(distance_match2.group(1))
-                # track_surfaceは馬場状態から推測（後で設定）
+            # パターン2: 新潟直線コース「芝直線1000m」形式
+            straight_match = re.search(r'(芝|ダ)直線\s*(\d+)m', metadata_text)
+            if straight_match:
+                surface_map = {'芝': '芝', 'ダ': 'ダート'}
+                metadata['track_surface'] = surface_map.get(straight_match.group(1))
+                metadata['distance_m'] = int(straight_match.group(2))
+                metadata['is_straight_course'] = True  # 直線コースフラグ
+                metadata['course_direction'] = 'left'  # 新潟直線は左回り扱い
+                metadata['is_outer_course'] = True  # 外回りコース
+            else:
+                # パターン3: 通常レース「芝1800m」「ダ1800m」「芝右 外1800m」「芝左 内2000m」形式
+                # グループ: (馬場)(回り)(内外)(距離)
+                course_match = re.search(r'(芝|ダ|障)\s*(右|左)?\s*(内|外)?\s*(\d+)m', metadata_text)
+                if course_match:
+                    surface_map = {'芝': '芝', 'ダ': 'ダート', '障': '障害'}
+                    metadata['track_surface'] = surface_map.get(course_match.group(1))
+                    metadata['distance_m'] = int(course_match.group(4))
+                    
+                    # 回り方向を抽出
+                    if course_match.group(2):
+                        metadata['course_direction'] = course_match.group(2)
+                    
+                    # 内/外を抽出（「外」なら外回り、無指定ならNone→後でdefault処理）
+                    if course_match.group(3) == '外':
+                        metadata['is_outer_course'] = True
+                    elif course_match.group(3) == '内':
+                        metadata['is_outer_course'] = False
+                    # 無指定はNoneのまま（マスターデータのdefaultを使う）
+                else:
+                    # パターン4: 「馬場 ：1800m」（芝/ダート表記なし）
+                    distance_match2 = re.search(r'馬場\s*[：:]\s*(\d+)m', metadata_text)
+                    if distance_match2:
+                        metadata['distance_m'] = int(distance_match2.group(1))
+                        # track_surfaceは馬場状態から推測（後で設定）
 
         # 天候
         weather_match = re.search(r'天候\s*[：:]\s*(\S+)', metadata_text)

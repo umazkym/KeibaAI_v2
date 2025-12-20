@@ -253,6 +253,19 @@ def extract_race_date_from_html(soup: BeautifulSoup, race_id: str) -> Optional[s
         3. <dd class="Active"> (ただし年が欠落している可能性あり)
     """
     try:
+        # パターン0: <title>タグ (全てのHTMLで確実に存在)
+        # 例: "２歳未勝利 出馬表 | 2014年7月26日 札幌1R レース情報(JRA) - netkeiba"
+        title_tag = soup.find('title')
+        if title_tag:
+            title_text = title_tag.get_text(strip=True)
+            match = re.search(r'(\d{4})年(\d{1,2})月(\d{1,2})日', title_text)
+            if match:
+                year = match.group(1)
+                month = match.group(2).zfill(2)
+                day = match.group(3).zfill(2)
+                logging.info(f"日付抽出成功 (title): {year}-{month}-{day}")
+                return f"{year}-{month}-{day}"
+
         # パターン1: <p class="smalltxt"> (debug_find_date.py で発見)
         # (注: shutuba.html にはこのクラスが存在しない場合があるが、
         #  results_parser.py とロジックを共通化するため残す)

@@ -32,7 +32,7 @@ def load_config():
     with open(config_path / "scraping.yaml", "r", encoding="utf-8") as f:
         scraping_cfg_raw = yaml.safe_load(f)
 
-    data_root = Path(__file__).resolve().parent / "keibaai" / default_cfg['data_path']
+    data_root = project_root / default_cfg['data_path']
     default_cfg['raw_data_path'] = str(data_root / 'raw')
     default_cfg['parsed_data_path'] = str(data_root / 'parsed')
     default_cfg['database']['path'] = str(data_root / 'metadata' / 'db.sqlite3')
