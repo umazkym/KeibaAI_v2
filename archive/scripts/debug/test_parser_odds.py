@@ -5,7 +5,7 @@ from pathlib import Path
 project_root = Path(__file__).resolve().parent
 sys.path.append(str(project_root))
 
-from keibaai.src.modules.parsers.results_parser import parse_results_html
+from keibaai.src.parsers.results_parser import parse_results_html
 
 # サンプルHTMLファイルでテスト
 sample_file = 'keibaai/data/raw/html/race/202001010101.bin'

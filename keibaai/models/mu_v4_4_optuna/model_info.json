@@ -1,0 +1,21 @@
+{
+  "version": "v4.4_optuna",
+  "description": "Optuna最適化版 (30トライアル)",
+  "valid_roi": 85.87092731829574,
+  "test_roi": 77.514450867052,
+  "gap": 8.356476451243736,
+  "feature_count": 155,
+  "best_params": {
+    "num_leaves": 39,
+    "max_depth": 6,
+    "min_child_samples": 141,
+    "learning_rate": 0.09742280626123827,
+    "reg_alpha": 1.6999379673960286,
+    "reg_lambda": 3.627290506995681,
+    "feature_fraction": 0.6120526024225235,
+    "bagging_fraction": 0.6035951217304721,
+    "bagging_freq": 6
+  },
+  "n_trials": 30,
+  "created_at": "2025-12-20T23:49:08.844475"
+}

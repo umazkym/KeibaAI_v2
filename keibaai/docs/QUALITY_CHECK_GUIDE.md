@@ -193,7 +193,7 @@ python keibaai/scripts/run_quality_checks.py \
 
 ```python
 from pathlib import Path
-from keibaai.src.modules.validation.validation_pipeline import ValidationPipeline
+from keibaai.src.validation.validation_pipeline import ValidationPipeline
 
 data_path = Path('keibaai/data')
 config = {}  # 設定辞書
@@ -255,7 +255,7 @@ pipeline.save_report(Path('validation_report.md'), format='markdown')
 
 ```python
 from pathlib import Path
-from keibaai.src.modules.monitoring.monitoring_local import MonitoringSystem
+from keibaai.src.monitoring.monitoring_local import MonitoringSystem
 
 data_path = Path('keibaai/data')
 config = {}
@@ -332,7 +332,7 @@ print(summary)
 ```python
 from pathlib import Path
 import pandas as pd
-from keibaai.src.modules.monitoring.model_analyzer import ModelAnalyzer
+from keibaai.src.monitoring.model_analyzer import ModelAnalyzer
 
 model_path = Path('keibaai/data/models/latest')
 data_path = Path('keibaai/data')
@@ -440,7 +440,7 @@ crontabに追加：
 
 **症状**:
 ```
-ImportError: cannot import name 'ValidationPipeline' from 'keibaai.src.modules.validation'
+ImportError: cannot import name 'ValidationPipeline' from 'keibaai.src.validation'
 ```
 
 **解決策**:

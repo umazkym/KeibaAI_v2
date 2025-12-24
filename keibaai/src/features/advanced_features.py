@@ -877,3 +877,170 @@ class AdvancedFeatureEngine:
             traceback.print_exc()
             self.logger.error(f"Critical error in generate_jockey_venue_affinity: {e}")
             raise e
+
+    # =========================================================================
+    # V15 Legacy Features (Ported for v2.6 Restoration)
+    # =========================================================================
+    
+    def generate_v15_legacy_features(
+        self,
+        df: pd.DataFrame,
+        performance_df: pd.DataFrame,
+        corners_df: Optional[pd.DataFrame] = None,
+        min_corner_races: int = 5,
+        front_runner_threshold: float = 0.3
+    ) -> pd.DataFrame:
+        """
+        V15の重要特徴量を生成する
+        
+        【追加特徴量】
+        - horse_c4_gap_avg: 過去C4馬身差平均
+        - horse_relative_c4_avg: 過去相対C4位置平均
+        - post_style_conflict: 馬番×脚質不適合スコア
+        - race_front_runner_count: レース内逃げ予備軍数
+        - front_runner_competition: 逃げ競合スコア
+        
+        【リーク対策】
+        - 累積統計は expanding().mean().shift(1) で計算
+        - 当該レースの情報は使用しない
+        
+        Args:
+            df: 特徴量を追加するデータフレーム
+            performance_df: 過去成績データ（race_date, horse_id, finish_position等）
+            corners_df: コーナー通過データ（race_id, horse_number, corner, position, gap_from_leader）
+            min_corner_races: C4統計の最小レース数要件
+            front_runner_threshold: 逃げ予備軍判定閾値
+        
+        Returns:
+            V15特徴量が追加されたデータフレーム
+        """
+        self.logger.info("V15レガシー特徴量を生成中...")
+        
+        # 1. C4馬身差・相対位置統計 (corners_dfが必要)
+        if corners_df is not None and not corners_df.empty:
+            df = self._calc_v15_c4_features(df, performance_df, corners_df, min_corner_races)
+        else:
+            self.logger.warning("corners_dfが未提供のため、C4特徴量をスキップします")
+            df['horse_c4_gap_avg'] = np.nan
+            df['horse_relative_c4_avg'] = np.nan
+            df['post_style_conflict'] = np.nan
+        
+        # 2. 逃げ予備軍特徴量 (horse_front_runner_rateが必要)
+        df = self._calc_v15_front_runner_features(df, front_runner_threshold)
+        
+        self.logger.info("V15レガシー特徴量の生成完了")
+        return df
+    
+    def _calc_v15_c4_features(
+        self,
+        df: pd.DataFrame,
+        performance_df: pd.DataFrame,
+        corners_df: pd.DataFrame,
+        min_corner_races: int
+    ) -> pd.DataFrame:
+        """
+        C4馬身差平均と馬番×脚質不適合スコアを計算
+        
+        【リーク対策】
+        - cumsum() + shift(1) で当該レースの情報を除外
+        """
+        self.logger.info("  C4馬身差・不適合スコアを計算中...")
+        
+        # C4データを取得
+        c4 = corners_df[corners_df['corner'] == 4][['race_id', 'horse_number', 'position', 'gap_from_leader']].copy()
+        c4.columns = ['race_id', 'horse_number', 'c4_pos', 'c4_gap']
+        
+        # 履歴データとマージ
+        hist = performance_df[['race_id', 'horse_number', 'horse_id', 'race_date']].copy()
+        hist = hist.drop_duplicates(['race_id', 'horse_number'])
+        
+        # 出走頭数を追加
+        field_size = hist.groupby('race_id').size().reset_index(name='field_size')
+        hist = hist.merge(field_size, on='race_id', how='left')
+        
+        c4_with_id = c4.merge(hist, on=['race_id', 'horse_number'], how='left')
+        c4_with_id = c4_with_id.dropna(subset=['horse_id'])
+        c4_with_id = c4_with_id.sort_values(['horse_id', 'race_date', 'race_id'])
+        
+        # 相対C4位置を計算
+        c4_with_id['relative_c4'] = c4_with_id['c4_pos'] / c4_with_id['field_size']
+        
+        # ★ リーク防止: 累積統計 + shift(1)
+        c4_with_id['cum_gap_avg'] = c4_with_id.groupby('horse_id')['c4_gap'].transform(
+            lambda x: x.expanding().mean().shift(1)
+        )
+        c4_with_id['cum_count'] = c4_with_id.groupby('horse_id')['c4_gap'].transform(
+            lambda x: x.expanding().count().shift(1)
+        )
+        c4_with_id['cum_relative_c4'] = c4_with_id.groupby('horse_id')['relative_c4'].transform(
+            lambda x: x.expanding().mean().shift(1)
+        )
+        
+        # 最小レース数フィルタ
+        c4_with_id.loc[c4_with_id['cum_count'] < min_corner_races, 'cum_gap_avg'] = np.nan
+        c4_with_id.loc[c4_with_id['cum_count'] < min_corner_races, 'cum_relative_c4'] = np.nan
+        
+        # 馬ごとの最新統計を取得
+        latest = c4_with_id.groupby('horse_id').last()[['cum_gap_avg', 'cum_relative_c4']].reset_index()
+        horse_c4_gap_stats = latest.set_index('horse_id')['cum_gap_avg'].to_dict()
+        horse_relative_c4_stats = latest.set_index('horse_id')['cum_relative_c4'].to_dict()
+        
+        # dfにマップ
+        df['horse_id'] = df['horse_id'].astype(str)
+        df['horse_c4_gap_avg'] = df['horse_id'].map(horse_c4_gap_stats)
+        df['horse_relative_c4_avg'] = df['horse_id'].map(horse_relative_c4_stats)
+        
+        # 馬番×脚質不適合スコア
+        if 'field_size' not in df.columns:
+            df['field_size'] = df.groupby('race_id')['horse_number'].transform('count')
+        
+        df['_relative_post'] = df['horse_number'] / df['field_size']
+        df['post_style_conflict'] = (df['_relative_post'] - df['horse_relative_c4_avg']).abs()
+        df = df.drop(columns=['_relative_post'], errors='ignore')
+        
+        non_null = df['horse_c4_gap_avg'].notna().sum()
+        self.logger.info(f"    horse_c4_gap_avg非NaN: {non_null:,}/{len(df):,} ({non_null/len(df)*100:.1f}%)")
+        
+        return df
+    
+    def _calc_v15_front_runner_features(
+        self,
+        df: pd.DataFrame,
+        threshold: float
+    ) -> pd.DataFrame:
+        """
+        逃げ予備軍数と競合スコアを計算
+        
+        【前提】
+        - horse_front_runner_rate はすでにdfに存在する（過去累積統計）
+        
+        【リーク対策】
+        - horse_front_runner_rate は shift 済みと仮定
+        """
+        self.logger.info("  逃げ予備軍特徴量を計算中...")
+        
+        df = df.copy()
+        
+        # horse_front_runner_rate がない場合はスキップ
+        if 'horse_front_runner_rate' not in df.columns:
+            self.logger.warning("horse_front_runner_rateがないため、逃げ予備軍特徴量をスキップします")
+            df['race_front_runner_count'] = np.nan
+            df['front_runner_competition'] = np.nan
+            return df
+        
+        # 逃げ予備軍フラグ
+        df['_is_front_candidate'] = (df['horse_front_runner_rate'] > threshold).astype(float)
+        df['_is_front_candidate'] = df['_is_front_candidate'].fillna(0)
+        
+        # レース内逃げ予備軍数
+        df['race_front_runner_count'] = df.groupby('race_id')['_is_front_candidate'].transform('sum')
+        
+        # 逃げ競合スコア（自分以外）
+        df['front_runner_competition'] = df['race_front_runner_count'] - df['_is_front_candidate']
+        
+        # 一時カラムを削除
+        df = df.drop(columns=['_is_front_candidate'], errors='ignore')
+        
+        self.logger.info(f"    race_front_runner_count平均: {df['race_front_runner_count'].mean():.2f}")
+        
+        return df

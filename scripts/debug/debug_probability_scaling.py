@@ -71,7 +71,7 @@ def main():
     # モデルの能力スコアで確認
     print(f"\n[3] モデル能力スコアの分布")
     
-    from keibaai.src.modules.models.hybrid_betting_ai import HybridHorseRacingAI
+    from keibaai.src.models.hybrid_betting_ai import HybridHorseRacingAI
     
     # 特徴量作成（簡易版 - レースデータのみ）
     numeric_cols = [c for c in df.columns if df[c].dtype in ['int64', 'float64', 'int32', 'float32']

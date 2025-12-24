@@ -94,7 +94,7 @@
 **ファイル**: `debug_scraping_and_parsing.py`
 
 **特徴**:
-- `keibaai.src.modules.parsers.common_utils` のロジックを移植
+- `keibaai.src.parsers.common_utils` のロジックを移植
 - `extract_race_metadata_enhanced()` などの関数を独自実装
 - HTMLコンテンツを直接受け取れるように改造
 - **実行確認**: ✅ 正常動作（欠損率0%達成）

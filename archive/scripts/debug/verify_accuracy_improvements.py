@@ -2,14 +2,14 @@ import pandas as pd
 import numpy as np
 import os
 import shutil
-from keibaai.src.modules.models.optuna_tuner import OptunaTuner
-from keibaai.src.modules.models.stacking_ensemble import StackingEnsemble
-from keibaai.src.modules.models.model_train import MuEstimator
+from keibaai.src.models.optuna_tuner import OptunaTuner
+from keibaai.src.models.stacking_ensemble import StackingEnsemble
+from keibaai.src.models.model_train import MuEstimator
 import lightgbm as lgb
 
 def verify_accuracy_improvements():
     import sys
-    import keibaai.src.modules.models.optuna_tuner as optuna_tuner_module
+    import keibaai.src.models.optuna_tuner as optuna_tuner_module
     print(f"DEBUG: OptunaTuner file: {optuna_tuner_module.__file__}")
     print("Verifying Accuracy Improvements (Optuna & Stacking)...")
     

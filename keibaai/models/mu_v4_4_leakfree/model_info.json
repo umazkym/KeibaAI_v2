@@ -1,0 +1,17 @@
+{
+  "version": "v4.4_leakfree",
+  "description": "v4_3からリーク特徴量(6個)を除外したリークフリー版",
+  "valid_roi": 76.39724310776941,
+  "test_roi": 75.37922578385006,
+  "gap": 1.0180173239193522,
+  "feature_count": 150,
+  "excluded_features": [
+    "form_rank",
+    "gap_course_fit_popularity",
+    "gap_jockey_popularity",
+    "gap_pedigree_popularity",
+    "gap_trainer_popularity",
+    "is_overvalued"
+  ],
+  "created_at": "2025-12-20T23:13:16.451935"
+}

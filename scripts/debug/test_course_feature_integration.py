@@ -6,7 +6,7 @@ from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from keibaai.src.modules.parsers.results_parser import extract_race_metadata_enhanced
+from keibaai.src.parsers.results_parser import extract_race_metadata_enhanced
 from keibaai.src.utils.course_feature_provider import CourseFeatureProvider
 from bs4 import BeautifulSoup
 

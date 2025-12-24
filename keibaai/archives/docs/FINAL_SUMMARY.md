@@ -181,7 +181,7 @@ python keibaai/src/run_parsing_pipeline_local.py
 # tests/unit/test_results_parser.py
 
 import pytest
-from keibaai.src.modules.parsers.results_parser import extract_race_metadata
+from keibaai.src.parsers.results_parser import extract_race_metadata
 
 def test_distance_extraction_short_format():
     """短縮形式（ダ1000m）のテスト"""

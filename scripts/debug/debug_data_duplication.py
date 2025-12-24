@@ -79,8 +79,8 @@ def main():
     # Layer2の問題調査
     print(f"\n[4] Layer2キャリブレーション調査")
     
-    from keibaai.src.modules.models.ability_estimator import Layer1_AbilityEstimator
-    from keibaai.src.modules.models.probability_calibrator import Layer2_ProbabilityCalibrator
+    from keibaai.src.models.ability_estimator import Layer1_AbilityEstimator
+    from keibaai.src.models.probability_calibrator import Layer2_ProbabilityCalibrator
     
     # 学習データ（2023年）
     train_df = pd.read_parquet(races_path)

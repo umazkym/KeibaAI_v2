@@ -10,7 +10,7 @@ from pathlib import Path
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-from keibaai.src.modules.parsers.shutuba_parser import parse_shutuba_html
+from keibaai.src.parsers.shutuba_parser import parse_shutuba_html
 
 def test_shutuba_parser():
     """

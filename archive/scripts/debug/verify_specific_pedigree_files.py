@@ -6,7 +6,7 @@ import pandas as pd
 project_root = Path(__file__).resolve().parent
 sys.path.append(str(project_root))
 
-from keibaai.src.modules.parsers import pedigree_parser
+from keibaai.src.parsers import pedigree_parser
 
 files_to_check = [
     r"C:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\raw\html\ped\2021102922.bin",

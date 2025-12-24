@@ -19,8 +19,8 @@ import numpy as np
 project_root = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(project_root))
 
-from keibaai.src.modules.models.ability_estimator import Layer1_AbilityEstimator
-from keibaai.src.modules.models.probability_calibrator import Layer2_ProbabilityCalibrator
+from keibaai.src.models.ability_estimator import Layer1_AbilityEstimator
+from keibaai.src.models.probability_calibrator import Layer2_ProbabilityCalibrator
 
 
 def create_leak_free_features(train_df: pd.DataFrame, test_df: pd.DataFrame) -> tuple:

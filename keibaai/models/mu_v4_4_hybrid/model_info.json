@@ -1,0 +1,19 @@
+{
+  "version": "v4.4_hybrid",
+  "description": "V4_3特徴量(リーク除外) + V16コース特徴量",
+  "valid_roi": 77.13032581453633,
+  "test_roi": 74.77491679803818,
+  "gap": 2.3554090164981574,
+  "feature_count": 153,
+  "v43_features": 159,
+  "v16_features": 3,
+  "excluded_features": [
+    "form_rank",
+    "gap_course_fit_popularity",
+    "gap_jockey_popularity",
+    "gap_pedigree_popularity",
+    "gap_trainer_popularity",
+    "is_overvalued"
+  ],
+  "created_at": "2025-12-20T23:34:02.169984"
+}

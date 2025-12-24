@@ -12,7 +12,7 @@ project_root = Path('.').resolve()
 sys.path.append(str(project_root))
 
 try:
-    from keibaai.src.modules.models.model_train import MuEstimator
+    from keibaai.src.models.model_train import MuEstimator
 except ImportError:
     # パスが違う場合のフォールバック
     sys.path.append(str(project_root / 'keibaai' / 'src'))

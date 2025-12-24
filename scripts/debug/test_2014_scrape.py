@@ -60,7 +60,7 @@ def test_race_page():
             print(f"  ✓ 馬ID抽出: {len(horse_ids)}頭")
             
             # パーサーテスト
-            from keibaai.src.modules.parsers import results_parser
+            from keibaai.src.parsers import results_parser
             temp_file = Path("temp_race.bin")
             with open(temp_file, 'wb') as f:
                 f.write(html)
@@ -113,7 +113,7 @@ def test_shutuba_page():
             
             # パーサーテスト（shutuba_parser）
             try:
-                from keibaai.src.modules.parsers import shutuba_parser
+                from keibaai.src.parsers import shutuba_parser
                 temp_file = Path("temp_shutuba.bin")
                 with open(temp_file, 'wb') as f:
                     f.write(html)
@@ -168,7 +168,7 @@ def test_horse_page(horse_id: str):
             
             # パーサーテスト
             try:
-                from keibaai.src.modules.parsers import horse_info_parser
+                from keibaai.src.parsers import horse_info_parser
                 temp_file = Path(f"temp_{horse_id}_profile.bin")
                 with open(temp_file, 'wb') as f:
                     f.write(html)
@@ -220,7 +220,7 @@ def test_pedigree_page(horse_id: str):
             
             # パーサーテスト
             try:
-                from keibaai.src.modules.parsers import pedigree_parser
+                from keibaai.src.parsers import pedigree_parser
                 temp_file = Path(f"temp_{horse_id}_ped.bin")
                 with open(temp_file, 'wb') as f:
                     f.write(html)

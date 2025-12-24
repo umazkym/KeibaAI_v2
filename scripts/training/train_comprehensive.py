@@ -17,8 +17,8 @@ project_root = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(project_root))
 
 from keibaai.src.features.comprehensive_features import ComprehensiveFeatureEngineer, FeatureConfig
-from keibaai.src.modules.models.ability_estimator import Layer1_AbilityEstimator
-from keibaai.src.modules.models.probability_calibrator import Layer2_ProbabilityCalibrator
+from keibaai.src.models.ability_estimator import Layer1_AbilityEstimator
+from keibaai.src.models.probability_calibrator import Layer2_ProbabilityCalibrator
 
 
 def calculate_roi_uniform_bet(test_df, pred_probs, ev_threshold=1.0, prob_threshold=0.01):

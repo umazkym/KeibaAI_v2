@@ -33,7 +33,7 @@ sys.path.append(os.path.abspath('.'))
 
 # スクレイピング関数をインポート
 try:
-    from keibaai.src.modules.preparing._scrape_html import (
+    from keibaai.src.preparing._scrape_html import (
         fetch_html_robust_get,
         scrape_kaisai_date,
         scrape_race_id_list
@@ -323,7 +323,7 @@ class CompletePipeline:
 
         # 正しいパーサーをインポート
         try:
-            from keibaai.src.modules.parsers.shutuba_parser import parse_shutuba_html
+            from keibaai.src.parsers.shutuba_parser import parse_shutuba_html
             SHUTUBA_PARSER_AVAILABLE = True
         except ImportError:
             print("  [!] shutuba_parser.py が見つかりません。簡易版パースを使用します。")
@@ -381,11 +381,11 @@ class CompletePipeline:
 
         # 正しいパーサーをインポート
         try:
-            from keibaai.src.modules.parsers.horse_info_parser import (
+            from keibaai.src.parsers.horse_info_parser import (
                 parse_horse_profile,
                 parse_horse_performance
             )
-            from keibaai.src.modules.parsers.pedigree_parser import parse_pedigree_html
+            from keibaai.src.parsers.pedigree_parser import parse_pedigree_html
             HORSE_PARSERS_AVAILABLE = True
         except ImportError as e:
             print(f"  [!] 馬情報パーサーのインポートに失敗しました: {e}")

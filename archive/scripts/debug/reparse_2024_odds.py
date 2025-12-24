@@ -15,7 +15,7 @@ project_root = Path(__file__).resolve().parent
 sys.path.append(str(project_root))
 
 from keibaai.src import pipeline_core
-from keibaai.src.modules.parsers import results_parser
+from keibaai.src.parsers import results_parser
 
 # ロギング設定
 logging.basicConfig(

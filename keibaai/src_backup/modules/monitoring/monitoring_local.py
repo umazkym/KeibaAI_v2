@@ -1,0 +1,83 @@
+# keibaai/src/modules/monitoring/monitoring_local.py
+"""
+ローカル環境用モニタリングシステム
+スクレイピング、パース、モデルのメトリクスを収集・監視します。
+"""
+import json
+import logging
+from pathlib import Path
+from typing import Dict, Any, Optional, List
+from datetime import datetime
+
+logger = logging.getLogger(__name__)
+
+class MonitoringSystem:
+    """
+    ローカル環境用モニタリングシステムクラス
+    """
+    
+    def __init__(self, data_path: Path, config: Dict[str, Any]):
+        self.data_path = Path(data_path)
+        self.config = config
+        self.metrics = {
+            'scraping': {},
+            'parsing': {},
+            'model': {},
+            'system': {}
+        }
+        self.alerts = []
+        
+    def load_metrics(self, path: Path):
+        """過去のメトリクスを読み込む"""
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                loaded = json.load(f)
+                # 簡易的なマージ
+                self.metrics.update(loaded.get('metrics', {}))
+                logger.info(f"メトリクスを読み込みました: {path}")
+        except Exception as e:
+            logger.warning(f"メトリクスの読み込みに失敗しました: {e}")
+
+    def track_scraping_metrics(self, start_date: str, end_date: str):
+        """スクレイピングのメトリクスを追跡（プレースホルダー）"""
+        logger.info(f"スクレイピングメトリクス収集中 ({start_date} - {end_date})...")
+        # 実装詳細不明のため、ダミーデータを記録
+        self.metrics['scraping']['last_check'] = datetime.now().isoformat()
+        self.metrics['scraping']['status'] = 'ok'
+
+    def track_parsing_metrics(self):
+        """パースのメトリクスを追跡（プレースホルダー）"""
+        logger.info("パースメトリクス収集中...")
+        self.metrics['parsing']['last_check'] = datetime.now().isoformat()
+        self.metrics['parsing']['status'] = 'ok'
+
+    def calculate_baselines(self):
+        """ベースラインの計算（プレースホルダー）"""
+        logger.info("ベースライン計算中...")
+        pass
+
+    def save_metrics(self, path: Path):
+        """メトリクスを保存"""
+        try:
+            output = {
+                'timestamp': datetime.now().isoformat(),
+                'metrics': self.metrics,
+                'alerts': self.alerts
+            }
+            with open(path, 'w', encoding='utf-8') as f:
+                json.dump(output, f, indent=2, ensure_ascii=False)
+            logger.info(f"メトリクスを保存しました: {path}")
+        except Exception as e:
+            logger.error(f"メトリクスの保存に失敗しました: {e}")
+
+    def get_summary(self) -> Dict[str, Any]:
+        """サマリを取得"""
+        return {
+            'total_metrics': sum(len(v) for v in self.metrics.values()),
+            'total_alerts': len(self.alerts),
+            'alert_by_severity': {
+                'INFO': 0,
+                'WARNING': 0,
+                'ERROR': 0
+            }
+        }

@@ -1,147 +1,140 @@
-#!/usr/bin/env python3
-# src/models/nu_estimator.py
-"""
-src/models/nu_estimator.py (NuEstimator)
-ν（レース荒れ度）を推定するモデルクラス
-仕様書 7.7.3章 に基づく実装
-"""
-
-import logging
-from typing import Dict, List, Optional
-from pathlib import Path
-import pandas as pd
 import numpy as np
+import pandas as pd
 import lightgbm as lgb
-import joblib
-import json
+from scipy.stats import t
+from scipy.optimize import minimize_scalar
+from sklearn.base import BaseEstimator, RegressorMixin
+from typing import Dict, Optional, List, Union
+import logging
 
-class NuEstimator:
+logger = logging.getLogger(__name__)
+
+class NuEstimator(BaseEstimator, RegressorMixin):
     """
-    ν（レース全体の荒れ度）推定モデル
+    レースごとの自由度（ν: Nu）を予測するモデル。
+    νが小さいほど裾が重い（荒れやすい）、大きいほど正規分布に近い（堅い）。
     
-    仕様書 13.4章 (train_sigma_nu_models.py) に基づき、
-    LGBMRegressor を使用してレース単位の分散（例: 着順の標準偏差）を予測する。
+    アプローチ:
+    1. レースごとに、残差（標準化済み）の分布に最もフィットするνをMLEで推定。
+    2. 推定されたνを正解ラベルとして、レース特徴量からνを予測するモデルを学習。
     """
     
-    def __init__(self, config: Dict):
-        """
-        Args:
-            config: configs/models.yaml の 'nu_estimator' セクション
-        """
-        self.config = config
-        self.params = config.get('params', {
+    def __init__(self, params: Optional[Dict] = None):
+        self.params = params or {
             'objective': 'regression',
-            'metric': 'rmse',
-            'boosting_type': 'gbdt'
+            'metric': 'mae', # νの予測は外れ値の影響を抑えるためMAE推奨
+            'boosting_type': 'gbdt',
+            'n_estimators': 500,
+            'learning_rate': 0.01,
+            'num_leaves': 15,
+            'max_depth': 5,
+            'verbose': -1
+        }
+        self.model = None
+        self.feature_names_ = None
+        
+    def _estimate_nu_mle(self, standardized_residuals: np.ndarray) -> float:
+        """
+        標準化残差からMLEで最適なνを推定する
+        """
+        if len(standardized_residuals) < 3:
+            return 5.0 # データ不足時はデフォルト値
+            
+        def neg_log_likelihood(nu):
+            # t分布の対数尤度のマイナスを最小化
+            return -np.sum(t.logpdf(standardized_residuals, df=nu))
+            
+        # νの探索範囲: 2.1 (非常に荒れる) 〜 30.0 (ほぼ正規分布)
+        result = minimize_scalar(
+            neg_log_likelihood,
+            bounds=(2.1, 30.0),
+            method='bounded'
+        )
+        
+        return result.x
+        
+    def fit(self, 
+            race_features_df: pd.DataFrame, 
+            y: Union[pd.Series, np.ndarray], 
+            mu_pred: Union[pd.Series, np.ndarray],
+            sigma_pred: Union[pd.Series, np.ndarray],
+            race_ids: Union[pd.Series, np.ndarray]):
+        """
+        モデルの学習
+        
+        Args:
+            race_features_df: レース単位の特徴量（1行1レース）
+            y: 各馬の実際の完走時間
+            mu_pred: Muモデルの予測値
+            sigma_pred: Sigmaモデルの予測値
+            race_ids: 各サンプルのレースID
+        """
+        # 1. 標準化残差の計算 z = (y - μ) / σ
+        z = (y - mu_pred) / sigma_pred
+        
+        # 2. レースごとに最適なνを推定
+        df_temp = pd.DataFrame({
+            'race_id': race_ids,
+            'z': z
         })
         
-        self.model: Optional[lgb.LGBMRegressor] = None
-        self.feature_names: List[str] = []
-        self.global_nu: float = 1.0 # フォールバック用のグローバル平均
-
-    def train(
-        self,
-        features_df: pd.DataFrame,
-        feature_names: List[str],
-        target_nu: str = 'nu_target' # 目的変数 (例: finish_position の std)
-    ):
-        """
-        νモデルを学習
+        race_nu_targets = {}
+        unique_races = df_temp['race_id'].unique()
         
-        Args:
-            features_df: 学習用特徴量DataFrame (レース単位で集約済みを想定)
-            feature_names: 使用する特徴量リスト
-            target_nu: レース荒れ度のターゲットカラム名
-        """
-        logging.info("νモデルの学習開始...")
+        logger.info(f"Estimating optimal Nu for {len(unique_races)} races...")
         
-        self.feature_names = feature_names
+        for rid in unique_races:
+            residuals = df_temp[df_temp['race_id'] == rid]['z'].values
+            optimal_nu = self._estimate_nu_mle(residuals)
+            race_nu_targets[rid] = optimal_nu
+            
+        # 3. 学習用データの作成
+        # race_features_df はすでにレースIDでユニークになっている前提、またはここで集約が必要
+        # ここでは race_features_df のインデックスが race_id であるか、カラムに含まれていると仮定
         
-        X = features_df[self.feature_names]
-        y = features_df[target_nu]
+        # ターゲット変数のシリーズ作成
+        target_series = pd.Series(race_nu_targets, name='target_nu')
         
-        # グローバル平均を計算（予測失敗時のフォールバック用）
-        self.global_nu = y.mean()
+        # 特徴量とターゲットの結合
+        # race_features_df がレース単位（ユニーク）であることを確認
+        if 'race_id' in race_features_df.columns:
+            train_df = race_features_df.drop_duplicates(subset=['race_id']).set_index('race_id')
+        else:
+            train_df = race_features_df # インデックスがrace_idと仮定
+            
+        # 共通するレースIDのみで学習
+        common_indices = train_df.index.intersection(target_series.index)
+        X_train = train_df.loc[common_indices]
+        y_train = target_series.loc[common_indices]
+        
+        logger.info(f"Training Nu Estimator with {len(X_train)} races")
         
         self.model = lgb.LGBMRegressor(**self.params)
-        self.model.fit(X, y)
-        logging.info("νモデルの学習完了")
-
-    def predict(
-        self,
-        features_df: pd.DataFrame
-    ) -> np.ndarray:
+        self.model.fit(X_train, y_train)
+        self.feature_names_ = X_train.columns.tolist()
+        
+        return self
+    
+    def predict(self, race_features_df: pd.DataFrame) -> np.ndarray:
         """
-        ν（レース荒れ度）を予測
-        
-        Args:
-            features_df: 予測対象の特徴量DataFrame (レース単位)
-        
-        Returns:
-            ν（荒れ度スコア）の配列
+        レース自由度νの予測
         """
-        
         if self.model is None:
-            raise RuntimeError("モデルが学習されていません。 train() または load_model() を呼び出してください。")
+            raise ValueError("Model has not been trained yet.")
             
-        X = features_df[self.feature_names]
+        # race_idカラムがあれば除外して予測
+        X = race_features_df.copy()
+        if 'race_id' in X.columns:
+             # 重複排除（レース単位にする）
+             X = X.drop_duplicates(subset=['race_id']).set_index('race_id')
         
-        predicted_nu = self.model.predict(X)
-        
-        # 異常値をグローバル平均で置換
-        predicted_nu = np.nan_to_num(predicted_nu, nan=self.global_nu)
-        
-        # 負の値をクリップ
-        return np.maximum(predicted_nu, 0.0)
-
-    def save_model(self, model_path: str):
-        """
-        学習済みモデルと特徴量リストを保存
-        
-        Args:
-            model_path: 保存先パス (例: data/models/nu_model.pkl)
-        """
-        output_path = Path(model_path)
-        output_dir = output_path.parent
-        output_dir.mkdir(parents=True, exist_ok=True)
-        
-        # モデル本体を保存
-        joblib.dump(self.model, output_path)
-        
-        # メタデータを同階層に保存
-        meta_data = {
-            'feature_names': self.feature_names,
-            'global_nu': self.global_nu
-        }
-        meta_path = output_dir / f"{output_path.stem}_metadata.json"
-        with open(meta_path, 'w', encoding='utf-8') as f:
-            json.dump(meta_data, f, ensure_ascii=False, indent=2)
+        # モデルの特徴量と一致させる（必要なら）
+        if self.feature_names_:
+            X = X[self.feature_names_]
             
-        logging.info(f"νモデルを {output_path} に保存しました")
-
-    def load_model(self, model_path: str):
-        """
-        モデルと特徴量リストをロード
+        return self.model.predict(X)
         
-        Args:
-            model_path: ロード元パス
-        """
-        model_file = Path(model_path)
-
-        if not model_file.exists():
-            raise FileNotFoundError(f"モデルファイルが見つかりません: {model_path}")
-
-        self.model = joblib.load(model_file)
-        
-        meta_path = model_file.parent / f"{model_file.stem}_metadata.json"
-        try:
-            with open(meta_path, 'r', encoding='utf-8') as f:
-                meta_data = json.load(f)
-                self.feature_names = meta_data['feature_names']
-                self.global_nu = meta_data['global_nu']
-        except FileNotFoundError:
-            logging.warning(f"メタファイルが見つかりません: {meta_path}。グローバル値がデフォルトになります。")
-            self.feature_names = self.model.feature_name_
-            self.global_nu = 1.0
-            
-        logging.info(f"νモデルを {model_path} からロードしました")
+    def save_model(self, filepath: str):
+        if self.model is None:
+            raise ValueError("Model has not been trained yet.")
+        self.model.booster_.save_model(filepath)

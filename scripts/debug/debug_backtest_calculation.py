@@ -88,8 +88,8 @@ def main():
     
     # モデル学習（シンプルに）
     print(f"\n[2] モデル学習")
-    from keibaai.src.modules.models.ability_estimator import Layer1_AbilityEstimator
-    from keibaai.src.modules.models.probability_calibrator import Layer2_ProbabilityCalibrator
+    from keibaai.src.models.ability_estimator import Layer1_AbilityEstimator
+    from keibaai.src.models.probability_calibrator import Layer2_ProbabilityCalibrator
     
     X = df[feature_cols].fillna(0)
     y = df['finish_position']
@@ -98,7 +98,7 @@ def main():
     # 学習データは別途用意が必要だが、ここではテストデータで直接推論
     # → 訓練済みモデルをロード
     
-    from keibaai.src.modules.models.hybrid_betting_ai import HybridHorseRacingAI
+    from keibaai.src.models.hybrid_betting_ai import HybridHorseRacingAI
     
     # 訓練済みモデルをロード
     model_path = Path('keibaai/data/models/hybrid_v1')

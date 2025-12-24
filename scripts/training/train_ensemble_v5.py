@@ -33,7 +33,7 @@ from datetime import datetime
 from keibaai.src.models.edge_calculator import EdgeCalculator, EdgeOptimizer
 from keibaai.src.models.specialized import PaceScenarioModel, PedigreeAptitudeModel
 from keibaai.src.backtesting import BacktestEngine
-from keibaai.src.modules.splitters import StrictDataSplitter
+from keibaai.src.splitters import StrictDataSplitter
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 

@@ -29,7 +29,11 @@ def load_data():
     
     races_df = pd.read_parquet(data_dir / "races/races.parquet")
     races_df['race_date'] = pd.to_datetime(races_df['race_date'])
-    races_df = races_df[races_df['race_date'] >= '2020-01-01'].dropna(subset=['finish_position', 'win_odds'])
+    # ドキュメント記載のデータ期間に合わせる (2020-01-05 〜 2025-10-26)
+    races_df = races_df[
+        (races_df['race_date'] >= '2020-01-01') & 
+        (races_df['race_date'] <= '2025-10-26')  # ★ ドキュメント記載の終了日
+    ].dropna(subset=['finish_position', 'win_odds'])
     
     pedigrees_df = pd.read_parquet(data_dir / "pedigrees/pedigrees.parquet")
     corners_df = pd.read_parquet(data_dir / "corners/corner_positions.parquet")
@@ -88,17 +92,16 @@ def main():
     
     races_df, pedigrees_df, corners_df, race_details_df, returns_df = load_data()
     
-    # V15相当の期間設定: Train全体でfit, Testで評価
-    train_end = '2024-01-01'
+    # 時系列分割 (2025-01-01で分割)
+    # v15レポートによると、Test期間は2025-01-01〜
+    train_end_date = '2025-01-01'
+    test_start_date = '2025-01-01'
     
-    train_mask = races_df['race_date'] < train_end
-    test_mask = races_df['race_date'] >= train_end
+    train_df = races_df[races_df['race_date'] < train_end_date].copy()
+    test_df = races_df[races_df['race_date'] >= test_start_date].copy()
     
-    train_df = races_df[train_mask].copy()
-    test_df = races_df[test_mask].copy()
-    
-    logger.info(f"  Train: {len(train_df):,}件 (~{train_end})")
-    logger.info(f"  Test:  {len(test_df):,}件 ({train_end}~)")
+    logger.info(f"  Train: {len(train_df):,}件 (~{train_end_date})")
+    logger.info(f"  Test:  {len(test_df):,}件 ({test_start_date}~)")
     logger.info(f"  Trainレース数: {train_df['race_id'].nunique():,}")
     logger.info(f"  Testレース数: {test_df['race_id'].nunique():,}")
     
@@ -114,59 +117,56 @@ def main():
     feature_cols = fe.get_feature_columns()
     logger.info(f"  特徴量数: {len(feature_cols)}")
     
-    # 関連度ラベル
-    train_features['relevance'] = train_features['finish_position'].apply(create_relevance_label)
-    test_features['relevance'] = test_features['finish_position'].apply(create_relevance_label)
+    # ★ Binary Classification用ターゲット (V15公式: objective='binary')
+    train_features['is_win'] = (train_features['finish_position'] == 1).astype(int)
+    test_features['is_win'] = (test_features['finish_position'] == 1).astype(int)
     
-    # is_place も追加
-    train_features['is_place'] = (train_features['finish_position'] <= 3).astype(int)
-    test_features['is_place'] = (test_features['finish_position'] <= 3).astype(int)
-    
-    # グループ
+    # ソート
     train_sorted = train_features.sort_values('race_id')
     test_sorted = test_features.sort_values('race_id')
     
-    groups_train = train_sorted.groupby('race_id').size().values
-    groups_test = test_sorted.groupby('race_id').size().values
-    
     X_train = train_sorted[feature_cols].fillna(0)
-    y_train = train_sorted['relevance']
+    y_train = train_sorted['is_win']  # ★ Binary Classification: 0 or 1
     X_test = test_sorted[feature_cols].fillna(0)
+    y_test = test_sorted['is_win']
     
-    # LambdaRank（V15相当パラメータ）
+    # Binary Classification（V15公式設定）
     logger.info("")
     logger.info("=" * 60)
-    logger.info("LambdaRank単勝モデル（V15相当）")
+    logger.info("Binary Classification 単勝モデル（V15公式）")
     logger.info("=" * 60)
     
-    # V15相当のパラメータを推定
-    params = {
-        'objective': 'lambdarank',
-        'metric': 'ndcg',
-        'eval_at': [1, 3, 5],
-        'boosting_type': 'gbdt',
-        'max_depth': 3,
-        'num_leaves': 15,
-        'min_child_samples': 200,
-        'learning_rate': 0.02,
-        'reg_alpha': 10.0,
-        'reg_lambda': 10.0,
-        'subsample': 0.6,
-        'colsample_bytree': 0.5,
-        'random_state': 42,
-        'n_jobs': -1,
-        'verbose': -1
+    # V15公式ハイパーパラメータ (from 23_包括的検証レポート_v3.md)
+    lgbm_params = {
+        'objective': 'binary',
+        'metric': 'auc',
+        'verbosity': -1,
+        'learning_rate': 0.03,      # 0.05 -> 0.03
+        'num_leaves': 20,           # 31 -> 20
+        'max_depth': 3,             # -1 -> 3 (重要: 浅い木で過学習を防ぐ)
+        'min_child_samples': 100,   # 20 -> 100
+        'reg_alpha': 3.0,           # 0.0 -> 3.0
+        'reg_lambda': 5.0,          # 0.0 -> 5.0
+        'bagging_fraction': 0.7,
+        'bagging_freq': 3,
+        'feature_fraction': 0.7,
+        'random_state': 42
     }
+    num_boost_round = 200 # レポート記載の値
     
-    train_ds = lgb.Dataset(X_train, y_train, group=groups_train)
+    # ★ Binary Classification: groupパラメータは不要
+    train_ds = lgb.Dataset(X_train, y_train)
+    test_ds = lgb.Dataset(X_test, y_test)
     
     model = lgb.train(
-        params,
+        lgbm_params,
         train_ds,
-        num_boost_round=500,
-        callbacks=[lgb.log_evaluation(100)]
+        num_boost_round=num_boost_round,  # ★ ドキュメント通りフル200ラウンド (Early Stoppingなし)
+        valid_sets=[test_ds],
+        callbacks=[
+            lgb.log_evaluation(period=50)  # ログ用 (Early Stoppingは削除)
+        ]
     )
-    
     train_sorted['score'] = model.predict(X_train)
     test_sorted['score'] = model.predict(X_test)
     
@@ -202,8 +202,55 @@ def main():
         logger.info(f"  ✅ V15ベースライン再現成功")
     else:
         logger.info(f"  ❌ 差分: {target - test_roi:.1f}%")
+
+    logger.info("")
+    logger.info("=" * 60)
+    logger.info("詳細ブレークダウン分析")
+    logger.info("=" * 60)
+
+    # 1. トラック条件別
+    logger.info("【トラック種別 ROI】")
+    # Noneを除外し、文字列に変換
+    surfaces = [s for s in test_sorted['track_surface'].unique() if s is not None]
+    for surface in surfaces:
+        subset = test_sorted[test_sorted['track_surface'] == surface]
+        _, roi = calculate_roi(subset, 'score')
+        count = len(subset.groupby('race_id'))
+        logger.info(f"  {surface:5}: ROI={roi:6.1f}% (レース数={count})")
+
+    # 2. クラス別
+    logger.info("\n【クラス別 ROI】")
+    class_map = {
+        'Shogai': '障害', 'G1': 'G1', 'G2': 'G2', 'G3': 'G3', 'OP': 'オープン',
+        '3Win': '3勝', '2Win': '2勝', '1Win': '1勝', 'Maiden': '未勝利', 'New': '新馬'
+    }
+    # 簡単なマッピングでグルーピング
+    test_sorted['simple_class'] = test_sorted['race_class'].astype(str)
+    for c in sorted(test_sorted['simple_class'].unique()):
+        subset = test_sorted[test_sorted['simple_class'] == c]
+        if len(subset) < 100: continue
+        _, roi = calculate_roi(subset, 'score')
+        count = len(subset['race_id'].unique())
+        logger.info(f"  {c:10}: ROI={roi:6.1f}% (レース数={count})")
+
+    # 3. オッズ帯別（Top1選出時）
+    logger.info("\n【単勝オッズ帯別 ROI (Top1 Only)】")
+    # Top1のみ抽出
+    test_sorted['pred_rank'] = test_sorted.groupby('race_id')['score'].rank(ascending=False, method='first')
+    top1 = test_sorted[test_sorted['pred_rank'] == 1].copy()
     
-    # 特徴量重要度Top10
+    odds_bins = [1.0, 5.0, 10.0, 20.0, 50.0, 100.0, 999.0]
+    labels = ['1-5', '5-10', '10-20', '20-50', '50-100', '100+']
+    top1['odds_bin'] = pd.cut(top1['win_odds'], bins=odds_bins, labels=labels, right=False)
+    
+    for label in labels:
+        subset = top1[top1['odds_bin'] == label]
+        if len(subset) == 0: continue
+        hits = subset[subset['finish_position'] == 1]
+        bets = len(subset)
+        ret = hits['win_odds'].sum()
+        roi = ret / bets * 100 if bets > 0 else 0
+        logger.info(f"  {label:7}: ROI={roi:6.1f}% (件数={bets}, 的中={len(hits)})")
     logger.info("")
     logger.info("Top 10 特徴量:")
     importance = pd.DataFrame({

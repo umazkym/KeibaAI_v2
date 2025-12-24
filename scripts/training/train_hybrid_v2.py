@@ -18,7 +18,7 @@ import pandas as pd
 project_root = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(project_root))
 
-from keibaai.src.modules.models.hybrid_betting_ai import HybridHorseRacingAI
+from keibaai.src.models.hybrid_betting_ai import HybridHorseRacingAI
 from keibaai.src.features.hybrid_features import HybridFeatureEngineer, FeatureConfig
 
 logging.basicConfig(

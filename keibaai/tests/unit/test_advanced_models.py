@@ -2,8 +2,8 @@ import pytest
 import pandas as pd
 import numpy as np
 from scipy.stats import t
-from keibaai.src.modules.models.sigma_estimator import SigmaEstimator
-from keibaai.src.modules.models.nu_estimator import NuEstimator
+from keibaai.src.models.sigma_estimator import SigmaEstimator
+from keibaai.src.models.nu_estimator import NuEstimator
 
 @pytest.fixture
 def synthetic_data():

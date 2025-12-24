@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 project_root = Path(__file__).resolve().parent.parent.parent
 sys.path.append(str(project_root))
 
-from keibaai.src.modules.constants import UrlPaths
+from keibaai.src.constants import UrlPaths
 
 # テスト用の設定
 USER_AGENTS = [

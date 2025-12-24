@@ -23,7 +23,7 @@ import logging
 project_root = Path(__file__).resolve().parent
 sys.path.append(str(project_root / "keibaai"))
 
-from keibaai.src.modules.parsers import horse_info_parser, pedigree_parser
+from keibaai.src.parsers import horse_info_parser, pedigree_parser
 from keibaai.src import pipeline_core
 import sqlite3
 

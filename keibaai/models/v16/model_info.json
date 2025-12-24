@@ -1,0 +1,38 @@
+{
+  "version": "v16",
+  "description": "V16 Binary Classification (V15 + ペース特徴量)",
+  "base_model": "V15",
+  "new_features": [
+    "horse_pace_preference",
+    "horse_avg_pace_lf",
+    "pace_fit_score",
+    "venue_surface_pace_trend"
+  ],
+  "train_roi": 113.84619957789602,
+  "valid_roi": 78.79510885773934,
+  "test_roi": 73.38782051282051,
+  "train_hit_rate": 29.82075443655064,
+  "valid_hit_rate": 21.08559498956159,
+  "test_hit_rate": 22.24358974358974,
+  "train_valid_gap": 35.05109072015668,
+  "train_test_gap": 40.458379065075505,
+  "feature_count": 70,
+  "train_period": "~2023-12-31",
+  "valid_period": "2024-01-01~2024-12-31",
+  "test_period": "2025-01-01~",
+  "params": {
+    "objective": "binary",
+    "metric": "auc",
+    "verbosity": -1,
+    "learning_rate": 0.03,
+    "num_leaves": 20,
+    "max_depth": 3,
+    "min_child_samples": 100,
+    "reg_alpha": 3.0,
+    "reg_lambda": 5.0,
+    "bagging_fraction": 0.7,
+    "bagging_freq": 3,
+    "feature_fraction": 0.7
+  },
+  "created_at": "2025-12-23T12:44:11.069485"
+}

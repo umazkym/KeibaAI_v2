@@ -20,9 +20,9 @@ sys.path.append(str(project_root))
 
 try:
     from keibaai.src.pipeline_core import setup_logging
-    from keibaai.src.modules.validation.validation_pipeline import ValidationPipeline
-    from keibaai.src.modules.monitoring.monitoring_local import MonitoringSystem
-    from keibaai.src.modules.monitoring.model_analyzer import ModelAnalyzer
+    from keibaai.src.validation.validation_pipeline import ValidationPipeline
+    from keibaai.src.monitoring.monitoring_local import MonitoringSystem
+    from keibaai.src.monitoring.model_analyzer import ModelAnalyzer
 except ImportError as e:
     print(f"エラー: 必要なモジュールのインポートに失敗しました: {e}")
     print(f"プロジェクトルート: {project_root}")

@@ -39,6 +39,7 @@ class FeatureEngine:
         results_history_df: pd.DataFrame,
         horse_profiles_df: pd.DataFrame,
         pedigree_df: Optional[pd.DataFrame] = None,
+        corners_df: Optional[pd.DataFrame] = None,  # V15 Legacy用
     ) -> pd.DataFrame:
         """
         shutuba_df と各種履歴データから特徴量を生成する
@@ -258,6 +259,20 @@ class FeatureEngine:
                         logging.info("基本血統特徴量の生成完了")
                 except Exception as e:
                     logging.warning(f"基本血統特徴量の生成をスキップしました: {e}")
+
+                # 16. V15 Legacy Features (ROI向上の核心部分)
+                try:
+                    logging.info("V15レガシー特徴量を生成中...")
+                    df = adv_engine.generate_v15_legacy_features(
+                        df, 
+                        results_history_df,
+                        corners_df=corners_df,
+                        min_corner_races=5,
+                        front_runner_threshold=0.3
+                    )
+                    logging.info("V15レガシー特徴量の生成完了")
+                except Exception as e:
+                    logging.warning(f"V15レガシー特徴量の生成をスキップしました: {e}")
 
                 # 14. 生産者・産地特徴量
                 # try:

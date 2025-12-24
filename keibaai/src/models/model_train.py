@@ -1,203 +1,186 @@
-#!/usr/bin/env python3
-# src/models/model_train.py
-"""
-src/models/model_train.py (MuEstimator)
-μ（馬の基礎能力）を推定するモデルクラス
-仕様書 7.7.1章 に基づく実装
-"""
-
-import logging
-from typing import Dict, List, Optional
-from pathlib import Path
-import pandas as pd
 import numpy as np
+import pandas as pd
 import lightgbm as lgb
-import joblib
-import json
+from sklearn.base import BaseEstimator, RegressorMixin
+from typing import Dict, Optional, List, Union
+import logging
+from tqdm import tqdm
 
-class MuEstimator:
+logger = logging.getLogger(__name__)
+
+class MuEstimator(BaseEstimator, RegressorMixin):
     """
-    μ（馬の基礎能力スコア）推定モデル
+    各馬の期待完走時間（μ）を予測するモデル。
     
-    仕様書に基づき、LightGBMのRegressor（基礎スコア）とRanker（順位）を
-    内部に持つアンサンブルモデルとして実装（ただし運用はRegressor主体でも可）。
-   
+    アプローチ:
+    2段階学習 (Two-Stage Learning)
+    1. Ranking Model (LGBMRanker):
+       - レース内の相対的な着順（強さ）を学習
+       - 特徴量: 馬、騎手、血統など
+       - ターゲット: 着順（小さい方が良い）
+    
+    2. Regression Model (LGBMRegressor):
+       - 絶対的な完走時間を学習
+       - 特徴量: 元の特徴量 + Rankerの予測スコア
+       - ターゲット: 完走時間（秒）
     """
     
-    def __init__(self, config: Dict):
-        """
-        Args:
-            config: configs/models.yaml の 'mu_estimator' セクション
-        """
-        self.config = config
-        self.regressor_params = config.get('regressor_params', {})
-        self.ranker_params = config.get('ranker_params', {})
-        
-        self.model_regressor: Optional[lgb.LGBMRegressor] = None
-        self.model_ranker: Optional[lgb.LGBMRanker] = None
-        
-        self.feature_names: List[str] = []
+    def __init__(self, ranker_params: Optional[Dict] = None, regressor_params: Optional[Dict] = None):
+        self.ranker_params = ranker_params or {
+            'objective': 'lambdarank',
+            'metric': 'ndcg',
+            'boosting_type': 'gbdt',
+            'n_estimators': 1000,
+            'learning_rate': 0.01,
+            'num_leaves': 31,
+            'verbose': -1
+        }
+        self.regressor_params = regressor_params or {
+            'objective': 'regression',
+            'metric': 'rmse',
+            'boosting_type': 'gbdt',
+            'n_estimators': 1000,
+            'learning_rate': 0.01,
+            'num_leaves': 31,
+            'verbose': -1
+        }
+        self.ranker = None
+        self.regressor = None
+        self.feature_names_ = None
 
-    def train(
-        self,
-        features_df: pd.DataFrame,
-        feature_names: List[str],
-        target_regressor: str = 'finish_time_seconds', # 回帰ターゲット
-        target_ranker: str = 'finish_position',     # ランクターゲット
-        group_col: str = 'race_id'
-    ):
+    def train(self, features_df: pd.DataFrame, feature_names: List[str], target_regressor: str, target_ranker: str, group_col: str):
         """
-        μモデル（RegressorとRanker）を学習
+        学習のラッパーメソッド
         
         Args:
-            features_df: 学習用特徴量DataFrame
-            feature_names: 使用する特徴量のリスト
-            target_regressor: 回帰（スコア）の目的変数名
-            target_ranker: ランキング（順位）の目的変数名
-            group_col: レースID（グループ）のカラム名
+            features_df: 学習データ
+            feature_names: 特徴量カラム名のリスト
+            target_regressor: 回帰ターゲット（完走時間）
+            target_ranker: ランキングターゲット（着順）
+            group_col: グループカラム（race_id）
         """
-        logging.info("μモデルの学習開始...")
+        logger.info("Starting training process...")
         
-        self.feature_names = feature_names
+        # グループ（レース）ごとにデータをソート（LightGBMのgroupパラメータの仕様上必須）
+        # race_idでソートすることで、同じレースの馬が連続するようにする
+        sorted_df = features_df.sort_values(group_col).reset_index(drop=True)
         
-        X = features_df[self.feature_names]
+        # 特徴量とターゲットの抽出
+        X = sorted_df[feature_names]
+        y = sorted_df[target_regressor]
         
-        # 1. Regressor (基礎スコア) の学習
-        logging.info(f"Regressor (LGBMRegressor) を '{target_regressor}' で学習中...")
-        y_reg = features_df[target_regressor]
+        # グループ情報の作成（各レースの馬数）
+        # sort_valuesしているので、groupby(sort=False)で順序を維持
+        group = sorted_df.groupby(group_col, sort=False).size().to_list()
         
-        # Detect categorical features (one-hot encoded)
-        categorical_features = [col for col in self.feature_names if 
-                               col.startswith('sex_') or 
-                               col.startswith('trainer_') or
-                               col.startswith('jockey_') or
-                               '_' in col and col.split('_')[0] in ['surface', 'weather', 'grade']]
+        logger.info(f"Data sorted by {group_col}. Total groups: {len(group)}")
         
-        if categorical_features:
-            logging.info(f"カテゴリカル特徴量を検出: {len(categorical_features)}個")
+        # 学習実行
+        self.fit(X, y, group=group)
         
-        self.model_regressor = lgb.LGBMRegressor(**self.regressor_params)
-        self.model_regressor.fit(X, y_reg, categorical_feature=categorical_features if categorical_features else 'auto')
-        logging.info("Regressor の学習完了")
-        
-        # 2. Ranker (順位) の学習
-        logging.info(f"Ranker (LGBMRanker) を '{target_ranker}' で学習中...")
-        y_rank = features_df[target_ranker]
-        
-        # グループ（レースごと）のサンプル数を計算
-        # group_col でソートされている必要があるため、ソートを実行
-        features_df_sorted = features_df.sort_values(by=group_col)
-        X_rank = features_df_sorted[self.feature_names]
-        y_rank_sorted = features_df_sorted[target_ranker]
-        group_counts = features_df_sorted.groupby(group_col).size().values
-        
-        self.model_ranker = lgb.LGBMRanker(**self.ranker_params)
-        self.model_ranker.fit(X_rank, y_rank_sorted, group=group_counts, 
-                             categorical_feature=categorical_features if categorical_features else 'auto')
-        logging.info("Ranker の学習完了")
-
-    def predict(
-        self,
-        features_df: pd.DataFrame,
-        ensemble_weight_regressor: float = 0.5,
-        ensemble_weight_ranker: float = 0.5
-    ) -> np.ndarray:
+    def fit(self, X: pd.DataFrame, y: Union[pd.Series, np.ndarray], group: Optional[Union[List, np.ndarray]] = None):
         """
-        μスコアを予測
+        モデルの学習
         
         Args:
-            features_df: 予測対象の特徴量DataFrame
-            ensemble_weight_regressor: Regressorの予測値の重み
-            ensemble_weight_ranker: Rankerの予測値の重み
-        
-        Returns:
-            μスコアの配列
+            X: 特徴量
+            y: 完走時間（秒）
+            group: レースごとの馬数（Ranker学習に必須）
         """
-        if self.model_regressor is None or self.model_ranker is None:
-            raise RuntimeError("モデルが学習されていません。 train() または load_model() を呼び出してください。")
+        if group is None:
+            raise ValueError("group (number of horses per race) is required for Ranking model.")
             
-        if not self.feature_names:
-             raise RuntimeError("特徴量リストがロードされていません。")
-
-        X = features_df[self.feature_names]
+        logger.info(f"Training Mu Estimator (Ranker + Regressor) with {len(X)} samples")
         
-        # 1. Regressor 予測
-        # Regressor (例: タイム予測) は値が小さいほど良い
-        pred_regressor = self.model_regressor.predict(X)
-        # スコア化 (値が大きいほど良いように反転)
-        score_regressor = -pred_regressor
+        # 1. Ranker Training
+        # Rankerのターゲットは整数の「関連度」スコアが必要
+        # yはタイム（浮動小数点）なので、レース内の順位に変換する
+        # 各レース内で: タイムが短い馬ほど高いrelevanceスコアを付与
+        rank_target = []
+        start_idx = 0
+        for g in tqdm(group, desc="Generating Rank Targets"):
+            group_y = y[start_idx:start_idx+g]
+            # argsortで順位を取得（0-indexed）
+            ranks = np.argsort(np.argsort(group_y))
+            # relevance: 最大ランク - 現在のランク（1着が最高スコア）
+            relevance = (g - 1) - ranks
+            # LightGBMのデフォルトlabel_gainは31個までなので、30以下にクリップする
+            relevance = np.clip(relevance, 0, 30)
+            rank_target.extend(relevance)
+            start_idx += g
+        rank_target = np.array(rank_target, dtype=int)
         
-        # 2. Ranker 予測
-        # Ranker はスコアを直接出力 (値が大きいほど順位が良い)
-        score_ranker = self.model_ranker.predict(X)
+        self.ranker = lgb.LGBMRanker(**self.ranker_params)
+        self.ranker.fit(X, rank_target, group=group)
         
-        # 3. アンサンブル (レースごとにZ-score正規化後に加重平均)
-        if 'race_id' not in features_df.columns:
-            raise ValueError("race_id が特徴量DataFrameに含まれていません。レースごとの正規化に必要です。")
-
-        # 正規化のための一時的なDataFrameを作成
-        temp_df = pd.DataFrame({
-            'race_id': features_df['race_id'],
-            'score_regressor': score_regressor,
-            'score_ranker': score_ranker
-        })
-
-        # レースごとに正規化
-        temp_df['score_regressor_norm'] = temp_df.groupby('race_id')['score_regressor'].transform(
-            lambda x: (x - x.mean()) / (x.std() + 1e-6)
-        )
-        temp_df['score_ranker_norm'] = temp_df.groupby('race_id')['score_ranker'].transform(
-            lambda x: (x - x.mean()) / (x.std() + 1e-6)
-        )
-
-        # stdが0の場合（例：レースに1頭しかいない）にNaNが発生する可能性があるため、0で埋める
-        temp_df.fillna(0, inplace=True)
-
-        final_score = (
-            temp_df['score_regressor_norm'] * ensemble_weight_regressor +
-            temp_df['score_ranker_norm'] * ensemble_weight_ranker
-        )
+        # 2. Feature Augmentation
+        rank_score = self.ranker.predict(X)
+        X_aug = X.copy()
+        X_aug['rank_score'] = rank_score
         
-        return final_score.values
-
-    def save_model(self, model_dir: str):
+        logger.info(f"Feature Augmentation: X shape {X.shape} -> X_aug shape {X_aug.shape}")
+        
+        # 3. Regressor Training
+        self.regressor = lgb.LGBMRegressor(**self.regressor_params)
+        self.regressor.fit(X_aug, y)
+        
+        self.feature_names_ = X.columns.tolist()
+        
+        return self
+    
+    def predict(self, X: pd.DataFrame) -> np.ndarray:
         """
-        学習済みモデルと特徴量リストを保存
-        
-        Args:
-            model_dir: 保存先ディレクトリ (例: data/models/mu_model)
+        期待完走時間μの予測
         """
-        output_path = Path(model_dir)
-        output_path.mkdir(parents=True, exist_ok=True)
-        
-        # モデル保存
-        joblib.dump(self.model_regressor, output_path / 'regressor.pkl')
-        joblib.dump(self.model_ranker, output_path / 'ranker.pkl')
-        
-        # 特徴量リスト保存
-        features_path = output_path / 'feature_names.json'
-        with open(features_path, 'w', encoding='utf-8') as f:
-            json.dump(self.feature_names, f, ensure_ascii=False, indent=2)
+        if self.ranker is None or self.regressor is None:
+            raise ValueError("Model has not been trained yet.")
             
-        logging.info(f"μモデルを {model_dir} に保存しました")
-
-    def load_model(self, model_dir: str):
-        """
-        モデルと特徴量リストをロード
+        # Ranker Prediction
+        rank_score = self.ranker.predict(X)
         
-        Args:
-            model_dir: ロード元ディレクトリ
-        """
-        model_path = Path(model_dir)
+        # Feature Augmentation
+        X_aug = X.copy()
+        X_aug['rank_score'] = rank_score
         
-        if not model_path.exists():
-            raise FileNotFoundError(f"モデルディレクトリが見つかりません: {model_dir}")
-            
-        self.model_regressor = joblib.load(model_path / 'regressor.pkl')
-        self.model_ranker = joblib.load(model_path / 'ranker.pkl')
+        # Regressor Prediction
+        mu_pred = self.regressor.predict(X_aug)
         
-        features_path = model_path / 'feature_names.json'
-        with open(features_path, 'r', encoding='utf-8') as f:
-            self.feature_names = json.load(f)
-            
-        logging.info(f"μモデルを {model_dir} からロードしました")
+        return mu_pred
+        
+    def save_model(self, filepath_base: str):
+        """モデルの保存（個別モデル + 完全なEstimatorオブジェクト）"""
+        import joblib
+        from pathlib import Path
+        
+        if self.ranker is None or self.regressor is None:
+            raise ValueError("Model has not been trained yet.")
+        
+        # ディレクトリ作成
+        output_dir = Path(filepath_base)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # 個別モデルをpklで保存（train_mu_model.pyとの互換性）
+        joblib.dump(self.ranker, output_dir / "ranker.pkl")
+        joblib.dump(self.regressor, output_dir / "regressor.pkl")
+        
+        # 完全なMuEstimatorオブジェクトを保存（evaluate_model.pyとの互換性）
+        joblib.dump(self, output_dir / "mu_model.pkl")
+        
+        # 特徴量名リストをJSONで保存
+        import json
+        with open(output_dir / "feature_names.json", "w") as f:
+            json.dump(self.feature_names_, f, indent=2)
+        
+        print(f"Models saved to {output_dir}:")
+        print(f"  - ranker.pkl")
+        print(f"  - regressor.pkl")
+        print(f"  - mu_model.pkl")
+        print(f"  - feature_names.json")
+        
+    def load_model(self, filepath_base: str):
+        """モデルの読み込み"""
+        self.ranker = lgb.LGBMRanker(**self.ranker_params)
+        self.ranker._Booster = lgb.Booster(model_file=f"{filepath_base}_ranker.txt")
+        
+        self.regressor = lgb.LGBMRegressor(**self.regressor_params)
+        self.regressor._Booster = lgb.Booster(model_file=f"{filepath_base}_regressor.txt")

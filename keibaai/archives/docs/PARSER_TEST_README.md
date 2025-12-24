@@ -236,7 +236,7 @@ python debug_full_pipeline_by_date.py --date 2023-10-09 --parse-only
 | 項目 | test/test.py | debug_full_pipeline_by_date.py |
 |------|--------------|--------------------------------|
 | 対象 | 固定の5binファイル | 日付指定で動的に取得 |
-| パーサー | 独自実装 | keibaai.src.modules.parsersを使用 |
+| パーサー | 独自実装 | keibaai.src.parsersを使用 |
 | 出力 | test/test_output/ | 指定ディレクトリ |
 | スクレイピング | なし | オプションであり |
 | 保守性 | 低（コピペコード） | 高（本番パーサー使用） |

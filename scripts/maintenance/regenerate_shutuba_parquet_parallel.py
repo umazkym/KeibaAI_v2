@@ -15,7 +15,7 @@ sys.path.insert(0, str(project_root))
 def parse_single_file(file_path):
     """1ファイルをパース（ワーカープロセス用）"""
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
-    from keibaai.src.modules.parsers import shutuba_parser
+    from keibaai.src.parsers import shutuba_parser
     
     try:
         df = shutuba_parser.parse_shutuba_html(str(file_path))
@@ -26,7 +26,7 @@ def parse_single_file(file_path):
     return None
 
 def main():
-    from keibaai.src.modules.parsers import shutuba_parser
+    from keibaai.src.parsers import shutuba_parser
     
     html_dir = project_root / 'keibaai' / 'data' / 'raw' / 'html' / 'shutuba'
     output_dir = project_root / 'keibaai' / 'data' / 'parsed' / 'parquet' / 'shutuba'

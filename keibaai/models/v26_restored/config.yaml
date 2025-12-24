@@ -1,0 +1,87 @@
+# v2.6 Restored Model Configuration
+# Created: 2025-12-20 (V15 Feature Porting)
+
+version: "v26_restored"
+created_at: "2025-12-20"
+base_model: "LightGBM"
+description: "V15のROI向上特徴量を移植したv2.6復元版"
+
+# ====================
+# Data Configuration
+# ====================
+data:
+  train_end: "2024-12-31"
+  test_start: "2025-01-01"
+  test_end: null  # 最新まで
+  filters: []  # 特別なフィルタなし
+
+# ====================
+# Model Hyperparameters
+# ====================
+hyperparams:
+  # MuEstimator Two-Stage
+  stage1:
+    objective: "binary"
+    metric: "auc"
+    learning_rate: 0.03
+    num_leaves: 31
+    max_depth: -1
+    min_child_samples: 50
+    reg_alpha: 0.1
+    reg_lambda: 0.1
+    random_state: 42
+    num_boost_round: 500
+    early_stopping_rounds: 50
+  
+  stage2:
+    loss_weighting: "log1p_odds"
+
+# ====================
+# V15 Legacy Features (Ported)
+# ====================
+v15_features:
+  enabled: true
+  min_corner_races: 5
+  front_runner_threshold: 0.3
+  features:
+    - horse_c4_gap_avg
+    - horse_relative_c4_avg
+    - post_style_conflict
+    - race_front_runner_count
+    - front_runner_competition
+
+# ====================
+# Leak Prevention
+# ====================
+leak_prevention:
+  cumulative_stats: "expanding().mean().shift(1)"
+  min_races_requirement: 5
+  notes:
+    - "全ての累積統計は shift(1) で当該レース情報を除外"
+    - "馬の過去成績のみ使用、着順・オッズは特徴量に含めない"
+
+# ====================
+# Multi-Period Test Config
+# ====================
+multi_period_test:
+  periods:
+    - name: "2022"
+      train_end: "2021-12-31"
+      test_start: "2022-01-01"
+      test_end: "2022-12-31"
+    - name: "2023"
+      train_end: "2022-12-31"
+      test_start: "2023-01-01"
+      test_end: "2023-12-31"
+    - name: "2024"
+      train_end: "2023-12-31"
+      test_start: "2024-01-01"
+      test_end: "2024-12-31"
+    - name: "2025"
+      train_end: "2024-12-31"
+      test_start: "2025-01-01"
+      test_end: null
+  
+  stability_criteria:
+    min_roi: 75.0
+    max_variance: 15.0

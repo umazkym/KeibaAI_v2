@@ -21,7 +21,7 @@ project_root = Path(__file__).resolve().parent.parent.parent
 sys.path.append(str(project_root / 'keibaai'))
 
 from src import pipeline_core
-from src.modules.parsers import results_parser, shutuba_parser, horse_info_parser, pedigree_parser
+from src.parsers import results_parser, shutuba_parser, horse_info_parser, pedigree_parser
 
 
 def load_config():

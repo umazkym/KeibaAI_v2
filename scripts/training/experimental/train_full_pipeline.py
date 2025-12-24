@@ -15,9 +15,9 @@ from pathlib import Path
 project_root = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.append(str(project_root))
 
-from keibaai.src.modules.models.model_train import MuEstimator
-from keibaai.src.modules.models.sigma_estimator import SigmaEstimator
-from keibaai.src.modules.models.nu_estimator import NuEstimator
+from keibaai.src.models.model_train import MuEstimator
+from keibaai.src.models.sigma_estimator import SigmaEstimator
+from keibaai.src.models.nu_estimator import NuEstimator
 from keibaai.src.features.feature_engine import FeatureEngine
 
 # ロギング設定
@@ -119,7 +119,7 @@ def main():
     mu_params = {}
     
     if args.tune:
-        from keibaai.src.modules.models.optuna_tuner import OptunaTuner
+        from keibaai.src.models.optuna_tuner import OptunaTuner
         tuner = OptunaTuner(n_trials=20) # 試行回数は調整
         
         # Ranker Tuning

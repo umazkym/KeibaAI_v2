@@ -1,7 +1,7 @@
 """
 修正したparserをテスト
 """
-from keibaai.src.modules.parsers.results_parser import parse_results_html
+from keibaai.src.parsers.results_parser import parse_results_html
 
 # テストファイル
 html_file = 'keibaai/data/raw/html/race/202001010101.bin'

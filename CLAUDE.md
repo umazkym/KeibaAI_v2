@@ -1,1158 +1,416 @@
-# CLAUDE.md - KeibaAI_v2 Developer Guide for AI Assistants
+# CLAUDE.md - KeibaAI_v2 AI開発ガイドライン
 
-**Last Updated**: 2025-11-16
-**Project**: KeibaAI_v2 - Horse Racing AI Prediction & Optimal Investment System
-**Purpose**: Guide for AI assistants working with this codebase
-
----
-
-## 📋 Table of Contents
-
-1. [Project Overview](#project-overview)
-2. [Architecture & Codebase Structure](#architecture--codebase-structure)
-3. [Data Pipeline Flow](#data-pipeline-flow)
-4. [Key Modules & Responsibilities](#key-modules--responsibilities)
-5. [Development Workflows](#development-workflows)
-6. [Configuration Management](#configuration-management)
-7. [Testing Infrastructure](#testing-infrastructure)
-8. [Common Tasks](#common-tasks)
-9. [Code Conventions & Patterns](#code-conventions--patterns)
-10. [Important Notes & Gotchas](#important-notes--gotchas)
-11. [File Organization](#file-organization)
-12. [Git Workflow](#git-workflow)
+**最終更新日**: 2025-12-20  
+**プロジェクト**: KeibaAI_v2 - 競馬AI予測＆最適投資システム  
+**目的**: AIアシスタントがこのコードベースで作業するためのガイド
 
 ---
 
-## 🎯 Project Overview
+## 🚨 重要ルール（必ず守ること）
 
-### What is KeibaAI_v2?
+> [!IMPORTANT]
+> **ディレクトリ配置ルール**:
+> - `keibaai/src/`: Pythonパッケージ（import用モジュール・クラス）のみ
+> - `scripts/`: CLI実行スクリプト（エントリーポイント）
+> - `docs/system/`: プロジェクトドキュメント一式
+> - `keibaai/models/{version}/`: モデルバージョン別フォルダ
 
-A **sophisticated horse racing AI prediction and optimal investment system** that:
-- Scrapes horse racing data from netkeiba.com and JRA sources
-- Parses HTML to structured data (Parquet format)
-- Generates ML features from race history, pedigrees, and performance data
-- Trains probabilistic models (μ, σ, ν) using LightGBM
-- Runs Monte Carlo simulations to estimate win probabilities
-- Optimizes betting portfolios using Fractional Kelly Criterion
-- Tracks performance metrics (Brier score, ECE, ROI)
+> [!IMPORTANT]
+> **モデルバージョニングルール**:
+> - モデル構築ごとに `keibaai/models/{version_name}/` フォルダを作成
+> - 必須ファイル: `config.yaml`, `report.md`, `features.txt`
+> - 推奨ファイル: `multi_period_results.csv`, `development_log.md`
+> - 詳細は [docs/system/15_モデル命名規則とベストプラクティス.md](docs/system/15_モデル命名規則とベストプラクティス.md) を参照
 
-### Key Statistics
-
-- **~5,025 lines** of core production code
-- **278,098 race records** in current dataset
-- **1,377,361 pedigree records** (5 generations)
-- **100% test-driven** with unit, integration, and regression tests
-- **Zero cloud costs** - fully local/personal use system
-
-### Technology Stack
-
-- **Python 3.10+** with type hints
-- **Data**: pandas, pyarrow (Parquet), NumPy
-- **ML**: LightGBM, scikit-learn
-- **Scraping**: requests, BeautifulSoup4, Selenium
-- **Storage**: Parquet files, SQLite metadata
-- **Testing**: pytest
-- **Config**: YAML files
+> [!CAUTION]
+> **ルートディレクトリに配置してよいファイル**:
+> - `CLAUDE.md` - このファイル（AI開発ガイドライン）
+> - `README.md` - GitHubリポジトリ説明
+> - `requirements.txt`, `pyproject.toml` - 依存関係定義
+> - `.gitignore`, `.env` - Git/環境設定
+>
+> **ルートに配置してはいけないファイル（発見次第移動/削除）**:
+> - `*.log` → `keibaai/data/logs/` または削除
+> - `*_list.txt` → `keibaai/data/metadata/` または削除
+> - 実行スクリプト → `scripts/` 配下へ移動
 
 ---
 
-## 🏗️ Architecture & Codebase Structure
+## 📋 目次
 
-### High-Level Architecture
+1. [プロジェクト概要](#プロジェクト概要)
+2. [アーキテクチャとディレクトリ構造](#アーキテクチャとディレクトリ構造)
+3. [データパイプライン](#データパイプライン)
+4. [主要モジュール](#主要モジュール)
+5. [開発ワークフロー](#開発ワークフロー)
+6. [設定管理](#設定管理)
+7. [テスト基盤](#テスト基盤)
+8. [よくあるタスク](#よくあるタスク)
+9. [コード規約](#コード規約)
+10. [注意事項](#注意事項)
+
+---
+
+## 🎯 プロジェクト概要
+
+### KeibaAI_v2 とは？
+
+**競馬AI予測＆最適投資システム**:
+- netkeiba.com / JRA公式から競馬データをスクレイピング
+- HTMLを構造化データ（Parquet形式）にパース
+- レース履歴・血統・成績データから特徴量を生成
+- LightGBMで確率モデル（μ, σ, ν）を訓練
+- モンテカルロシミュレーションで勝率を推定
+- Fractional Kelly Criterionでポートフォリオ最適化
+- パフォーマンス指標（Brier score, ECE, ROI）を追跡
+
+### 主要統計
+
+| 項目 | 数値 |
+|-----|------|
+| コード行数 | 約5,025行 |
+| レースレコード数 | 約278,098件 |
+| 血統レコード数 | 約1,377,361件（5世代） |
+| テストカバレッジ | ユニット・統合・回帰テスト完備 |
+| クラウドコスト | 0円（完全ローカル） |
+
+### 技術スタック
+
+| カテゴリ | 技術 |
+|---------|------|
+| 言語 | Python 3.10+ (型ヒント付き) |
+| データ処理 | pandas, pyarrow (Parquet), NumPy |
+| 機械学習 | LightGBM, scikit-learn |
+| スクレイピング | requests, BeautifulSoup4, Selenium |
+| ストレージ | Parquetファイル, SQLiteメタデータ |
+| テスト | pytest |
+| 設定 | YAMLファイル |
+
+---
+
+## 🏗️ アーキテクチャとディレクトリ構造
+
+### システムアーキテクチャ
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    KeibaAI_v2 System                         │
 ├─────────────────────────────────────────────────────────────┤
-│  [Scraping] → [Parsing] → [Features] → [Models]             │
-│      ↓           ↓            ↓            ↓                 │
-│   HTML.bin   Parquet    Feature.pq   LightGBM               │
-│                                          ↓                   │
----
-
-## 🔄 Data Pipeline Flow
-
-### Complete End-to-End Pipeline
-
+│  [スクレイピング] → [パース] → [特徴量] → [モデル]           │
+│       ↓              ↓           ↓          ↓               │
+│    HTML.bin      Parquet    Feature.pq  LightGBM            │
+│                                             ↓               │
+│                              [シミュレーション] → [最適化]   │
+│                                     ↓              ↓        │
+│                                  勝率推定      Kelly配分    │
+└─────────────────────────────────────────────────────────────┘
 ```
----
 
-## 📂 Project Structure and Placement Rules
-
-**Last Updated**: 2025-11-24
-
-### Directory Placement Rules
-
-> [!IMPORTANT]
-> **明確な配置ルール（2025-11-24 標準化完了）**:
-> - **`keibaai/src/`**: Pythonパッケージとして `import` されるモジュール・クラス・関数のみ。一部レガシー実行スクリプトも残存。
-> - **`scripts/`**: CLIから直接実行するスクリプト（エントリーポイント）。全て `python scripts/xxx/yyy.py` で実行。
-> - **`scripts/training/experimental/`**: 実験的スクリプト・過去バージョン保存（モデル開発段階用）。
-> - **`docs/`**: プロジェクトドキュメント。レポートは `docs/reports/` に集約。
-> - **`archive/`**: 使用されなくなった古いスクリプト・ログ。
-
-### Complete Directory Structure
+### ディレクトリ構造
 
 ```
 KeibaAI_v2/
-├── keibaai/                          # Main Python package
-│   ├── src/                          # Source code (modules for import)
-│   │   ├── modules/                  # Core business logic
-│   │   │   ├── preparing/           # Web scraping modules
-│   │   │   ├── parsers/             # HTML parsers
-│   │   │   ├── features/            # Feature engineering modules
-│   │   │   ├── models/              # Model classes (estimators)
-│   │   │   ├── sim/                 # Simulation modules
-│   │   │   ├── optimizer/           # Optimization modules
-│   │   │   ├── executor/            # Execution modules (disabled)
-│   │   │   ├── monitoring/          # Model analysis & monitoring
-│   │   │   ├── validation/          # Data quality validation
-│   │   │   └── constants/           # Constant definitions
-│   │   ├── features/                # Feature modules
-│   │   │   ├── feature_engine.py        # FeatureEngine class
-│   │   │   ├── advanced_features.py     # Advanced features
-│   │   │   ├── mu_v2_features.py        # μv2.0 features
-│   │   │   ├── time_series_features.py  # Time series features
-│   │   │   ├── track_bias.py            # Track bias features
-│   │   │   └── generate_features.py     # [MOVED] -> scripts/pipelines/
-│   │   ├── models/                  # Model modules
-│   │   │   ├── model_train.py           # MuEstimator class
-│   │   │   ├── calibration.py           # Probability calibration
-│   │   │   ├── sigma_estimator.py       # SigmaEstimator class
-│   │   │   └── nu_estimator.py          # NuEstimator class
-│   │   ├── optimizer/               # Optimization modules
-│   │   │   ├── optimizer.py             # PortfolioOptimizer class
-│   │   │   └── daily_allocator.py       # ★LEGACY: Daily allocation script
-│   │   ├── sim/                     # Simulation modules
-│   │   │   └── simulator.py             # RaceSimulator class
-│   │   ├── dashboard/               # Streamlit dashboard
-│   │   │   ├── pages/               # Dashboard pages
-│   │   │   └── app.py               # Dashboard entry point
-│   │   ├── utils/                   # Utility functions
-│   │   └── pipeline_core.py         # Pipeline common logic
-│   ├── configs/                     # YAML configuration files
-│   ├── data/                        # Local data storage (.gitignored)
-│   │   ├── raw/html/                # Raw HTML files (.bin format)
-│   │   │   ├── race/                # Race results
-│   │   │   ├── shutuba/             # Entry lists
-│   │   │   ├── horse/               # Horse data
-│   │   │   └── ped/                 # Pedigree data
-│   │   ├── parsed/parquet/          # Parsed Parquet files
-│   │   │   ├── races/               # Race results
-│   │   │   ├── shutuba/             # Entry lists
-│   │   │   ├── horses/              # Horse profiles
-│   │   │   └── pedigrees/           # Pedigree data
-│   │   ├── features/parquet/        # Feature data (partitioned by year/month)
-│   │   ├── models/                  # Trained models
-│   │   ├── predictions/             # Prediction results
-│   │   ├── simulations/             # Simulation results
-│   │   ├── orders/                  # Order logs
-│   │   ├── logs/                    # Application logs
-│   │   └── quality_reports/         # Quality check reports
-│   └── tests/                       # Test suite
-│       ├── unit/                    # Unit tests
-│       ├── integration/             # Integration tests
-│       └── regression/              # Regression tests
-├── scripts/                         # Executable scripts (CLI tools) ★
-│   ├── pipelines/                   # Data pipeline scripts (9 scripts)
-│   │   ├── run_scraping_resumable.py
-│   │   ├── run_scraping_pipeline_local.py
-│   │   ├── run_scraping_pipeline_with_args.py
-│   │   ├── run_parsing_pipeline_local.py
-│   │   └── run_parsing_resumable.py
-│   ├── training/                    # Model training & prediction ★
-│   │   ├── train_mu_model.py            # μ model training
-│   │   ├── train_mu_v2_model.py         # μv2.0 model training
-│   │   ├── train_sigma_nu_models.py     # σ/ν model training
-│   │   ├── optimize_hyperparameters.py  # Hyperparameter optimization
-│   │   ├── optimize_sigma_nu.py         # σ/ν optimization
-│   │   ├── evaluate_model.py            # Model evaluation
-│   │   ├── evaluate_model_advanced.py   # Advanced evaluation
-│   │   ├── predict.py                   # Prediction (⚠️ needs fix)
-│   │   └── experimental/                # Experimental scripts (model dev) ★
-│   │       ├── README.md                # Purpose & usage guide
-│   │       ├── train_full_pipeline.py   # Full pipeline experiment
-│   │       └── train_sigma_nu_phase_d.py # Phase D implementation
-│   ├── optimization/                # Portfolio optimization ★
-│   │   └── optimize_daily_races.py      # Kelly criterion optimization
-│   ├── simulation/                  # Simulation ★
-│   │   └── simulate_daily_races.py      # Monte Carlo simulation
-│   ├── debug/                       # Debug & validation tools (40+ scripts)
-│   │   ├── debug_scraping_issues.py
-│   │   ├── debug_combined.py
-│   │   └── check_*.py, validate_*.py など
-│   ├── analysis/                    # Analysis scripts
-│   │   └── analyze_model_performance.py
-│   └── temp/                        # Temporary work scripts
-├── docs/                            # Documentation
-│   ├── system/                      # System documentation (14 files)
-│   │   ├── 01_システム概要.md
-│   │   ├── 02_アーキテクチャ.md
-│   │   ├── 10_運用ガイド.md
-│   │   └── ...
-│   ├── reports/                     # Reports ★
-│   │   ├── FIX_REPORT_20251122.md
-│   │   └── ...
-│   ├── archive/                     # Archived docs
-│   │   └── reports/                 # Old reports
-│   ├── gemini.md                    # AI assistant guidelines
-│   ├── instructions.md              # User instructions
-│   └── schema.md                    # Data schema
-├── archive/                         # Archived files ★
-│   ├── scripts/                     # Deprecated scripts
-│   │   └── debug/                   # Old debug scripts (160+ files)
-│   └── logs/                        # Old logs
-├── CLAUDE.md                        # This file (AI developer guide)
-├── README.md                        # User-facing README
-├── .gitignore                       # Git ignore rules
-└── <utility scripts>                # Setup & utility scripts
-    ├── standardize_structure.ps1
-    ├── fix_moved_imports.py
-    └── ...
+├── keibaai/                          # メインPythonパッケージ
+│   ├── src/                          # ソースコード（import用モジュール）
+│   │   ├── features/                 # 特徴量モジュール
+│   │   │   ├── feature_engine.py        # FeatureEngineクラス
+│   │   │   ├── advanced_features.py     # 高度な特徴量
+│   │   │   └── leak_free_feature_engineer_v*.py  # リークフリー版
+│   │   ├── models/                  # モデルモジュール
+│   │   │   ├── model_train.py           # MuEstimatorクラス
+│   │   │   ├── sigma_estimator.py       # SigmaEstimatorクラス
+│   │   │   └── nu_estimator.py          # NuEstimatorクラス
+│   │   ├── parsers/                 # HTMLパーサー
+│   │   ├── preparing/               # スクレイピングモジュール
+│   │   ├── sim/                     # シミュレーションモジュール
+│   │   ├── optimizer/               # 最適化モジュール
+│   │   └── dashboard/               # Streamlitダッシュボード
+│   ├── configs/                     # YAML設定ファイル
+│   ├── data/                        # ローカルデータ（.gitignore）
+│   │   ├── raw/html/                # 生HTMLファイル（.bin形式）
+│   │   ├── parsed/parquet/          # パース済みParquetファイル
+│   │   ├── features/parquet/        # 特徴量データ
+│   │   └── logs/                    # アプリケーションログ
+│   ├── models/                      # モデルバージョン別フォルダ ★
+│   │   ├── v15_legacy/              # V15レガシーモデル
+│   │   ├── v26_restored/            # V2.6復元版
+│   │   └── {version}/               # 新バージョン
+│   └── tests/                       # テストスイート
+├── scripts/                         # 実行スクリプト（CLIツール）★
+│   ├── pipelines/                   # データパイプラインスクリプト
+│   ├── training/                    # モデル訓練・予測 ★
+│   │   ├── train_mu_model.py            # μモデル訓練
+│   │   ├── train_mu_v2_model.py         # μv2.0モデル訓練
+│   │   ├── test_multi_period_v26.py     # 複数期間テスト
+│   │   └── experimental/                # 実験的スクリプト ★
+│   ├── optimization/                # ポートフォリオ最適化
+│   ├── simulation/                  # シミュレーション
+│   ├── debug/                       # デバッグ・検証ツール
+│   └── temp/                        # 一時スクリプト
+├── docs/                            # ドキュメント
+│   └── system/                      # システムドキュメント（29ファイル）
+├── CLAUDE.md                        # このファイル
+└── README.md                        # ユーザー向けREADME
 ```
 
-**★ マーク**: 2025-11-24 標準化で整理されたディレクトリ・ファイル
-
-### File Placement Decision Tree
-
-新しいファイルを作成するときの配置ガイド:
+### ファイル配置の判断フロー
 
 ```
 新しいファイルを作成する
     ↓
-[Q1] これは実行スクリプト (python xxx.py で直接実行)?
-    YES → ┐
-    NO  → keibaai/src/<category>/xxx.py (モジュール・クラス定義)
-          ↓
-    [Q2] 本番環境で使用?
-        YES → scripts/<category>/xxx.py
-        NO  → ┐
-              ↓
-        [Q3] 実験的スクリプト? (過去バージョン、試行錯誤)
-            YES → scripts/training/experimental/xxx.py
-            NO  → scripts/temp/xxx.py (一時スクリプト)
-```
-
-### Experimental Scripts (`scripts/training/experimental/`)
-
-**Purpose**: モデル開発段階での実験的スクリプト・過去バージョンの保存
-
-**保存対象**:
-- 過去の訓練アプローチ (`train_sigma_nu_phase_d.py`)
-- 実験的な実装 (`train_full_pipeline.py`)
-- 異なるアルゴリズムの試行
-
-**使用方法**:
-- **参照**: 過去のアプローチを理解・比較
-- **再現**: 特定バージョンのモデルを再現
-- **分析**: 試行錯誤の記録として後から推論・分析
-
-**注意**: これらは本番では使用されません。動作保証もありません。
-
-### Legacy Scripts
-
-一部の実行スクリプトが `keibaai/src/` に残存:
-
-| ファイル | 理由 | 将来計画 |
-|---------|------|---------|
-| `keibaai/src/features/generate_features.py` | 使用頻度が高い | 段階的に `scripts/` へ移行検討 |
-| `keibaai/src/optimizer/daily_allocator.py` | レガシー | 必要に応じて移行 |
-
----
-
-## 🔄 Data Pipeline Flow
-
-### Complete End-to-End Pipeline
-
-```
-┌────────────────────────────────────────────────────────────────┐
-│ PHASE 0: Data Acquisition (Deep Night Batch - 03:00)          │
-└────────────────────────────────────────────────────────────────┘
-    ├─► [Scrape race dates] → kaisai_dates.csv
-    ├─► [Scrape race IDs] → race_id_list.csv
-    ├─► [Scrape race results] → data/raw/html/race/*.bin
-    ├─► [Scrape entry lists] → data/raw/html/shutuba/*.bin
-    ├─► [Extract horse IDs] → horse_id_list.txt
-    ├─► [Scrape horse profiles] → data/raw/html/horse/*_profile.bin
-    ├─► [Scrape horse performance] → data/raw/html/horse/*_perf.bin
-    └─► [Scrape pedigrees] → data/raw/html/ped/*.bin
-
-┌────────────────────────────────────────────────────────────────┐
-│ PHASE 1: Parsing (Immediately After Scraping)                 │
-└────────────────────────────────────────────────────────────────┘
-    ├─► [Parse race results] → races.parquet (27+ columns)
-    ├─► [Parse entry lists] → shutuba.parquet (21 columns)
-    ├─► [Parse horse profiles] → horses.parquet
-    └─► [Parse pedigrees] → pedigrees.parquet (5 generations)
-
-┌────────────────────────────────────────────────────────────────┐
-│ PHASE 2: Feature Engineering (After Parsing)                  │
-└────────────────────────────────────────────────────────────────┘
-    ├─► Load: races, shutuba, horses, pedigrees
-    ├─► Generate: race features (distance, surface, weather)
-    ├─► Generate: horse features (rolling stats, trends)
-    ├─► Generate: jockey/trainer features (win rates, ROI)
-    ├─► Generate: pedigree features (sire/dam encoding)
-    └─► Save: features/parquet/year=YYYY/month=MM/ (partitioned)
-
-┌────────────────────────────────────────────────────────────────┐
-│ PHASE 3: Model Training (Weekly/On-Demand)                    │
-└────────────────────────────────────────────────────────────────┘
-    ├─► Train μ model (LightGBM Ranker + Regressor)
-    ├─► Train σ model (variance estimation)
-    ├─► Train ν model (chaos parameter, t-distribution)
-    ├─► Calibrate probabilities (temperature scaling)
-    └─► Save models → data/models/{model_id}/
-
-┌────────────────────────────────────────────────────────────────┐
-│ PHASE 4: Daily Prediction (Race Day Morning - 10:00)          │
-└────────────────────────────────────────────────────────────────┘
-    ├─► Load today's features
-    ├─► Run μ, σ, ν inference
-    └─► Save predictions → predictions/parquet/
-
-┌────────────────────────────────────────────────────────────────┐
-│ PHASE 5: Simulation (10-30 min before race)                   │
-└────────────────────────────────────────────────────────────────┘
-    ├─► Load predictions (μ, σ, ν)
-    ├─► Run Monte Carlo (K=1000 iterations)
-    ├─► Compute win/place/exacta probabilities
-    └─► Save simulations → simulations/{race_id}.json
-
-┌────────────────────────────────────────────────────────────────┐
-│ PHASE 6: Optimization (Just before betting deadline)          │
-└────────────────────────────────────────────────────────────────┘
-    ├─► Scrape latest JRA odds (Selenium)
-    ├─► Load simulation results
-    ├─► Run Fractional Kelly optimization
-    ├─► Filter by EV threshold
-    └─► Save orders → orders/{race_id}_order.json
-
-┌────────────────────────────────────────────────────────────────┐
-│ PHASE 7: Execution (MANUAL - Disabled by Default)             │
-└────────────────────────────────────────────────────────────────┘
-    └─► Paper trading only (logs for backtesting)
-
-┌────────────────────────────────────────────────────────────────┐
-│ PHASE 8: Monitoring (Post-Race)                               │
-└────────────────────────────────────────────────────────────────┘
-    ├─► Scrape final results
-    ├─► Calculate actual returns
-    ├─► Update Brier score, ECE, ROI metrics
-    └─► Save metrics → metrics/weekly_report.json
+[Q1] これは実行スクリプト？（python xxx.py で直接実行）
+    YES → scripts/{category}/xxx.py
+    NO  → keibaai/src/{category}/xxx.py（モジュール・クラス定義）
+    
+[Q2] 実験的スクリプト？
+    YES → scripts/training/experimental/xxx.py
+    NO  → scripts/{category}/xxx.py
 ```
 
 ---
 
-## 🔧 Key Modules & Responsibilities
-
-### 1. Preparing Module (`modules/preparing/`)
-
-**Purpose**: Web scraping from netkeiba.com
-
-**Key Files**:
-- `_scrape_html.py` (23KB): Main scraping engine
-  - Anti-ban measures: random user agents, sleep intervals, retry backoff
-  - Handles HTTP 400 → 60-second pause
-  - Saves as `.bin` files (EUC-JP encoded HTML)
-- `_scrape_jra_odds.py`: JRA official odds (currently stub)
-- `_requests_utils.py`: HTTP utilities with robust error handling
-
-**Technologies**: requests, BeautifulSoup4, Selenium
-
-### 2. Parsers Module (`modules/parsers/`)
-
-**Purpose**: Convert raw HTML to structured DataFrames
-
-**4 Parsers**:
-
-1. **`results_parser.py`** (14KB)
-   - Parses race results HTML
-   - Extracts: finish data, race metadata, jockey/trainer/owner info
-   - **Recent improvements**: Enhanced metadata extraction (distance_m, track_surface, weather, venue, race_class, etc.)
-   - **Robustness**: 4-level fallback for distance/surface extraction
-   - Handles obstacle races, regional races, multiple HTML formats
-
-2. **`shutuba_parser.py`** (14KB)
-   - Parses entry lists (出馬表)
-   - Extracts: morning odds, blinkers, prediction marks
-
-3. **`horse_info_parser.py`** (16KB)
-   - Parses horse profile pages
-   - Extracts: birth date, breeder, physical stats
-   - Parses past performance tables
-
-4. **`pedigree_parser.py`** (9KB)
-   - Parses 5-generation pedigree trees
-   - Extracts: ancestor IDs, names, coat colors, birth years
-
-**Common Utilities** (`common_utils.py`):
-- `parse_time_to_seconds()`: HH:MM.S → seconds
-- `parse_margin_to_seconds()`: body lengths → seconds
-- `parse_sex_age()`: "牡3" → sex="牡", age=3
-- `parse_horse_weight()`: "476(+2)" → weight=476, change=+2
-
-**Output Format**: pandas DataFrame → Parquet files
-
-### 3. Features Module (`features/`)
-
-**Purpose**: Generate ML features from parsed data
-
-**Key Components**:
-- `feature_engine.py` (25KB): Central feature generation engine
-- `generate_features.py` (10KB): CLI script for feature generation
-- `advanced_features.py` (9KB): Advanced features (interaction terms, domain-specific)
-- `time_series_features.py` (3KB): Rolling window calculations, trend detection
-
-**Feature Categories**:
-- **Race features**: distance, surface, weather, track_condition, class
-- **Horse features**: age, sex, weight, weight_change, past performance aggregates
-- **Jockey features**: win_rate, place_rate, ROI
-- **Trainer features**: stable statistics
-- **Pedigree features**: sire/dam performance encoding
-- **Derived features**: pace_index, position_changes, popularity_finish_diff
-
-### 4. Models Module (`models/`)
-
-**Purpose**: Train probabilistic models
-
-**Mathematical Framework**: Three-parameter model (μ, σ, ν)
-- **μ (mu)**: Expected finish time for each horse
-- **σ (sigma)**: Horse-specific variance (uncertainty)
-- **ν (nu)**: Race-level "chaos" parameter (t-distribution degrees of freedom)
-
-**Key Files**:
-- `model_train.py`: MuEstimator class (LightGBM)
-- `train_mu_model.py`: CLI script for μ model training
-- `sigma_estimator.py`: σ model (variance)
-- `nu_estimator.py`: ν model (heavy-tailed distribution)
-- `train_sigma_nu_models.py`: Combined σ and ν training
-- `calibration.py`: Probability calibration (temperature scaling)
-- `predict.py`: Inference script
-- `evaluate_model.py`: Metrics (Brier score, log loss, accuracy)
-
-### 5. Simulation Module (`sim/`)
-
-**Purpose**: Monte Carlo simulation for win probability
-
-**Algorithm**:
-```python
-For k = 1 to K (default K=1000):
-    For each horse i:
-        time_i,k ~ t_ν(μ_i, σ_i²)
-    Sort horses by time
-    Record finish order
-Estimate P(win) = count(1st place) / K
-```
-
-**Key Files**:
-- `simulator.py`: RaceSimulator class
-- `simulate_daily_races.py`: CLI script for daily simulations
-
-### 6. Optimization Module (`optimizer/`)
-
-**Purpose**: Portfolio optimization using Fractional Kelly Criterion
-
-**Formula**:
-```
-Maximize: Σ f_i * log(1 + b_i * o_i)
-Subject to:
-  - Σ f_i ≤ W_0 (capital constraint)
-  - f_i ≥ 0 (no short selling)
-  - EV_i > threshold (expected value filter)
-```
-
-**Key Files**:
-- `optimizer.py`: PortfolioOptimizer class
-- `optimize_daily_races.py`: CLI script for daily optimization
-
-### 7. Monitoring Module (`monitoring/`)
-
-**Purpose**: Performance tracking
-
-**Metrics**:
-- Brier score (probability calibration)
-- ECE (Expected Calibration Error)
-- ROI (Return on Investment)
-- Hit rate (accuracy)
-
----
-
-## 🛠️ Development Workflows
-
-### Workflow 1: Data Quality Improvement
-
-**Evidence from codebase**:
-- 20+ `debug_*.py` scripts in root
-- `DEBUG_REPORT.md`: Documents HTML parser improvements
-- `PROGRESS.md`: Tracks data quality issues
-
-**Recent Fixes**:
-1. Changed HTML parser from `lxml` to `html.parser` (compatibility)
-2. Reduced race result missing data from 0.8% to near-zero
-3. Added 11 new metadata columns to race results
-4. Implemented 4-level fallback for distance/surface extraction
-
-### Workflow 2: Parser Development
-
-**Process**:
-1. Write parser in `modules/parsers/`
-2. Create debug script (e.g., `debug_scraping_and_parsing.py`)
-3. Validate with `validate_parquet.py`, `validate_parsed_data.py`
-4. Update `schema.md` with new columns
-5. Run regression tests
-
-**Key Pattern**:
-```python
-# Always use html.parser (NOT lxml)
-soup = BeautifulSoup(html_text, 'html.parser')
-
-# Always use nullable integer types
-df['finish_position'] = df['finish_position'].astype('Int64')
-
-# Always handle multiple HTML formats (fallback patterns)
-race_data = soup.find('div', class_='data_intro')
-if not race_data:
-    race_data = soup.find('div', class_='diary_snap_cut')
-if not race_data:
-    race_data = soup.find('dl', class_='racedata')
-```
-
-### Workflow 3: Feature Engineering Experimentation
-
-**Process**:
-1. Explore data in Jupyter notebooks (`notebooks/`)
-2. Implement features in `features/advanced_features.py`
-3. Validate with `check_features_data.py`
-4. Update `configs/features.yaml` to enable new features
-5. Regenerate features with `generate_features.py`
-
-### Workflow 4: Model Development Cycle
-
-**Process**:
-1. Train models weekly: `python scripts/training/train_mu_model.py`
-2. Evaluate on validation set: `python scripts/training/evaluate_model.py`
-3. Calibrate probabilities: Use calibration module
-4. Backtest on historical data
-5. Monitor Brier score and ECE
-
----
-
-## ⚙️ Configuration Management
-
-### 5 YAML Configuration Files
-
-Located in: `keibaai/configs/`
-
-1. **`default.yaml`**: Base paths and logging
-   ```yaml
-   data_path: "data"
-   database: {path: "${metadata_path}/db.sqlite3"}
-   logging: {level: "INFO", format: "%(asctime)s - %(levelname)s - %(message)s"}
-   ```
-
-2. **`scraping.yaml`**: Scraping behavior
-   - Date ranges, retry settings, sleep intervals
-
-3. **`features.yaml`**: Feature generation settings
-   ```yaml
-   feature_engine: {version: "v1.0"}
-   race_features: {enabled: true}
-   horse_features: {enabled: true}
-   jockey_features: {enabled: true}
-   trainer_features: {enabled: true}
-   pedigree_features: {enabled: true}
-   output: {partition_by: [year, month]}
-   ```
-
-4. **`models.yaml`**: Model hyperparameters
-   ```yaml
-   models:
-     lgbm_ranker:
-       objective: "lambdarank"
-       hyperparameters:
-         n_estimators: 2000
-         learning_rate: 0.01
-         num_leaves: 31
-   ```
-
-5. **`optimization.yaml`**: Portfolio constraints
-   - Kelly fraction, max bet size, EV thresholds
-
-**Variable Substitution**: Supports `${data_path}` placeholders
-
----
-
-## 🧪 Testing Infrastructure
-
-### Test Organization
-
-Located in: `keibaai/tests/`
-
-1. **Unit Tests** (`tests/unit/`):
-   - `test_parsers.py`: Parser validation with fixture HTML
-   - `test_features.py`: Feature engineering logic
-   - `test_models.py`: Model components
-
-2. **Integration Tests** (`tests/integration/`):
-   - `test_pipeline_e2e.py`: End-to-end pipeline validation
-
-3. **Regression Tests** (`tests/regression/`):
-   - `test_parser_regression.py`: Ensures parser output consistency
-
-### Test Fixtures
-
-- Sample HTML files in `tests/fixtures/`
-- Organized by type: `race_samples/`, `shutuba_samples/`, `horse_samples/`, `ped_samples/`
-
-### Running Tests
+## 🔄 データパイプライン
+
+### エンドツーエンドパイプライン
+
+| フェーズ | 時刻 | 処理 | 入力 | 出力 |
+|---------|------|------|------|------|
+| 0 | 03:00 | スクレイピング | netkeiba.com | `data/raw/html/*.bin` |
+| 1 | 04:00 | パース | HTML.bin | `data/parsed/parquet/*.parquet` |
+| 2 | 04:30 | 特徴量生成 | Parquet | `data/features/parquet/` |
+| 3 | 週次 | モデル訓練 | Features | `models/{version}/model.pkl` |
+| 4 | 10:00 | 予測 | Features + Model | Predictions |
+| 5 | レース前 | シミュレーション | Predictions | 勝率推定 |
+| 6 | レース前 | 最適化 | 勝率 + オッズ | 配分金額 |
+
+### 主要コマンド
 
 ```bash
-# Run all tests
-pytest
+# スクレイピング
+python scripts/pipelines/run_scraping_resumable.py --from-date 2024-01-01
 
-# Run specific test file
-pytest tests/unit/test_parsers.py
-
-# Run with coverage
-pytest --cov=keibaai
-```
-
----
-
-## 📝 Common Tasks
-
-### Task 1: Scrape New Data
-
-```bash
-# Edit date range in script first
-python scripts/pipelines/run_scraping_resumable.py
-```
-
-**What it does**:
-1. Scrapes race dates → `kaisai_dates.csv`
-2. Scrapes race IDs → `race_id_list.csv`
-3. Scrapes race results → `data/raw/html/race/*.bin`
-4. Scrapes entry lists → `data/raw/html/shutuba/*.bin`
-5. Scrapes horse data → `data/raw/html/horse/*.bin`
-
-### Task 2: Parse Scraped Data
-
-```bash
+# パース
 python scripts/pipelines/run_parsing_resumable.py
-```
 
-**What it does**:
-1. Parses race results → `data/parsed/parquet/races/races.parquet`
-2. Parses shutuba → `data/parsed/parquet/shutuba/shutuba.parquet`
-3. Parses horses → `data/parsed/parquet/horses/horses.parquet`
-4. Parses pedigrees → `data/parsed/parquet/pedigrees/pedigrees.parquet`
+# 特徴量生成
+python scripts/pipelines/generate_features.py
 
-### Task 3: Generate Features
-
-```bash
-python scripts/pipelines/generate_features.py \
-  --start_date 2023-01-01 \
-  --end_date 2023-12-31
-```
-
-**Output**: `data/features/parquet/year=YYYY/month=MM/`
-
-### Task 4: Train Models
-
-```bash
-# Train μ model
+# モデル訓練
 python scripts/training/train_mu_v2_model.py
 
-# Train σ and ν models
-python scripts/training/train_sigma_nu_models.py
-```
-
-### Task 5: Run Predictions
-
-```bash
-python scripts/training/predict.py \
-  --date 2023-10-01 \
-  --model_dir data/models/latest
-```
-
-### Task 6: Run Simulation
-
-```bash
-python scripts/simulation/simulate_daily_races.py \
-  --date 2023-10-01 \
-  --K 1000
-```
-
-### Task 7: Optimize Portfolio
-
-```bash
-python scripts/optimization/optimize_daily_races.py \
-  --date 2023-10-01 \
-  --W_0 100000
-```
-
-### Task 8: Validate Data Quality
-
-```bash
-# Check parsed data
-python check_parsed_data.py
-
-# Check features
-python check_features_data.py
-
-# Validate parquet files
-python validate_parquet.py
+# 複数期間テスト
+python scripts/training/test_multi_period_v26.py
 ```
 
 ---
 
-## 📐 Code Conventions & Patterns
+## 📦 主要モジュール
 
-### 1. File Naming
+### 1. FeatureEngine（特徴量生成）
 
-- **Modules**: `snake_case.py`
-- **Scripts**: `scripts/pipelines/`, `scripts/training/` etc.
-- **Debug scripts**: `scripts/debug/debug_*.py`
-- **Validation scripts**: `scripts/debug/check_*.py`
+**ファイル**: `keibaai/src/features/feature_engine.py`
 
-### 2. Data Files
-
-- **Raw HTML**: `.bin` extension, EUC-JP encoding
-- **Parsed data**: `.parquet` (columnar format)
-- **Features**: `.parquet`, partitioned by year/month
-- **Models**: Directory per model (e.g., `data/models/20231001_lgbm/`)
-- **Logs**: JSON or text, organized by date
-
-### 3. Pandas DataFrame Patterns
-
-**Always use nullable integer types**:
 ```python
-# ❌ BAD: float64 for integers
-df['finish_position'] = df['finish_position'].astype('float64')
+from keibaai.src.features.feature_engine import FeatureEngine
 
-# ✅ GOOD: nullable integer
-df['finish_position'] = df['finish_position'].astype('Int64')
+fe = FeatureEngine(config_path='keibaai/configs/features.yaml')
+df = fe.generate_features(shutuba_df, results_history_df, horse_profiles_df)
+feature_cols = fe.get_feature_columns()
 ```
 
-**Always use explicit dtype mapping**:
-```python
-int_columns = [
-    'finish_position', 'bracket_number', 'horse_number', 'age',
-    'passing_order_1', 'passing_order_2', 'passing_order_3', 'passing_order_4',
-    'popularity', 'horse_weight', 'horse_weight_change',
-    'distance_m', 'head_count', 'round_of_year', 'day_of_meeting'
-]
+### 2. LeakFreeFeatureEngineerV15（リークフリー特徴量）
 
-for col in int_columns:
-    if col in df.columns:
-        df[col] = df[col].astype('Int64')
+**ファイル**: `keibaai/src/features/leak_free_feature_engineer_v15.py`
+
+- V15推奨モデル用の66特徴量を生成
+- リーク防止策: `expanding().mean().shift(1)`
+- 主要特徴量: `horse_c4_gap_avg`, `post_style_conflict`, `race_front_runner_count`
+
+### 3. MuEstimator（μモデル）
+
+**ファイル**: `keibaai/src/models/model_train.py`
+
+```python
+from keibaai.src.models.model_train import MuEstimator
+
+estimator = MuEstimator(
+    ranker_params={'objective': 'lambdarank', 'n_estimators': 1000},
+    regressor_params={'objective': 'regression'}
+)
+estimator.fit(X_train, y_train, group=groups)
+mu_pred = estimator.predict(X_test)
 ```
 
-### 4. HTML Parsing Patterns
+### 4. RaceSimulator（モンテカルロシミュレーション）
 
-**Always use `html.parser` (NOT `lxml`)**:
+**ファイル**: `keibaai/src/sim/simulator.py`
+
 ```python
-# ✅ CORRECT
-soup = BeautifulSoup(html_text, 'html.parser')
+from keibaai.src.sim.simulator import RaceSimulator
 
-# ❌ WRONG
-soup = BeautifulSoup(html_text, 'lxml')
+simulator = RaceSimulator(K=1000)
+results = simulator.simulate(mu_array, sigma_array, nu)
+win_probs = results['win_probs']
 ```
 
-**Always implement fallback patterns**:
-```python
-# 4-level fallback for robustness
-race_data = soup.find('div', class_='data_intro')
-if not race_data:
-    race_data = soup.find('div', class_='diary_snap_cut')
-if not race_data:
-    race_data_dl = soup.find('dl', class_='racedata')
-    if race_data_dl:
-        race_data = race_data_dl.find('dd')
-if not race_data:
-    # Log warning and return empty
-    logging.warning(f"Race data not found in {file_path}")
-    return {}
+---
+
+## ⚙️ 設定管理
+
+### YAML設定ファイル
+
+| ファイル | 用途 |
+|---------|------|
+| `keibaai/configs/default.yaml` | 基本設定（パス、ログ） |
+| `keibaai/configs/scraping.yaml` | スクレイピング設定 |
+| `keibaai/configs/features.yaml` | 特徴量設定 |
+| `keibaai/configs/models.yaml` | モデル設定 |
+
+### モデルバージョン設定
+
+各モデルバージョンは `keibaai/models/{version}/config.yaml` に設定を保存:
+
+```yaml
+version: "v26_restored"
+created_at: "2025-12-20"
+
+hyperparams:
+  objective: "binary"
+  learning_rate: 0.03
+  max_depth: 3
+  num_boost_round: 200
+
+v15_features:
+  enabled: true
+  min_corner_races: 5
 ```
 
-### 5. Error Handling
+---
 
-**Always use try-except with logging**:
-```python
-try:
-    df = parse_race_results(file_path)
-except Exception as e:
-    logging.error(f"Parse error in {file_path}: {e}")
-    # Save to error database
-    save_parse_failure(file_path, str(e))
-    return pd.DataFrame()
+## 🧪 テスト基盤
+
+### テスト実行
+
+```bash
+# 全テスト実行
+pytest keibaai/tests/
+
+# ユニットテストのみ
+pytest keibaai/tests/unit/
+
+# 特定テスト
+pytest keibaai/tests/unit/test_feature_engine.py -v
 ```
 
-### 6. Configuration Loading
+### テスト構造
 
-**Always use centralized config loading**:
-```python
-from keibaai.src.utils.config_utils import load_config
-
-config = load_config('default')  # Loads configs/default.yaml
+```
+keibaai/tests/
+├── unit/           # ユニットテスト
+├── integration/    # 統合テスト
+└── regression/     # 回帰テスト
 ```
 
-### 7. Path Handling
+---
 
-**Always use Path objects**:
-```python
-from pathlib import Path
+## 📝 コード規約
 
-data_path = Path(config['data_path'])
-parquet_path = data_path / 'parsed' / 'parquet' / 'races'
-parquet_path.mkdir(parents=True, exist_ok=True)
-```
+### 必須ルール
 
-### 8. Logging
+1. **型ヒント**: 全ての関数に型ヒントを付ける
+2. **docstring**: 全ての公開関数にdocstringを付ける
+3. **エラーハンドリング**: 適切な例外処理を行う
+4. **ログ**: `logging` モジュールを使用
 
-**Always use module-level logger**:
+### コード例
+
 ```python
 import logging
+from typing import Optional
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-logger.info("Processing started")
-logger.warning("Missing data detected")
-logger.error("Parse failed", exc_info=True)
+def process_data(
+    df: pd.DataFrame,
+    threshold: float = 0.5,
+    debug: bool = False
+) -> Optional[pd.DataFrame]:
+    """
+    データを処理する
+    
+    Args:
+        df: 入力データフレーム
+        threshold: フィルタリング閾値
+        debug: デバッグモード
+    
+    Returns:
+        処理済みデータフレーム、エラー時はNone
+    """
+    try:
+        result = df[df['value'] > threshold]
+        logger.info(f"処理完了: {len(result)}行")
+        return result
+    except Exception as e:
+        logger.error(f"処理エラー: {e}")
+        return None
 ```
 
 ---
 
-## ⚠️ Important Notes & Gotchas
+## ⚠️ 注意事項
 
-### 1. HTML Encoding
+### データリーク防止
 
-**Issue**: Raw HTML files are **EUC-JP encoded**, not UTF-8
+以下の特徴量は学習時に**必ず除外**:
 
-**Solution**:
 ```python
-with open(file_path, 'rb') as f:
-    html_bytes = f.read()
-
-try:
-    html_text = html_bytes.decode('euc_jp', errors='replace')
-except:
-    html_text = html_bytes.decode('utf-8', errors='replace')
+FORBIDDEN_FEATURES = [
+    'finish_position',      # 結果
+    'finish_time_seconds',  # 結果
+    'win_odds',             # 確定オッズ
+    'popularity',           # 確定人気
+    'last_3f_time',         # レース結果
+    'passing_order_*',      # レース結果
+]
 ```
 
-### 2. Data Leakage Prevention
-
-**CRITICAL**: Never use final odds in training
+### 時系列分割
 
 ```python
-# ❌ DATA LEAKAGE
-X_train = features[['distance_m', 'win_odds', 'popularity']]
+# ❌ NG: ランダム分割（データリーク）
+from sklearn.model_selection import KFold
+kfold = KFold(n_splits=5, shuffle=True)
 
-# ✅ CORRECT (use morning odds only)
-X_train = features[['distance_m', 'morning_odds', 'jockey_win_rate']]
-```
-
-**Reason**: Final odds are determined just before race start and already incorporate all public information. Using them in training would give artificially high accuracy that doesn't translate to real predictions.
-
-### 3. Time Series Validation
-
-**Always use TimeSeriesSplit, NOT KFold**:
-```python
+# ✅ OK: 時系列分割
 from sklearn.model_selection import TimeSeriesSplit
-
-# ✅ CORRECT
 tscv = TimeSeriesSplit(n_splits=5)
-for train_idx, valid_idx in tscv.split(X):
-    # Train on past, validate on future
-    X_train, X_valid = X.iloc[train_idx], X.iloc[valid_idx]
 ```
 
-**Reason**: Horse racing data is time-dependent. Random splits cause data leakage from future to past.
+### パス参照
 
-### 4. Parquet Partitioning
-
-**Features are partitioned by year/month**:
 ```python
-# Reading partitioned data
-import pyarrow.parquet as pq
+# ❌ NG: 相対パス
+config_path = 'configs/default.yaml'
 
-table = pq.read_table('data/features/parquet/',
-                      filters=[('year', '=', 2023), ('month', '=', 10)])
-df = table.to_pandas()
-```
-
-### 5. Nullable vs. NaN
-
-**Use pd.NA for missing values, NOT np.nan**:
-```python
-# ✅ CORRECT
-df['finish_position'] = pd.NA
-
-# ❌ WRONG (converts to float)
-df['finish_position'] = np.nan
-```
-
-### 6. Race ID Format
-
-**Format**: `YYYYPPNNDDRR`
-- `YYYY`: Year (4 digits)
-- `PP`: Venue code (2 digits)
-  - 05 = Tokyo (東京)
-  - 06 = Nakayama (中山)
-  - 08 = Kyoto (京都)
-  - 09 = Hanshin (阪神)
-  - Others: See venue master data
-- `NN`: Round number (2 digits) - e.g., 04 = 4th round
-- `DD`: Day of meeting (2 digits) - e.g., 03 = 3rd day
-- `RR`: Race number (2 digits) - e.g., 01 = Race 1, 12 = Race 12
-
-**Example**: `202305040301` =
-- 2023年 (Year 2023)
-- 東京競馬場 (Tokyo, code 05)
-- 第4回開催 (4th round)
-- 3日目 (3rd day)
-- 1R (Race 1)
-
-**URL Example**: `https://db.netkeiba.com/race/202305040301`
-
-### 7. Horse ID Format
-
-**Format**: `YYYYNNNNNN`
-- `YYYY`: Birth year (4 digits)
-- `NNNNNN`: Sequential number (6 digits)
-
-**Example**: `2009100502` = Born in 2009, ID 100502
-
-### 8. Disabled Executor
-
-**The order executor is DISABLED by default**:
-- Legal/ethical concerns about automated gambling
-- Only generates order logs for paper trading
-- Enable only for research/backtesting
-
-### 9. Memory Management
-
-**Large datasets require memory optimization**:
-```python
-# Use categorical dtypes for repeated strings
-df['jockey_name'] = df['jockey_name'].astype('category')
-df['track_surface'] = df['track_surface'].astype('category')
-
-# Use nullable integers
-df['finish_position'] = df['finish_position'].astype('Int64')
-```
-
-### 10. Anti-Ban Strategy
-
-**Scraping must respect server load**:
-- Random sleep: 2.5-5 seconds between requests
-- HTTP 400 detection → 60-second pause
-- Random user agents
-- Retry with exponential backoff
-
-**Do NOT**:
-- Run multiple scrapers in parallel
-- Reduce sleep intervals below 2 seconds
-- Ignore HTTP 400/403 errors
-
----
-
-## 📂 File Organization
-
-### Data Files (.gitignored)
-
-```
-data/
-├── raw/html/              # Never commit (large binary files)
-├── parsed/parquet/        # Never commit (generated from raw)
-├── features/parquet/      # Never commit (generated from parsed)
-├── models/                # Never commit (large model files)
-├── simulations/           # Never commit (ephemeral)
-├── orders/                # Commit sample only
-├── logs/                  # Never commit
-└── metadata/db.sqlite3    # Consider committing schema only
-```
-
-### Documentation Files (commit these)
-
-```
-root/
-├── schema.md              # Data schema documentation
-├── PROGRESS.md            # Data quality tracking
-├── DEBUG_REPORT.md        # Parser improvement reports
-├── CLAUDE.md              # This file
-├── 指示.md                # Japanese requirements/instructions
-└── README.md              # User-facing documentation (TODO)
-```
-
-### Debug Scripts (commit selectively)
-
-```
-root/
-├── debug_*.py             # Keep useful ones, remove obsolete
-├── check_*.py             # Keep validation scripts
-├── validate_*.py          # Keep validation scripts
-└── inspect_*.py           # Keep inspection scripts
+# ✅ OK: プロジェクトルートからの絶対パス
+from pathlib import Path
+project_root = Path(__file__).resolve().parent.parent.parent
+config_path = project_root / 'keibaai' / 'configs' / 'default.yaml'
 ```
 
 ---
 
-## 🔀 Git Workflow
+## 📚 関連ドキュメント
 
-### Branch Strategy
-
-**Main branch**: `main` or `master` (production-ready code)
-
-**Feature branches**: `claude/claude-md-mi12qj9z2fr7948a-01EkmapzBs2F3dK9kganLBYD` (session-specific)
-
-### Commit Message Conventions
-
-**Format**: `<type>: <description>`
-
-**Types**:
-- `feat`: New feature
-- `fix`: Bug fix
-- `refactor`: Code refactoring (no functional change)
-- `perf`: Performance improvement
-- `docs`: Documentation update
-- `test`: Test addition/modification
-- `chore`: Build/tooling changes
-
-**Examples**:
-```
-feat: Add 11 new metadata columns to race results parser
-fix: Use html.parser instead of lxml for better compatibility
-refactor: Extract common HTML parsing utilities to shared module
-perf: Optimize feature generation with vectorized operations
-docs: Update schema.md with new race metadata columns
-```
-
-### Commit Workflow
-
-```bash
-# Make changes
-git add .
-
-# Commit with clear message
-git commit -m "fix: Improve distance/surface extraction with 4-level fallback"
-
-# Push to feature branch
-git push -u origin claude/claude-md-mi12qj9z2fr7948a-01EkmapzBs2F3dK9kganLBYD
-```
-
-### Pull Request Guidelines
-
-**When creating PR**:
-1. Include summary of changes
-2. Reference related issues/documents (e.g., "Fixes issue #123", "See DEBUG_REPORT.md")
-3. List testing performed
-4. Note any breaking changes
-
-**Example PR template**:
-```markdown
-## Summary
-Improved race metadata extraction by implementing 4-level fallback for distance/surface parsing.
-
-## Changes
-- Modified `results_parser.py` to try 4 different HTML selectors
-- Reduced missing data from 10.2% to 0%
-- Added regression tests for obstacle races
-
-## Testing
-- Validated with 440 race samples from 2023-10-09
-- All regression tests pass
-- No breaking changes to output schema
-
-## References
-- See DEBUG_REPORT.md for detailed analysis
-```
+| ドキュメント | 内容 |
+|-------------|------|
+| [docs/system/01_システム概要.md](docs/system/01_システム概要.md) | システム全体像 |
+| [docs/system/07_機械学習モデル.md](docs/system/07_機械学習モデル.md) | モデル詳細 |
+| [docs/system/15_モデル命名規則とベストプラクティス.md](docs/system/15_モデル命名規則とベストプラクティス.md) | バージョニング |
+| [docs/system/23_包括的検証レポート_v3.md](docs/system/23_包括的検証レポート_v3.md) | V15検証結果 |
+| [docs/system/99_AI開発ガイドライン.md](docs/system/99_AI開発ガイドライン.md) | AI向け詳細ガイド |
 
 ---
 
-## 🎓 Learning Resources
-
-### Understanding the System
-
-1. **Start with**: `schema.md` - Understand data structure
-2. **Then read**: `DEBUG_REPORT.md` - Learn about recent improvements
-3. **Review**: `PROGRESS.md` - Understand data quality journey
-4. **Explore**: `指示.md` - Original requirements (Japanese)
-
-### Key Papers/Concepts
-
-1. **Fractional Kelly Criterion**: Portfolio optimization under uncertainty
-2. **LightGBM**: Gradient boosting for ranking
-3. **Probability Calibration**: Temperature scaling, isotonic regression
-4. **Monte Carlo Simulation**: Estimating probability distributions
-5. **Expected Calibration Error (ECE)**: Measuring probability accuracy
-
-### Similar Systems
-
-- **betfair**: Betting exchange with trading API
-- **pymc**: Probabilistic programming for Bayesian models
-- **mlflow**: ML experiment tracking
-- **optuna**: Hyperparameter optimization
-
----
-
-## 🚀 Future Enhancements
-
-### Short-term (1-3 months)
-
-1. Complete JRA odds scraping (Selenium implementation)
-2. Build monitoring dashboard (Streamlit/Dash)
-3. Automate model retraining pipeline
-4. Expand test coverage to 80%+
-
-### Medium-term (3-6 months)
-
-1. Add support for different bet types (trifecta, quinella)
-2. Implement ensemble models (stacking)
-3. Add feature importance visualization
-4. Create comprehensive API documentation
-
-### Long-term (6-12 months)
-
-1. Deploy as web service (optional)
-2. Add real-time odds tracking
-3. Implement reinforcement learning for dynamic betting
-4. Create mobile app for notifications
-
----
-
-## 📞 Contact & Support
-
-### For AI Assistants
-
-When working with this codebase:
-1. **Always read**: `schema.md`, `PROGRESS.md`, `DEBUG_REPORT.md` first
-2. **Never commit**: Large data files (`.bin`, `.parquet`, models)
-3. **Always validate**: Changes with regression tests
-4. **Always document**: New features in this file
-5. **Always follow**: Code conventions in this guide
-
-### For Human Developers
-
-- **GitHub Issues**: Report bugs, request features
-- **Pull Requests**: Contribute improvements
-- **Documentation**: Update CLAUDE.md when making significant changes
-
----
-
-## 📜 Version History
-
-| Version | Date       | Changes                                      |
-|---------|------------|----------------------------------------------|
-| 1.0     | 2025-11-16 | Initial comprehensive CLAUDE.md creation     |
-
----
-
-**End of CLAUDE.md**
-
-This document should be updated whenever:
-- New modules are added
-- Data schemas change significantly
-- New workflows are established
-- Important patterns emerge
-- Critical bugs are discovered and fixed
+**Note**: このファイルはAIアシスタント向けのメタドキュメントです。プロジェクトの仕様変更に合わせて適宜更新してください。

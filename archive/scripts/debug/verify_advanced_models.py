@@ -1,8 +1,8 @@
 import pandas as pd
 import numpy as np
 import os
-from keibaai.src.modules.models.sigma_estimator import SigmaEstimator
-from keibaai.src.modules.models.nu_estimator import NuEstimator
+from keibaai.src.models.sigma_estimator import SigmaEstimator
+from keibaai.src.models.nu_estimator import NuEstimator
 from scipy.stats import t
 
 def verify_models():

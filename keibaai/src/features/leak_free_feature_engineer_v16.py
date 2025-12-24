@@ -1,24 +1,27 @@
 """
-リークフリー特徴量エンジニア V16 (Lightweight Optimized)
+リークフリー特徴量エンジニア V16
 
-V15をベースに、効果の高かった「騎手×コース相性」のみを追加。
-計算コストを抑えつつ、直近の傾向変化への適応力を高める。
+V15に、race_details.parquetを活用した個馬のペース適性特徴量を統合。
 
-【追加特徴量】
-1. jockey_venue_win_rate: 騎手の競馬場別勝率
-   - その騎手がその競馬場で過去どれだけ勝っているか
-   
-2. jockey_venue_races: 騎手の競馬場での過去レース数
-   - 信頼度（サンプル数）として使用
+【追加特徴量 (3個)】
+1. horse_pace_preference: 馬の得意ペース（好走時のpace_diff累積平均、shift済み）
+2. horse_avg_pace_lf: 馬の全レース平均ペース（累積平均、shift済み）
+3. pace_fit: 馬のペースとコースのペースの適合度（差の絶対値×-1）
 
-【削除された特徴量】
-初期V16で検討したが、効果が限定的だったため削除:
-- race_interval_days
-- relative_post
-- relative_post_venue_advantage
+【根拠】
+- race_details.parquet（39,811件）のfirst_half/second_halfを活用
+- pace_features.pyで実装済みのロジックを統合
+- 穴馬発掘に寄与する「ペースミスマッチ」を検出
 
 【リーク対策】
-- jockey_venue_*: 累積統計 + shift(1)
+- horse_pace_preference: expanding().mean().shift(1)で当該レース前までの情報のみ使用
+- venue_surface_pace_tendency: Train期間（train_cutoff以前）のデータのみで計算
+- レース結果（通過順、上がり3F等）は使用しない
+
+【過学習対策】
+- min_races=5に強化
+- 複雑な組み合わせ特徴量は追加しない
+- V17-V20の教訓を活かし、効果がなければロールバック可能
 """
 
 import pandas as pd
@@ -35,124 +38,275 @@ logger = logging.getLogger(__name__)
 @dataclass
 class FeatureConfigV16(FeatureConfigV15):
     """V16用設定"""
-    # 騎手×コース統計の最小レース数
-    min_jockey_venue_races: int = 10
+    # ペース特徴量の最小レース数
+    min_pace_races: int = 5
+    # 会場×馬場のペース統計サンプル数閾値
+    min_pace_samples: int = 30
+    # Train期間のペース統計cutoff
+    pace_train_cutoff: str = '2023-01-01'
 
 
 class LeakFreeFeatureEngineerV16(LeakFreeFeatureEngineerV15):
     """
-    リークフリー特徴量エンジニア V16 (軽量最適化版)
+    リークフリー特徴量エンジニア V16
     
-    V15に以下の特徴量を追加：
-    - jockey_venue_win_rate: 騎手×コース勝率
-    - jockey_venue_races: 騎手×コースレース数
+    V15にペース適性特徴量を追加：
+    - horse_pace_preference: 馬の得意ペース（好走時）
+    - horse_avg_pace_lf: 馬の全レース平均ペース
+    - pace_fit: ペース適合度
+    - venue_surface_pace_tendency: 会場×馬場のペース傾向（V14と別実装）
+    
+    【重要】過学習対策
+    - min_pace_races=5に強化
+    - Train期間のみでコース統計を固定
     """
     
+    # V15の特徴量 + V16の新特徴量
     FEATURE_COLS = LeakFreeFeatureEngineerV15.FEATURE_COLS + [
-        'jockey_venue_win_rate',          # 騎手×コース勝率
-        'jockey_venue_races',             # 騎手×コースレース数
+        'horse_pace_preference',      # 馬の得意ペース（好走時）
+        'horse_avg_pace_lf',          # 馬の全レース平均ペース
+        'pace_fit_score',             # ペース適合度スコア
+        'venue_surface_pace_trend',   # 会場×馬場のペース傾向（別名でV14と区別）
     ]
     
     def __init__(self, config: Optional[FeatureConfigV16] = None):
         super().__init__(config or FeatureConfigV16())
-        self._jockey_venue_stats: Dict = {}
+        self._venue_surface_pace_stats: Dict = {}
+        self._race_details_merged: Optional[pd.DataFrame] = None
+        self._horse_pace_stats: Dict[str, Dict] = {}  # horse_id -> {preference, avg_pace}
     
     def fit(self, races_df: pd.DataFrame, pedigrees_df=None, corners_df=None, 
             race_details_df=None, returns_df=None, horses_df=None):
         """
-        V16のfit拡張
+        fitメソッドの拡張
         
-        - 騎手×コースの累積統計
+        - race_detailsからペース統計を事前計算
+        - 会場×馬場のペース傾向をTrain期間で固定
+        - 馬ごとのペース適性を累積計算
         """
+        logger.info("LeakFreeFeatureEngineerV16: fit開始")
+        
         # 親クラスのfit
         super().fit(races_df, pedigrees_df, corners_df, race_details_df, returns_df, horses_df)
         
-        logger.info("LeakFreeFeatureEngineerV16: fit開始")
-        
-        # 1. 騎手×コース統計を計算
-        self._calc_jockey_venue_stats(races_df)
+        # ペース関連の事前計算
+        if race_details_df is not None and len(race_details_df) > 0:
+            self._prepare_pace_features(races_df, race_details_df)
+        else:
+            logger.warning("  race_detailsがないため、ペース特徴量はスキップ")
         
         logger.info("LeakFreeFeatureEngineerV16: fit完了")
         return self
     
-    def _calc_jockey_venue_stats(self, races_df: pd.DataFrame):
+    def _prepare_pace_features(self, races_df: pd.DataFrame, race_details_df: pd.DataFrame):
         """
-        騎手×コースの累積勝率を計算
+        ペース特徴量の事前計算（リークフリー）
         
-        【リーク対策】
-        - horse_id, race_dateでソート後に累積計算
-        - shift(1)で当該レース直前までの統計を使用
+        1. 会場×馬場のペース傾向（Train期間で固定）
+        2. 馬ごとのペース適性（累積・shift済み）
         """
-        logger.info("  騎手×コース統計を計算中...")
+        logger.info("  ペース特徴量の事前計算中...")
         
-        df = races_df.copy()
-        df = df.sort_values(['jockey_id', 'race_date', 'race_id'])
+        # 型変換
+        rd = race_details_df.copy()
+        rd['race_id'] = rd['race_id'].astype(str)
         
-        # 勝利フラグ
-        df['is_win'] = (df['finish_position'] == 1).astype(int)
+        # races_dfからレース情報を取得
+        races = races_df.copy()
+        races['race_id'] = races['race_id'].astype(str)
+        races['race_date'] = pd.to_datetime(races['race_date'])
         
-        # 騎手×コースでグループ化して累積計算
-        group_cols = ['jockey_id', 'venue']
+        # race_detailsにレース情報を結合
+        race_info = races.drop_duplicates('race_id')[['race_id', 'race_date', 'venue', 'track_surface', 'distance_m']]
+        rd_merged = rd.merge(race_info, on='race_id', how='left')
         
-        # グループ内でshiftしてリークを防ぐ
-        # cumcount() は0, 1, 2... となるので、それがそのまま「過去のレース数」になる（現在を含まない）
-        df['cum_races'] = df.groupby(group_cols).cumcount()
+        # ペース差を計算 (first_half - second_half)
+        # 正: 前傾（ハイペース）、負: 後傾（スローペース）
+        rd_merged['first_half'] = pd.to_numeric(rd_merged['first_half'], errors='coerce')
+        rd_merged['second_half'] = pd.to_numeric(rd_merged['second_half'], errors='coerce')
+        rd_merged['pace_diff'] = rd_merged['first_half'] - rd_merged['second_half']
         
-        # 勝利数も同様にshift
-        # transformを使ってグループ内でシフトさせる
-        df['cum_wins'] = df.groupby(group_cols)['is_win'].transform(lambda x: x.cumsum().shift(1)).fillna(0)
+        self._race_details_merged = rd_merged
         
-        # 勝率計算（レース数0の場合は0）
-        df['jockey_venue_win_rate'] = np.where(
-            df['cum_races'] > 0,
-            df['cum_wins'] / df['cum_races'],
-            0.0
+        # 1. 会場×馬場のペース傾向（Train期間で固定）
+        self._calc_venue_surface_pace_tendency(rd_merged)
+        
+        # 2. 馬ごとのペース適性（累積・shift済み）
+        self._calc_horse_pace_stats(races, rd_merged)
+    
+    def _calc_venue_surface_pace_tendency(self, rd_merged: pd.DataFrame):
+        """
+        【特徴量1】会場×馬場のペース傾向（Train期間固定）
+        
+        リーク防止: Train期間（pace_train_cutoff以前）のデータのみで計算
+        """
+        logger.info("    会場×馬場ペース傾向を計算中...（Train期間固定）")
+        
+        train_cutoff = pd.Timestamp(self.config.pace_train_cutoff)
+        
+        # Train期間のデータのみで統計計算
+        train_rd = rd_merged[rd_merged['race_date'] < train_cutoff].copy()
+        
+        if len(train_rd) == 0:
+            logger.warning("    Train期間のrace_detailsがありません")
+            return
+        
+        # 会場×馬場別の平均ペース差
+        pace_stats = train_rd.groupby(['venue', 'track_surface'])['pace_diff'].agg(['mean', 'std', 'count']).reset_index()
+        
+        # サンプル数が少ない場合はNaN
+        min_samples = self.config.min_pace_samples
+        pace_stats.loc[pace_stats['count'] < min_samples, 'mean'] = np.nan
+        
+        # Dictに保存
+        self._venue_surface_pace_stats = {}
+        for _, row in pace_stats.iterrows():
+            if pd.notna(row['mean']):
+                key = (row['venue'], row['track_surface'])
+                self._venue_surface_pace_stats[key] = row['mean']
+        
+        logger.info(f"    ペース統計パターン数: {len(self._venue_surface_pace_stats)}")
+    
+    def _calc_horse_pace_stats(self, races_df: pd.DataFrame, rd_merged: pd.DataFrame):
+        """
+        【特徴量2,3】馬ごとのペース適性（累積・shift済み）
+        
+        - horse_pace_preference: 好走時（3着以内）のペース傾向
+        - horse_avg_pace_lf: 全レースのペース傾向
+        
+        リーク対策: expanding().mean().shift(1)で当該レース前までの情報のみ使用
+        """
+        logger.info("    馬ごとのペース適性を計算中...（累積・shift済み）")
+        
+        # races_dfからhorse_id, race_date, finish_positionを取得
+        perf = races_df[['race_id', 'horse_id', 'race_date', 'finish_position']].copy()
+        perf['horse_id'] = perf['horse_id'].astype(str)
+        perf['race_id'] = perf['race_id'].astype(str)
+        perf['finish_position'] = pd.to_numeric(perf['finish_position'], errors='coerce')
+        
+        # race_detailsのペース情報を結合
+        perf = perf.merge(
+            rd_merged[['race_id', 'pace_diff']],
+            on='race_id',
+            how='left'
         )
         
-        # 辞書に格納（race_id, horse_idでユニークに）
-        for _, row in df.iterrows():
-            key = (row['race_id'], row.get('horse_id', row.get('horse_name', '')))
-            self._jockey_venue_stats[key] = {
-                'win_rate': row['jockey_venue_win_rate'],
-                'races': row['cum_races']
+        # pace_diffがないレースを除外
+        perf = perf.dropna(subset=['pace_diff'])
+        
+        if len(perf) == 0:
+            logger.warning("    pace_diffのあるレースがありません")
+            return
+        
+        # 3着以内のレースのみ考慮（好走時のペース傾向を学習）
+        perf['is_good_run'] = (perf['finish_position'] <= 3).fillna(False)
+        perf['pace_diff_good'] = np.where(perf['is_good_run'], perf['pace_diff'], np.nan)
+        
+        # 時系列でソート
+        perf = perf.sort_values(['horse_id', 'race_date']).reset_index(drop=True)
+        
+        # 累積平均（shift(1)で当該レース前まで）
+        perf['horse_pace_preference'] = perf.groupby('horse_id')['pace_diff_good'].transform(
+            lambda x: x.expanding().mean().shift(1)
+        )
+        
+        # 全レースの平均ペースも計算（好走時に限らない）
+        perf['horse_avg_pace_lf'] = perf.groupby('horse_id')['pace_diff'].transform(
+            lambda x: x.expanding().mean().shift(1)
+        )
+        
+        # レース数カウント
+        perf['pace_race_count'] = perf.groupby('horse_id')['pace_diff'].transform(
+            lambda x: x.expanding().count().shift(1)
+        )
+        
+        # 最小レース数フィルタ
+        min_races = self.config.min_pace_races
+        perf.loc[perf['pace_race_count'] < min_races, 'horse_pace_preference'] = np.nan
+        perf.loc[perf['pace_race_count'] < min_races, 'horse_avg_pace_lf'] = np.nan
+        
+        # horse_idごとの最新統計を取得
+        latest = perf.groupby('horse_id').last()[['horse_pace_preference', 'horse_avg_pace_lf']].reset_index()
+        
+        # Dictに保存
+        self._horse_pace_stats = {}
+        for _, row in latest.iterrows():
+            self._horse_pace_stats[row['horse_id']] = {
+                'preference': row['horse_pace_preference'],
+                'avg_pace': row['horse_avg_pace_lf']
             }
         
-        # サマリーログ
-        valid = df[df['cum_races'] >= self.config.min_jockey_venue_races]
-        logger.info(f"    騎手×コース統計: {len(self._jockey_venue_stats):,}件 (有効データ: {len(valid):,}件)")
+        valid_count = sum(1 for v in self._horse_pace_stats.values() if pd.notna(v['preference']))
+        logger.info(f"    馬ペース統計: {len(self._horse_pace_stats):,}頭, 有効: {valid_count:,}頭")
     
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
         """V16のtransform"""
-        # V15のtransform
+        
+        # 1. 親クラスのtransform（V15の特徴量）
         result = super().transform(df)
         
         logger.info("LeakFreeFeatureEngineerV16: 追加transform開始")
         
-        # V16の特徴量を追加
-        result = self._add_jockey_venue_features(result)
+        # 2. V16ペース特徴量の計算
+        result = self._add_pace_features(result)
         
         logger.info("LeakFreeFeatureEngineerV16: transform完了")
-        
         return result
     
-    def _add_jockey_venue_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """騎手×コース特徴量を付与"""
-        logger.info("  騎手×コース特徴量を付与中...")
+    def _add_pace_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        ペース特徴量を付与
         
-        win_rates = []
-        races_counts = []
+        1. venue_surface_pace_trend: 会場×馬場のペース傾向
+        2. horse_pace_preference: 馬の得意ペース
+        3. horse_avg_pace_lf: 馬の全レース平均ペース
+        4. pace_fit_score: ペース適合度スコア
+        """
+        logger.info("  ペース特徴量を付与中...")
         
-        for _, row in df.iterrows():
-            key = (row['race_id'], row.get('horse_id', row.get('horse_name', '')))
-            stats = self._jockey_venue_stats.get(key, {'win_rate': 0.0, 'races': 0})
-            win_rates.append(stats['win_rate'])
-            races_counts.append(stats['races'])
+        df = df.copy()
         
-        df['jockey_venue_win_rate'] = win_rates
-        df['jockey_venue_races'] = races_counts
+        # 1. 会場×馬場のペース傾向
+        def get_venue_pace(row):
+            key = (row['venue'], row['track_surface'])
+            return self._venue_surface_pace_stats.get(key, 0.0)
         
-        valid = df[df['jockey_venue_races'] >= self.config.min_jockey_venue_races]
-        logger.info(f"    jockey_venue_win_rate有効: {len(valid):,}/{len(df):,} ({len(valid)/len(df)*100:.1f}%)")
+        if self._venue_surface_pace_stats:
+            df['venue_surface_pace_trend'] = df.apply(get_venue_pace, axis=1)
+        else:
+            df['venue_surface_pace_trend'] = 0.0
+        
+        # 2. 馬のペース適性
+        def get_horse_pace_preference(horse_id):
+            stats = self._horse_pace_stats.get(str(horse_id), {})
+            return stats.get('preference', np.nan)
+        
+        def get_horse_avg_pace(horse_id):
+            stats = self._horse_pace_stats.get(str(horse_id), {})
+            return stats.get('avg_pace', np.nan)
+        
+        if self._horse_pace_stats:
+            df['horse_pace_preference'] = df['horse_id'].apply(get_horse_pace_preference)
+            df['horse_avg_pace_lf'] = df['horse_id'].apply(get_horse_avg_pace)
+        else:
+            df['horse_pace_preference'] = np.nan
+            df['horse_avg_pace_lf'] = np.nan
+        
+        # 3. ペース適合度スコア
+        # 馬の得意ペースとコースのペースの差（小さいほど良い）の符号反転
+        horse_pref = df['horse_pace_preference'].fillna(0)
+        venue_pace = df['venue_surface_pace_trend'].fillna(0)
+        df['pace_fit_score'] = -np.abs(horse_pref - venue_pace)
+        
+        # 欠損値は0（影響なし）
+        df['pace_fit_score'] = df['pace_fit_score'].fillna(0)
+        
+        # ログ出力
+        non_null_pref = df['horse_pace_preference'].notna().sum()
+        non_null_avg = df['horse_avg_pace_lf'].notna().sum()
+        logger.info(f"    horse_pace_preference非NaN: {non_null_pref:,}/{len(df):,} ({non_null_pref/len(df)*100:.1f}%)")
+        logger.info(f"    horse_avg_pace_lf非NaN: {non_null_avg:,}/{len(df):,} ({non_null_avg/len(df)*100:.1f}%)")
+        logger.info(f"    pace_fit_score平均: {df['pace_fit_score'].mean():.3f}")
         
         return df
     

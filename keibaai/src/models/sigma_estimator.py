@@ -1,142 +1,89 @@
-#!/usr/bin/env python3
-# src/models/sigma_estimator.py
-"""
-src/models/sigma_estimator.py (SigmaEstimator)
-σ（馬固有の残差分散）を推定するモデルクラス
-仕様書 7.7.2章 に基づく実装
-"""
-
-import logging
-from typing import Dict, List, Optional
-from pathlib import Path
-import pandas as pd
 import numpy as np
+import pandas as pd
 import lightgbm as lgb
-import joblib
-import json
+from sklearn.base import BaseEstimator, RegressorMixin
+from typing import Dict, Optional, List, Union
+import logging
 
-class SigmaEstimator:
+logger = logging.getLogger(__name__)
+
+class SigmaEstimator(BaseEstimator, RegressorMixin):
     """
-    σ（馬固有の残差分散）推定モデル
+    馬ごとの完走時間の不確実性（標準偏差σ）を予測するモデル。
     
-    仕様書 13.4章 (train_sigma_nu_models.py) に基づき、
-    LGBMRegressor を使用して残差の分散（または標準偏差）を予測する。
+    アプローチ:
+    1. Muモデル（期待値）の予測残差を計算: r = y_true - y_pred
+    2. 残差の絶対値（または対数）をターゲットとして学習
+    3. 特徴量として、馬の過去の安定性や経験数などを使用
     """
     
-    def __init__(self, config: Dict):
-        """
-        Args:
-            config: configs/models.yaml の 'sigma_estimator' セクション
-        """
-        self.config = config
-        self.params = config.get('params', {
+    def __init__(self, params: Optional[Dict] = None):
+        self.params = params or {
             'objective': 'regression',
             'metric': 'rmse',
-            'boosting_type': 'gbdt'
-        })
+            'boosting_type': 'gbdt',
+            'n_estimators': 1000,
+            'learning_rate': 0.01,
+            'num_leaves': 31,
+            'max_depth': -1,
+            'feature_fraction': 0.8,
+            'bagging_fraction': 0.8,
+            'bagging_freq': 5,
+            'verbose': -1
+        }
+        self.model = None
+        self.feature_names_ = None
         
-        self.model: Optional[lgb.LGBMRegressor] = None
-        self.feature_names: List[str] = []
-        self.global_sigma: float = 1.0 # フォールバック用のグローバル平均
-
-    def train(
-        self,
-        features_df: pd.DataFrame,
-        feature_names: List[str],
-        target_sigma: str = 'sigma_target' # 目的変数 (例: squared_error の平均)
-    ):
+    def fit(self, X: pd.DataFrame, y: Union[pd.Series, np.ndarray], mu_pred: Union[pd.Series, np.ndarray]):
         """
-        σモデルを学習
+        モデルの学習
         
         Args:
-            features_df: 学習用特徴量DataFrame (馬単位で集約済みを想定)
-            feature_names: 使用する特徴量リスト
-            target_sigma: 残差分散のターゲットカラム名
+            X: 特徴量
+            y: 実際の完走時間
+            mu_pred: Muモデルによる予測完走時間
         """
-        logging.info("σモデルの学習開始...")
+        # 残差の計算
+        residuals = y - mu_pred
         
-        self.feature_names = feature_names
+        # ターゲット: 残差の絶対値の対数（分布を正規に近づけるため）
+        # log(|r| + epsilon)
+        # 予測時は exp(pred) で戻す
+        target = np.log(np.abs(residuals) + 1e-6)
         
-        X = features_df[self.feature_names]
-        y = features_df[target_sigma]
-        
-        # グローバル平均を計算（予測失敗時のフォールバック用）
-        self.global_sigma = np.sqrt(y.mean()) # ターゲットが分散の場合、標準偏差を保存
+        logger.info(f"Training Sigma Estimator with {len(X)} samples")
         
         self.model = lgb.LGBMRegressor(**self.params)
-        self.model.fit(X, y)
-        logging.info("σモデルの学習完了")
-
-    def predict(
-        self,
-        features_df: pd.DataFrame
-    ) -> np.ndarray:
+        self.model.fit(X, target)
+        self.feature_names_ = X.columns.tolist()
+        
+        return self
+    
+    def predict(self, X: pd.DataFrame) -> np.ndarray:
         """
-        σ（残差の標準偏差）を予測
-        
-        Args:
-            features_df: 予測対象の特徴量DataFrame (レース・馬単位)
-        
-        Returns:
-            σ（標準偏差）の配列
+        標準偏差σの予測
         """
         if self.model is None:
-            raise RuntimeError("モデルが学習されていません。 train() または load_model() を呼び出してください。")
+            raise ValueError("Model has not been trained yet.")
             
-        X = features_df[self.feature_names]
+        # 対数スケールで予測
+        log_abs_residuals = self.model.predict(X)
         
-        # 予測 (予測ターゲットは分散 'sigma_target' を想定)
-        predicted_variance = self.model.predict(X)
+        # 元のスケールに戻す (exp)
+        sigma_pred = np.exp(log_abs_residuals)
         
-        # 負の分散をクリップし、標準偏差（σ）に変換
-        predicted_sigma = np.sqrt(np.maximum(predicted_variance, 0.0))
+        return sigma_pred
+    
+    def save_model(self, filepath: str):
+        """モデルの保存"""
+        if self.model is None:
+            raise ValueError("Model has not been trained yet.")
+        self.model.booster_.save_model(filepath)
         
-        # 異常値をグローバル平均で置換
-        predicted_sigma = np.nan_to_num(predicted_sigma, nan=self.global_sigma)
-        predicted_sigma[predicted_sigma == 0] = self.global_sigma
-        
-        return predicted_sigma
-
-    def save_model(self, model_dir: str):
-        """
-        学習済みモデルと特徴量リストを保存
-        
-        Args:
-            model_dir: 保存先ディレクトリ (例: data/models/sigma_model)
-        """
-        output_path = Path(model_dir)
-        output_path.mkdir(parents=True, exist_ok=True)
-        
-        joblib.dump(self.model, output_path / 'model.pkl')
-        
-        meta_data = {
-            'feature_names': self.feature_names,
-            'global_sigma': self.global_sigma
-        }
-        meta_path = output_path / 'metadata.json'
-        with open(meta_path, 'w', encoding='utf-8') as f:
-            json.dump(meta_data, f, ensure_ascii=False, indent=2)
-            
-        logging.info(f"σモデルを {model_dir} に保存しました")
-
-    def load_model(self, model_dir: str):
-        """
-        モデルと特徴量リストをロード
-        
-        Args:
-            model_dir: ロード元ディレクトリ
-        """
-        model_path = Path(model_dir)
-
-        if not model_path.exists():
-            raise FileNotFoundError(f"モデルディレクトリが見つかりません: {model_dir}")
-
-        self.model = joblib.load(model_path / 'model.pkl')
-        
-        meta_path = model_path / 'metadata.json'
-        with open(meta_path, 'r', encoding='utf-8') as f:
-            meta_data = json.load(f)
-            self.feature_names = meta_data['feature_names']
-            self.global_sigma = meta_data['global_sigma']
-            
-        logging.info(f"σモデルを {model_dir} からロードしました")
+    def load_model(self, filepath: str):
+        """モデルの読み込み"""
+        self.model = lgb.Booster(model_file=filepath)
+        # LGBMRegressorラッパーに戻す（予測APIの統一のため）
+        # 注意: 完全な復元ではないが、predictは動作する
+        self.model = lgb.LGBMRegressor(**self.params)
+        self.model._Booster = lgb.Booster(model_file=filepath)

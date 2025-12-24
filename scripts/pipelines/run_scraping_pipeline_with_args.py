@@ -34,7 +34,7 @@ project_root = Path(__file__).resolve().parent.parent.parent
 sys.path.append(str(project_root))
 sys.path.append(str(project_root / 'keibaai'))
 
-from keibaai.src.modules.preparing import _scrape_html, _scrape_jra_odds
+from keibaai.src.preparing import _scrape_html, _scrape_jra_odds
 from keibaai.src import pipeline_core
 from keibaai.src.utils import data_utils
 

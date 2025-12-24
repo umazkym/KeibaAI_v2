@@ -41,7 +41,7 @@ sys.path.append(os.path.abspath('.'))
 
 # スクレイピング関数をインポート
 try:
-    from keibaai.src.modules.preparing._scrape_html import (
+    from keibaai.src.preparing._scrape_html import (
         fetch_html_robust_get,
         scrape_kaisai_date,
         scrape_race_id_list
@@ -52,13 +52,13 @@ except ImportError:
     print("[警告] スクレイピングモジュールが利用できません。--parse-only モードのみ使用可能です。")
 
 # 正しいパーサーをインポート
-from keibaai.src.modules.parsers.results_parser import parse_race_results_html
-from keibaai.src.modules.parsers.shutuba_parser import parse_shutuba_html
-from keibaai.src.modules.parsers.horse_info_parser import (
+from keibaai.src.parsers.results_parser import parse_race_results_html
+from keibaai.src.parsers.shutuba_parser import parse_shutuba_html
+from keibaai.src.parsers.horse_info_parser import (
     parse_horse_profile,
     parse_horse_performance
 )
-from keibaai.src.modules.parsers.pedigree_parser import parse_pedigree_html
+from keibaai.src.parsers.pedigree_parser import parse_pedigree_html
 
 # --- 設定 ---
 DEFAULT_OUTPUT_DIR = 'output'

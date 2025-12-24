@@ -20,17 +20,17 @@ import pandas as pd
 import yaml
 from tqdm import tqdm
 
-# --- プロジェクトルート (keibaai/) を基準にする ---
+# --- プロジェクトルート (Keiba_AI_v2/) を基準にする ---
 script_dir = Path(__file__).resolve().parent  # scripts/pipelines/
 project_root = script_dir.parent.parent  # Keiba_AI_v2/
-src_dir = project_root / "keibaai" / "src"  # keibaai/src/
+keibaai_dir = project_root / "keibaai"  # keibaai/
 
-sys.path.insert(0, str(src_dir))
+sys.path.insert(0, str(keibaai_dir))
 
 try:
-    from pipeline_core import setup_logging
-    from utils.data_utils import load_parquet_data_by_date
-    from features.feature_engine import FeatureEngine
+    from src import pipeline_core
+    from src.utils.data_utils import load_parquet_data_by_date
+    from src.features.feature_engine import FeatureEngine
 except ImportError as e:
     print(f"エラー: 必要なモジュールのインポートに失敗しました: {e}")
     print(f"sys.path: {sys.path}")

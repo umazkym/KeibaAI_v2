@@ -18,7 +18,7 @@ sys.path.append(str(project_root))
 sys.path.append(str(project_root / 'keibaai'))
 
 from keibaai.src import pipeline_core
-from keibaai.src.modules.parsers import results_parser, shutuba_parser, horse_info_parser, pedigree_parser
+from keibaai.src.parsers import results_parser, shutuba_parser, horse_info_parser, pedigree_parser
 
 # --- ▼▼▼ デバッグ設定 ▼▼▼ ---
 # 各処理のファイル上限数を設定

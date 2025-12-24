@@ -15,7 +15,7 @@ from datetime import datetime
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from keibaai.src.modules.parsers.race_detail_parser import parse_race_html
+from keibaai.src.parsers.race_detail_parser import parse_race_html
 
 # ログ設定
 logging.basicConfig(

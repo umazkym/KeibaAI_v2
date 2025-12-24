@@ -23,7 +23,7 @@ def parse_single_file(file_path):
     import logging
     logging.disable(logging.WARNING)
     
-    from keibaai.src.modules.parsers import shutuba_parser
+    from keibaai.src.parsers import shutuba_parser
     
     try:
         df = shutuba_parser.parse_shutuba_html(str(file_path))

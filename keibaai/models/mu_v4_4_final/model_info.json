@@ -1,0 +1,33 @@
+{
+  "version": "v4.4_final",
+  "description": "V4_3 + コース特徴量 + 深層分析新特徴量",
+  "valid_roi": 77.09586466165412,
+  "test_roi": 72.17376072867403,
+  "gap": 4.922103932980093,
+  "feature_count": 164,
+  "new_features": [
+    "course_slope_percent",
+    "course_final_straight_m",
+    "course_start_to_corner_m",
+    "is_high_roi_course",
+    "is_optimal_field_size",
+    "is_small_field",
+    "is_large_field",
+    "is_steep_slope",
+    "is_long_straight",
+    "is_long_run_to_corner",
+    "weight_gain_flag",
+    "weight_loss_flag",
+    "is_too_soon",
+    "is_long_rest"
+  ],
+  "excluded_features": [
+    "form_rank",
+    "gap_course_fit_popularity",
+    "gap_jockey_popularity",
+    "gap_pedigree_popularity",
+    "gap_trainer_popularity",
+    "is_overvalued"
+  ],
+  "created_at": "2025-12-20T23:43:57.708740"
+}

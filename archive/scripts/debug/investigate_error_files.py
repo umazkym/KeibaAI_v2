@@ -23,7 +23,7 @@ project_root = Path(__file__).resolve().parent
 sys.path.append(str(project_root / 'keibaai'))
 
 from bs4 import BeautifulSoup
-from keibaai.src.modules.parsers.results_parser import parse_results_html
+from keibaai.src.parsers.results_parser import parse_results_html
 
 
 def investigate_file(race_id: str):

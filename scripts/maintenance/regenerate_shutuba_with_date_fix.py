@@ -11,7 +11,7 @@ from tqdm import tqdm
 project_root = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from keibaai.src.modules.parsers import shutuba_parser
+from keibaai.src.parsers import shutuba_parser
 
 def main():
     html_dir = project_root / 'keibaai' / 'data' / 'raw' / 'html' / 'shutuba'

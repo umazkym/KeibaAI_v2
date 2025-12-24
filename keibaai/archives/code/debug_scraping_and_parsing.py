@@ -19,7 +19,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # --- 「実際のフロー」からロジックをインポート/拝借 ---
 # 1. 堅牢なスクレイピング関数をインポート
-from keibaai.src.modules.preparing._scrape_html import fetch_html_robust_get
+from keibaai.src.preparing._scrape_html import fetch_html_robust_get
 
 # 2. 高機能なパーサー関数群を移植 (common_utilsも含む)
 #    元のパーサーはファイルパスを引数に取るため、HTMLコンテンツを直接受け取れるように改造
@@ -29,7 +29,7 @@ TARGET_DATE = '2023-10-09'
 BASE_URL = 'https://db.netkeiba.com'
 OUTPUT_CSV_PATH = 'debug_scraped_data.csv'
 
-# --- 共通パーサーユーティリティ (keibaai.src.modules.parsers.common_utils より移植) ---
+# --- 共通パーサーユーティリティ (keibaai.src.parsers.common_utils より移植) ---
 
 def parse_int_or_none(value: Optional[str]) -> Optional[int]:
     if value is None or value == '': return None
@@ -154,7 +154,7 @@ def parse_margin_to_seconds(margin_str: Optional[str]) -> Optional[float]:
     except (ValueError, ZeroDivisionError):
         return None
 
-# --- 高機能パーサー (keibaai.src.modules.parsers.results_parser より移植・改造) ---
+# --- 高機能パーサー (keibaai.src.parsers.results_parser より移植・改造) ---
 
 def parse_html_content(html_bytes: bytes, race_id: str) -> pd.DataFrame:
     """HTMLコンテンツ(bytes)を直接パースしてDataFrameを返す"""

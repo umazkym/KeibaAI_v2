@@ -19,8 +19,8 @@ sys.path.insert(0, str(project_root))
 
 from keibaai.src.features.leak_free_feature_engineer import LeakFreeFeatureEngineer
 from keibaai.src.features.leak_free_feature_engineer_v2 import LeakFreeFeatureEngineerV2
-from keibaai.src.modules.models.ability_estimator import Layer1_AbilityEstimator
-from keibaai.src.modules.models.probability_calibrator import Layer2_ProbabilityCalibrator
+from keibaai.src.models.ability_estimator import Layer1_AbilityEstimator
+from keibaai.src.models.probability_calibrator import Layer2_ProbabilityCalibrator
 
 
 def train_and_evaluate(train_feat, valid_feat, test2_feat, feature_cols, config, strategy_name):

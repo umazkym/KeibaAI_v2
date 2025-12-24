@@ -82,7 +82,7 @@ class TestLayer1AbilityEstimator:
         # TODO: AbilityEstimatorが実装されたら有効化
         pytest.skip("AbilityEstimator not implemented yet")
         
-        # from keibaai.src.modules.models.ability_estimator import Layer1_AbilityEstimator
+        # from keibaai.src.models.ability_estimator import Layer1_AbilityEstimator
         # estimator = Layer1_AbilityEstimator()
         # estimator.train(X, y, groups)
         # 

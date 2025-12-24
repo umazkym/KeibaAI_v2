@@ -20,8 +20,8 @@ from tqdm import tqdm
 project_root = Path(__file__).resolve().parent.parent.parent
 sys.path.append(str(project_root))
 
-from keibaai.src.modules.preparing import _scrape_html
-from keibaai.src.modules.constants import LocalPaths
+from keibaai.src.preparing import _scrape_html
+from keibaai.src.constants import LocalPaths
 
 
 def load_config():
@@ -285,16 +285,13 @@ def scrape_phase_horses(conn, horse_ids: list, skip_existing: bool = True, retry
             horse_id = file.stem.replace('_profile', '')
             existing_ids.add(horse_id)
 
-        log.info(f"  → 既にスクレイピング済み: {len(existing_ids):,}頭")
+        log.info(f"  → 既にプロフィール取得済み: {len(existing_ids):,}頭")
 
-        horse_ids_to_process = [
-            hid for hid in horse_ids
-            if hid not in existing_ids or hid in error_ids
-        ]
-
-        new_count = len([hid for hid in horse_ids if hid not in existing_ids])
-        error_retry = len([hid for hid in horse_ids_to_process if hid in error_ids])
-        log.info(f"  → 処理対象: {len(horse_ids_to_process):,}頭 (新規: {new_count:,}頭, エラー再処理: {error_retry:,}頭)")
+        # 修正: 過去成績(perf)の更新チェックが必要なため、既存ファイルがあっても除外せずに全件渡す
+        # _scrape_html.scrape_html_horse 内部で skip=True であっても TTL期限切れなら perf を更新するロジックがある
+        horse_ids_to_process = horse_ids
+        
+        log.info(f"  → 処理対象: {len(horse_ids_to_process):,}頭 (更新チェック含む)")
     elif retry_errors:
         horse_ids_to_process = [hid for hid in horse_ids if hid in error_ids]
         log.info(f"  → 処理対象: {len(horse_ids_to_process):,}頭 (エラー再処理のみ)")
@@ -446,8 +443,12 @@ def main():
                 race_ids = pd.read_csv(race_id_file)['race_id'].astype(str).tolist()
                 log.info(f"  → 既存のレースIDリストを読み込みました: {len(race_ids)}件")
             else:
-                log.error("  ❌ race_id_list.csv が見つかりません。フェーズ0aを先に実行してください。")
-                return
+                if args.phase in ['0b']:
+                    log.error("  ❌ race_id_list.csv が見つかりません。フェーズ0aを先に実行してください。")
+                    return
+                else:
+                    log.info("  ℹ️ race_id_list.csv が見つかりませんが、現在のフェーズでは不要なため続行します。")
+                    race_ids = []
 
         # --- フェーズ0b: レース結果と出馬表の取得 ---
         if args.phase in ['0b', 'all']:

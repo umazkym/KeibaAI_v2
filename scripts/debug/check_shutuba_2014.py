@@ -2,7 +2,7 @@ import sys
 sys.path.insert(0, '.')
 
 from pathlib import Path
-from keibaai.src.modules.parsers import shutuba_parser
+from keibaai.src.parsers import shutuba_parser
 
 # 2014年と2020年のshutubaファイルをパースして比較
 html_dir = Path('keibaai/data/raw/html/shutuba')

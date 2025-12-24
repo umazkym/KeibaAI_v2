@@ -15,8 +15,8 @@ from tqdm import tqdm
 project_root = Path(__file__).resolve().parent.parent.parent
 sys.path.append(str(project_root))
 
-from keibaai.src.modules.preparing import _scrape_html
-from keibaai.src.modules.constants import LocalPaths
+from keibaai.src.preparing import _scrape_html
+from keibaai.src.constants import LocalPaths
 
 
 def setup_logging():

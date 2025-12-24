@@ -7,8 +7,8 @@ import logging
 project_root = Path(__file__).resolve().parent
 sys.path.append(str(project_root))
 
-from keibaai.src.modules.preparing import _scrape_html
-from keibaai.src.modules.constants import LocalPaths
+from keibaai.src.preparing import _scrape_html
+from keibaai.src.constants import LocalPaths
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)

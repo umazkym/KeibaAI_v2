@@ -28,7 +28,7 @@ sys.path.append(str(project_root / 'keibaai'))
 from bs4 import BeautifulSoup
 
 try:
-    from keibaai.src.modules.parsers.results_parser import parse_results_html
+    from keibaai.src.parsers.results_parser import parse_results_html
     PARSER_AVAILABLE = True
 except ImportError as e:
     logger.warning(f"パーサーのインポートに失敗: {e}")
