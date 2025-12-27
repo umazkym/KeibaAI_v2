@@ -1,0 +1,18 @@
+created_at: '2025-12-25T07:08:10.435970'
+description: 競馬場×距離×馬場×状態の詳細基準タイム + 階層的フォールバック
+metrics:
+  mae_seconds: 1.1314912879121135
+  median_error_seconds: 0.8201153190279342
+  n_estimators_used: 1000
+  n_features: 23
+  n_test: 47274
+  n_train: 142199
+  rmse_gap: -7.023047586447709
+  test_rmse: 0.8232191678045793
+  test_spearman: 0.41466961432853
+  test_top1_acc: 0.21643518518518517
+  train_rmse: 0.7654040939089048
+  train_spearman: 0.4308868139222341
+  train_top1_acc: 0.23042052469135801
+target: normalized_time
+version: mu_time_v4.1

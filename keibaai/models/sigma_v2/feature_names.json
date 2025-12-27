@@ -1,0 +1,11 @@
+[
+  "horse_avg_finish",
+  "age",
+  "sex",
+  "horse_weight",
+  "basis_weight",
+  "distance_m",
+  "track_surface",
+  "horse_front_runner_rate",
+  "horse_c4_gap_avg"
+]

@@ -1,0 +1,39 @@
+base_model: mu_time_v1
+created_at: '2025-12-24T23:43:11.998895'
+metrics:
+  log_test_rmse: !!python/object/apply:numpy.core.multiarray.scalar
+  - &id001 !!python/object/apply:numpy.dtype
+    args:
+    - f8
+    - false
+    - true
+    state: !!python/tuple
+    - 3
+    - <
+    - null
+    - null
+    - null
+    - -1
+    - -1
+    - 0
+  - !!binary |
+    WcqRi+i28j8=
+  log_train_rmse: !!python/object/apply:numpy.core.multiarray.scalar
+  - *id001
+  - !!binary |
+    FVNltPsF8j8=
+  n_estimators_used: 545
+  n_features: 9
+  n_test: 47274
+  n_train: 142199
+  sigma_test_rmse: !!python/object/apply:numpy.core.multiarray.scalar
+  - *id001
+  - !!binary |
+    zIxgqEys+D8=
+  sigma_train_rmse: !!python/object/apply:numpy.core.multiarray.scalar
+  - *id001
+  - !!binary |
+    ffMSbhJw8D8=
+n_features: 9
+target: log(|residual| + 1e-6)
+version: sigma_v2

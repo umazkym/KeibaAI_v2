@@ -1,0 +1,10 @@
+[
+  "head_count",
+  "distance_m",
+  "track_surface",
+  "track_condition",
+  "weather",
+  "venue",
+  "race_class",
+  "age_restriction"
+]

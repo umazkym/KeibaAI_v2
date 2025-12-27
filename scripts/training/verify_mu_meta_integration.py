@@ -1,0 +1,295 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+アプローチ1: μ予測をV15の特徴量として統合
+
+【目的】
+μモデルの予測値をV15モデルの入力特徴量として追加し、
+LightGBMに「いつμを信じるべきか」を自動学習させる。
+
+【追加特徴量】
+- mu_pred: μモデル予測値（normalized_time）
+- mu_pred_rank: レース内順位
+- mu_rank_pct: パーセンタイル順位
+- mu_v15_diff: V15予測順位との乖離
+"""
+import pandas as pd
+import numpy as np
+import lightgbm as lgb
+from pathlib import Path
+import sys
+import logging
+import warnings
+warnings.filterwarnings('ignore')
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+project_root = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(project_root))
+
+
+def load_data():
+    data_dir = project_root / "keibaai/data/parsed/parquet"
+    races = pd.read_parquet(data_dir / "races/races.parquet")
+    pedigrees = pd.read_parquet(data_dir / "pedigrees/pedigrees.parquet")
+    corners = pd.read_parquet(data_dir / "corners/corner_positions.parquet")
+    race_details = pd.read_parquet(data_dir / "race_details/race_details.parquet")
+    horses = pd.read_parquet(data_dir / "horses/horses.parquet")
+    
+    races = races[races['finish_position'].notna()].copy()
+    races['race_date'] = pd.to_datetime(races['race_date'])
+    return races, pedigrees, corners, race_details, horses
+
+
+def calc_roi(df, preds):
+    d = df.copy()
+    d['score'] = preds
+    d['rank'] = d.groupby('race_id')['score'].rank(ascending=False, method='first')
+    bets = d[d['rank'] == 1]
+    hits = bets[bets['finish_position'] == 1]
+    if len(bets) == 0:
+        return 0, 0, 0
+    roi = hits['win_odds'].sum() / len(bets) * 100
+    hit_rate = len(hits) / len(bets) * 100
+    return roi, hit_rate, len(bets)
+
+
+def normalize(x):
+    return (x - x.min()) / (x.max() - x.min() + 1e-8)
+
+
+def train_v15(train_df, feature_cols):
+    params = {
+        'objective': 'binary', 'metric': 'auc', 'verbosity': -1,
+        'learning_rate': 0.03, 'num_leaves': 20, 'max_depth': 3,
+        'min_child_samples': 100, 'reg_alpha': 3.0, 'reg_lambda': 5.0,
+        'bagging_fraction': 0.7, 'bagging_freq': 3, 'feature_fraction': 0.7,
+    }
+    y_train = (train_df['finish_position'] == 1).astype(int)
+    train_ds = lgb.Dataset(train_df[feature_cols].fillna(0), y_train)
+    model = lgb.train(params, train_ds, num_boost_round=200)
+    return model
+
+
+def train_v44_residual(train_df, feature_cols, v15_preds):
+    train_df = train_df.copy()
+    train_df['v15_pred'] = v15_preds
+    
+    odds = train_df['win_odds'].fillna(1.0).clip(upper=90)
+    log_odds = np.log1p(odds)
+    
+    actual = (train_df['finish_position'] == 1).astype(float)
+    residual = actual - train_df['v15_pred']
+    
+    residual_gain = np.zeros(len(train_df))
+    residual_gain[train_df['finish_position'] == 1] = residual[train_df['finish_position'] == 1] * log_odds[train_df['finish_position'] == 1] * 10
+    residual_gain[train_df['finish_position'] == 2] = residual[train_df['finish_position'] == 2] * log_odds[train_df['finish_position'] == 2] * 5
+    residual_gain[train_df['finish_position'] == 3] = residual[train_df['finish_position'] == 3] * log_odds[train_df['finish_position'] == 3] * 2
+    residual_gain = np.maximum(residual_gain, 0)
+    
+    train_df['target'] = residual_gain.astype(int)
+    train_df = train_df.sort_values('race_id')
+    groups = train_df.groupby('race_id', sort=False).size().to_list()
+    
+    params = {
+        'objective': 'lambdarank', 'boosting_type': 'gbdt',
+        'num_leaves': 20, 'max_depth': 3, 'min_child_samples': 200,
+        'learning_rate': 0.03, 'reg_alpha': 8.0, 'reg_lambda': 12.0,
+        'feature_fraction': 0.5, 'bagging_fraction': 0.6, 'bagging_freq': 3,
+        'verbose': -1, 'random_state': 42, 'label_gain': list(range(100))
+    }
+    
+    model = lgb.LGBMRanker(**params, n_estimators=150)
+    model.fit(train_df[feature_cols].fillna(0), train_df['target'], group=groups)
+    return model
+
+
+def train_mu_time(train_df, mu_feature_cols):
+    train_valid = train_df.dropna(subset=['normalized_time']).copy()
+    
+    params = {
+        'objective': 'regression', 'metric': 'rmse', 'verbosity': -1,
+        'learning_rate': 0.02, 'num_leaves': 31, 'max_depth': 4,
+        'min_child_samples': 100, 'reg_alpha': 2.0, 'reg_lambda': 3.0,
+        'bagging_fraction': 0.8, 'bagging_freq': 3, 'feature_fraction': 0.8,
+    }
+    
+    y_train = train_valid['normalized_time']
+    train_ds = lgb.Dataset(train_valid[mu_feature_cols].fillna(0), y_train)
+    model = lgb.train(params, train_ds, num_boost_round=300)
+    return model
+
+
+def add_mu_meta_features(df, mu_preds, v15_rank):
+    """μ予測からメタ特徴量を生成"""
+    df = df.copy()
+    df['_mu_pred'] = mu_preds
+    
+    # μ予測の順位（タイムが速い=順位が高い）
+    df['mu_pred_rank'] = df.groupby('race_id')['_mu_pred'].rank(ascending=True, method='min')
+    
+    # パーセンタイル順位（0=最速, 1=最遅）
+    df['mu_rank_pct'] = df.groupby('race_id')['_mu_pred'].rank(pct=True, ascending=True)
+    
+    # V15予測との乖離
+    df['mu_v15_diff'] = df['mu_pred_rank'] - v15_rank
+    df['mu_v15_diff_abs'] = df['mu_v15_diff'].abs()
+    
+    # μ予測値そのもの（正規化済み）
+    df['mu_pred_normalized'] = df.groupby('race_id')['_mu_pred'].transform(lambda x: (x - x.mean()) / (x.std() + 1e-8))
+    
+    df = df.drop(columns=['_mu_pred'])
+    
+    return df
+
+
+def main():
+    logger.info("=" * 80)
+    logger.info("アプローチ1: μ予測をV15の特徴量として統合")
+    logger.info("=" * 80)
+    
+    from keibaai.src.features.leak_free_feature_engineer_v15_fixed import LeakFreeFeatureEngineerV15Fixed
+    from keibaai.src.features.time_feature_engineer_v3 import TimeFeatureEngineerV3
+    
+    races, pedigrees, corners, race_details, horses = load_data()
+    
+    test_years = [2021, 2022, 2023, 2024]
+    results_base = []
+    results_with_mu_meta = []
+    
+    for test_year in test_years:
+        train_end = f'{test_year - 2}-12-31'
+        test_start = f'{test_year}-01-01'
+        test_end = f'{test_year}-12-31'
+        
+        logger.info(f"\n{'='*60}")
+        logger.info(f"検証: {test_year}年")
+        logger.info("=" * 60)
+        
+        train = races[races['race_date'] <= train_end].copy()
+        test = races[(races['race_date'] >= test_start) & (races['race_date'] <= test_end)].copy()
+        
+        # ===== V15特徴量生成 =====
+        engine_v15 = LeakFreeFeatureEngineerV15Fixed()
+        engine_v15.fit(train, pedigrees, corners, race_details, horses_df=horses)
+        train_v15f = engine_v15.transform(train)
+        test_v15f = engine_v15.transform(test)
+        v15_feature_cols = [c for c in engine_v15.get_feature_columns() if c in train_v15f.columns]
+        
+        # ===== μ特徴量生成 =====
+        engine_mu = TimeFeatureEngineerV3(min_samples=30)
+        engine_mu.fit(train)
+        train_muf = engine_mu.transform(train)
+        test_muf = engine_mu.transform(test)
+        mu_feature_cols = [c for c in engine_mu.get_feature_columns() if c in train_muf.columns]
+        
+        basic_cols = ['distance_m', 'bracket_number', 'horse_weight', 'age', 'basis_weight']
+        for col in ['track_surface', 'track_condition', 'venue']:
+            if col in train_muf.columns:
+                train_muf[col + '_enc'] = train_muf[col].astype('category').cat.codes
+                test_muf[col + '_enc'] = test_muf[col].astype('category').cat.codes
+                basic_cols.append(col + '_enc')
+        mu_feature_cols_full = mu_feature_cols + [c for c in basic_cols if c in train_muf.columns]
+        
+        # ===== ベースライン (V15 + V4.4) =====
+        model_v15_base = train_v15(train_v15f, v15_feature_cols)
+        v15_train_pred = model_v15_base.predict(train_v15f[v15_feature_cols].fillna(0))
+        v15_test_pred = model_v15_base.predict(test_v15f[v15_feature_cols].fillna(0))
+        
+        model_v44 = train_v44_residual(train_v15f, v15_feature_cols, v15_train_pred)
+        v44_test_pred = model_v44.predict(test_v15f[v15_feature_cols].fillna(0))
+        
+        base_score = normalize(v15_test_pred) * 0.5 + normalize(v44_test_pred) * 0.5
+        roi_base, hit_base, n_base = calc_roi(test_v15f, base_score)
+        
+        logger.info(f"  ベースライン (V15+V4.4): {roi_base:.1f}% (的中率={hit_base:.1f}%)")
+        results_base.append({'year': test_year, 'roi': roi_base, 'hit': hit_base})
+        
+        # ===== μモデル学習 =====
+        model_mu = train_mu_time(train_muf, mu_feature_cols_full)
+        mu_train_pred = model_mu.predict(train_muf[mu_feature_cols_full].fillna(0))
+        mu_test_pred = model_mu.predict(test_muf[mu_feature_cols_full].fillna(0))
+        
+        # ===== μメタ特徴量をV15特徴量に追加 =====
+        # Train: V15予測順位を計算
+        train_v15f['_v15_pred'] = v15_train_pred
+        train_v15f['v15_rank'] = train_v15f.groupby('race_id')['_v15_pred'].rank(ascending=False, method='min')
+        train_v15f = add_mu_meta_features(train_v15f, mu_train_pred, train_v15f['v15_rank'])
+        train_v15f = train_v15f.drop(columns=['_v15_pred', 'v15_rank'])
+        
+        # Test: V15予測順位を計算
+        test_v15f['_v15_pred'] = v15_test_pred
+        test_v15f['v15_rank'] = test_v15f.groupby('race_id')['_v15_pred'].rank(ascending=False, method='min')
+        test_v15f = add_mu_meta_features(test_v15f, mu_test_pred, test_v15f['v15_rank'])
+        test_v15f = test_v15f.drop(columns=['_v15_pred', 'v15_rank'])
+        
+        # μメタ特徴量を含む新しい特徴量リスト
+        mu_meta_cols = ['mu_pred_rank', 'mu_rank_pct', 'mu_v15_diff', 'mu_v15_diff_abs', 'mu_pred_normalized']
+        v15_with_mu_cols = v15_feature_cols + mu_meta_cols
+        
+        # ===== V15 + μメタ特徴量で再学習 =====
+        model_v15_with_mu = train_v15(train_v15f, v15_with_mu_cols)
+        v15_mu_train_pred = model_v15_with_mu.predict(train_v15f[v15_with_mu_cols].fillna(0))
+        v15_mu_test_pred = model_v15_with_mu.predict(test_v15f[v15_with_mu_cols].fillna(0))
+        
+        # V4.4 Residualも再学習
+        model_v44_with_mu = train_v44_residual(train_v15f, v15_with_mu_cols, v15_mu_train_pred)
+        v44_mu_test_pred = model_v44_with_mu.predict(test_v15f[v15_with_mu_cols].fillna(0))
+        
+        # アンサンブル
+        with_mu_score = normalize(v15_mu_test_pred) * 0.5 + normalize(v44_mu_test_pred) * 0.5
+        roi_with_mu, hit_with_mu, n_with_mu = calc_roi(test_v15f, with_mu_score)
+        
+        logger.info(f"  +μメタ特徴量 (V15+V4.4): {roi_with_mu:.1f}% (的中率={hit_with_mu:.1f}%)")
+        logger.info(f"  改善: {roi_with_mu - roi_base:+.1f}%")
+        results_with_mu_meta.append({'year': test_year, 'roi': roi_with_mu, 'hit': hit_with_mu})
+        
+        # μメタ特徴量の重要度
+        importance = model_v15_with_mu.feature_importance(importance_type='gain')
+        feature_importance = dict(zip(v15_with_mu_cols, importance))
+        logger.info(f"\n  μメタ特徴量の重要度:")
+        for col in mu_meta_cols:
+            if col in feature_importance:
+                rank = sorted(feature_importance.values(), reverse=True).index(feature_importance[col]) + 1
+                logger.info(f"    {col}: {feature_importance[col]:.0f} (順位: {rank}/{len(feature_importance)})")
+        
+        # カラム削除
+        for col in mu_meta_cols:
+            if col in test_v15f.columns:
+                test_v15f = test_v15f.drop(columns=[col])
+    
+    # ===== 最終サマリー =====
+    logger.info("\n" + "=" * 80)
+    logger.info("最終サマリー")
+    logger.info("=" * 80)
+    
+    base_df = pd.DataFrame(results_base)
+    mu_df = pd.DataFrame(results_with_mu_meta)
+    
+    logger.info(f"\n{'Year':>6} {'Base':>8} {'+μメタ':>8} {'改善':>8}")
+    logger.info("-" * 40)
+    for i, year in enumerate(test_years):
+        base_roi = base_df[base_df['year'] == year]['roi'].values[0]
+        mu_roi = mu_df[mu_df['year'] == year]['roi'].values[0]
+        diff = mu_roi - base_roi
+        logger.info(f"{year:>6} {base_roi:>7.1f}% {mu_roi:>7.1f}% {diff:>+7.1f}%")
+    
+    logger.info("-" * 40)
+    avg_base = base_df['roi'].mean()
+    avg_mu = mu_df['roi'].mean()
+    logger.info(f"{'Avg':>6} {avg_base:>7.1f}% {avg_mu:>7.1f}% {avg_mu - avg_base:>+7.1f}%")
+    
+    logger.info("\n" + "=" * 80)
+    logger.info("結論")
+    logger.info("=" * 80)
+    if avg_mu > avg_base:
+        logger.info(f"✅ μメタ特徴量統合で平均 {avg_mu - avg_base:+.1f}% 改善")
+        logger.info("  → LightGBMが「いつμを信じるべきか」を自動学習している")
+    else:
+        logger.info(f"⚠️ μメタ特徴量統合の効果なし（{avg_mu - avg_base:+.1f}%）")
+        logger.info("  → アプローチ2（μモデル改善）またはアプローチ3（信頼度ベース）を検討")
+
+
+if __name__ == "__main__":
+    main()

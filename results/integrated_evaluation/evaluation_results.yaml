@@ -1,0 +1,34 @@
+evaluated_at: '2025-12-25T00:21:20.928159'
+n_races: 3456
+sanrenpuku:
+  hit_rate: 41.464120370370374
+  hits: 1433
+  roi: 5854.050925925926
+  total_bet: 345600
+single_bet:
+  hit_rate: 74.71064814814815
+  hits: 2582
+  roi: !!python/object/apply:numpy.core.multiarray.scalar
+  - !!python/object/apply:numpy.dtype
+    args:
+    - f8
+    - false
+    - true
+    state: !!python/tuple
+    - 3
+    - <
+    - null
+    - null
+    - null
+    - -1
+    - -1
+    - 0
+  - !!binary |
+    voT2Evq8hUA=
+  total_bet: 345600
+test_period: 2023-01-01 to 2023-12-31
+umaren:
+  hit_rate: 53.848379629629626
+  hits: 1861
+  roi: 2353.8165509259256
+  total_bet: 345600

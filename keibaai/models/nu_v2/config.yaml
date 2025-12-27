@@ -1,0 +1,52 @@
+base_model: mu_time_v1 + sigma_v2
+created_at: '2025-12-25T00:03:28.904744'
+forbidden_features:
+- avg_win_odds
+- std_win_odds
+- min_win_odds
+- max_win_odds
+- win_odds
+- popularity
+- popularity_spread
+- finish_position
+- finish_time_seconds
+- margin_seconds
+- last_3f_time
+leak_free: true
+metrics:
+  n_estimators_used: 500
+  n_features: 8
+  n_test: 3456
+  n_train: 10368
+  test_mae: !!python/object/apply:numpy.core.multiarray.scalar
+  - &id001 !!python/object/apply:numpy.dtype
+    args:
+    - f8
+    - false
+    - true
+    state: !!python/tuple
+    - 3
+    - <
+    - null
+    - null
+    - null
+    - -1
+    - -1
+    - 0
+  - !!binary |
+    spqSXrBtGEA=
+  test_mean_nu: !!python/object/apply:numpy.core.multiarray.scalar
+  - *id001
+  - !!binary |
+    Uz3OvzSqFEA=
+  train_mae: !!python/object/apply:numpy.core.multiarray.scalar
+  - *id001
+  - !!binary |
+    AvT85Xm4G0A=
+  train_mean_nu: !!python/object/apply:numpy.core.multiarray.scalar
+  - *id001
+  - !!binary |
+    SXhrLofgHkA=
+n_features: 8
+target: nu (degrees of freedom)
+version: nu_v2
