@@ -1,0 +1,5 @@
+track_condition,undervalued_count,undervalued_rate,overvalued_count,overvalued_rate,actual_win_rate,n_horses
+不良,147,0.0816,147,0.0816,0.0733,1802
+稍重,1401,0.0753,1436,0.0771,0.0737,18615
+良,6378,0.0706,6577,0.0728,0.0738,90400
+重,599,0.0766,592,0.0757,0.0724,7819

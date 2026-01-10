@@ -1,0 +1,119 @@
+dirt_params:
+  bagging_fraction: 0.4
+  bagging_freq: 1
+  feature_fraction: 0.4
+  learning_rate: 0.03
+  max_depth: 3
+  metric: auc
+  min_child_samples: 100
+  num_leaves: 20
+  objective: binary
+  reg_alpha: 5.0
+  reg_lambda: 8.0
+  verbosity: -1
+expected_performance:
+  dirt_roi: 83.4
+  overall_roi: 80.5
+  turf_roi: 77.5
+feature_engineering:
+  additional_features:
+  - detailed_underdog_features
+  - dirt_specific_features
+  - front_runner_feature
+  base_version: V15
+features:
+- age
+- basis_weight
+- basis_weight_light_flag
+- bracket_bias
+- bracket_number
+- class_change
+- closer_long_straight_advantage
+- course_corner_count
+- course_final_straight_m
+- course_is_outer
+- course_slope_percent
+- course_start_to_corner_m
+- course_turn_direction
+- distance_category_encoded
+- distance_change
+- distance_extend_flag
+- distance_m
+- field_size
+- front_runner_competition
+- front_slope_disadvantage
+- heavy_track_fit
+- horse_avg_c4_gap
+- horse_avg_c4_pos
+- horse_avg_dirt_finish
+- horse_avg_finish
+- horse_c4_gap_avg
+- horse_c4_leader_rate
+- horse_days_since_last
+- horse_dirt_races
+- horse_dirt_win_rate
+- horse_dirt_wins
+- horse_front_runner_rate
+- horse_front_runner_score
+- horse_has_turf_exp
+- horse_last3_avg_finish
+- horse_last3f_avg
+- horse_last3f_rank_avg
+- horse_last_finish
+- horse_position_improvement_avg
+- horse_running_style
+- horse_top3_rate
+- horse_total_races
+- horse_upset_current_dist
+- horse_upset_history
+- horse_upset_long
+- horse_upset_mid
+- horse_upset_mile
+- horse_upset_rate
+- horse_upset_sprint
+- horse_weight
+- horse_win_rate
+- is_chitose_bred
+- is_class_down
+- is_class_up
+- is_long_straight
+- jockey_races
+- jockey_top3_rate
+- jockey_win_rate
+- pace_style_match_score
+- post_style_conflict
+- prev_finish_category
+- prev_race_class
+- race_class
+- race_front_runner_count
+- rest_days_optimal
+- sex_encoded
+- sire_races
+- sire_win_rate
+- straight_ratio
+- style_straight_match
+- surface_switch_flag
+- track_condition_encoded
+- track_surface_encoded
+- trainer_races
+- trainer_top3_rate
+- trainer_win_rate
+- venue_expected_pace
+- venue_pace_avg
+- weight_trend
+strategy: Hybrid (Turf:StrongReg, Dirt:Baseline)
+turf_params:
+  bagging_fraction: 0.3
+  bagging_freq: 1
+  feature_fraction: 0.3
+  learning_rate: 0.01
+  max_depth: 2
+  metric: auc
+  min_child_samples: 200
+  num_leaves: 10
+  objective: binary
+  reg_alpha: 50.0
+  reg_lambda: 100.0
+  verbosity: -1
+updated_at: '2026-01-10 11:12:43'
+version: 2.1.0

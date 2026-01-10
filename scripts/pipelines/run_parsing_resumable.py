@@ -3,10 +3,12 @@
 """
 再開可能なパースパイプライン
 途中で停止しても、既にパース済みのファイルをスキップして続行可能
+並列処理対応版
 """
 
 import logging
 import sqlite3
+import traceback
 from pathlib import Path
 import yaml
 from datetime import datetime
@@ -15,6 +17,7 @@ import pandas as pd
 import os
 from tqdm import tqdm
 import argparse
+from multiprocessing import Pool, cpu_count
 
 # プロジェクトルートをsys.pathに追加
 project_root = Path(__file__).resolve().parent.parent.parent
@@ -22,6 +25,76 @@ sys.path.append(str(project_root / 'keibaai'))
 
 from src import pipeline_core
 from src.parsers import results_parser, shutuba_parser, horse_info_parser, pedigree_parser
+
+
+# ============================================================
+# 並列処理用ワーカー関数（モジュールレベルで定義必須）
+# ワーカーはパース処理のみ行い、DB/ログアクセスはしない
+# ============================================================
+
+def _worker_parse_race(file_path: str) -> dict:
+    """レース結果HTMLをパースするワーカー（DBアクセスなし）"""
+    try:
+        df = results_parser.parse_results_html(file_path)
+        if df is not None and not df.empty:
+            return {"status": "success", "data": df.to_dict("records"), "file": file_path}
+        else:
+            return {"status": "empty", "file": file_path}
+    except Exception as e:
+        return {"status": "error", "error": str(e), "traceback": traceback.format_exc(), "file": file_path}
+
+
+def _worker_parse_shutuba(file_path: str) -> dict:
+    """出馬表HTMLをパースするワーカー（DBアクセスなし）"""
+    try:
+        df = shutuba_parser.parse_shutuba_html(file_path)
+        if df is not None and not df.empty:
+            return {"status": "success", "data": df.to_dict("records"), "file": file_path}
+        else:
+            return {"status": "empty", "file": file_path}
+    except Exception as e:
+        return {"status": "error", "error": str(e), "traceback": traceback.format_exc(), "file": file_path}
+
+
+def _worker_parse_horse_profile(file_path: str) -> dict:
+    """馬プロフィールHTMLをパースするワーカー（DBアクセスなし）"""
+    try:
+        data = horse_info_parser.parse_horse_profile(file_path)
+        if data and 'horse_id' in data and data['horse_id'] and not data.get('_is_empty', False):
+            return {"status": "success", "data": data, "file": file_path}
+        else:
+            return {"status": "empty", "file": file_path}
+    except Exception as e:
+        return {"status": "error", "error": str(e), "traceback": traceback.format_exc(), "file": file_path}
+
+
+def _worker_parse_pedigree(file_path: str) -> dict:
+    """血統HTMLをパースするワーカー（DBアクセスなし）"""
+    try:
+        df = pedigree_parser.parse_pedigree_html(file_path)
+        if df is not None and not df.empty:
+            return {"status": "success", "data": df.to_dict("records"), "file": file_path}
+        else:
+            return {"status": "empty", "file": file_path}
+    except Exception as e:
+        return {"status": "error", "error": str(e), "traceback": traceback.format_exc(), "file": file_path}
+
+
+def _worker_parse_performance(file_path: str) -> dict:
+    """馬過去成績HTMLをパースするワーカー（DBアクセスなし）"""
+    try:
+        df = horse_info_parser.parse_horse_performance(file_path)
+        if df is not None and not df.empty:
+            return {"status": "success", "data": df.to_dict("records"), "file": file_path}
+        else:
+            return {"status": "empty", "file": file_path}
+    except Exception as e:
+        return {"status": "error", "error": str(e), "traceback": traceback.format_exc(), "file": file_path}
+
+
+# ============================================================
+# 以下、既存のユーティリティ関数とメインロジック
+# ============================================================
 
 
 def load_config():
@@ -136,11 +209,34 @@ def extract_race_id_from_filename(file_path: str) -> str:
     return Path(file_path).stem.replace('_perf', '').replace('_profile', '')
 
 
+def _save_parse_error_to_db(conn, file_path: str, parser_name: str, error_msg: str, stack_trace: str):
+    """パースエラーをDBに記録（メインプロセスで呼び出し）"""
+    from datetime import timezone
+    try:
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO parse_failures (
+                parser_name, source_file, error_type, 
+                error_message, stack_trace, failed_ts
+            ) VALUES (?, ?, ?, ?, ?, ?)
+        ''', (
+            parser_name,
+            file_path,
+            'ParseError',
+            error_msg,
+            stack_trace,
+            datetime.now(timezone.utc).isoformat()
+        ))
+        conn.commit()
+    except Exception as e:
+        logging.warning(f"パースエラーのDB記録に失敗: {e}")
+
+
 def parse_phase_races(cfg, conn, skip_existing: bool = False, retry_errors: bool = False):
-    """フェーズ1: レース結果HTMLのパース"""
+    """フェーズ1: レース結果HTMLのパース（並列処理版）"""
     log = logging.getLogger(__name__)
     log.info("\n" + "=" * 80)
-    log.info("【フェーズ1/5】レース結果HTMLのパース処理を開始")
+    log.info("【フェーズ1/5】レース結果HTMLのパース処理を開始（並列処理）")
     log.info("=" * 80)
 
     raw_race_html_dir = Path(cfg["default"]["raw_data_path"]) / "html" / "race"
@@ -184,30 +280,52 @@ def parse_phase_races(cfg, conn, skip_existing: bool = False, retry_errors: bool
         race_html_files_to_process = race_html_files
         log.info(f"  → 処理対象: {len(race_html_files_to_process):,}件 (全ファイル)")
 
-    # パース実行
-    all_results_df = []
+    if not race_html_files_to_process:
+        log.info("  → 処理対象がありません。スキップします。")
+        return
+
+    # ============================================================
+    # 並列パース実行
+    # ============================================================
+    all_records = []
+    parse_errors = []
     success_count = 0
     error_count = 0
+    empty_count = 0
+
+    num_workers = max(1, cpu_count() - 1)  # 1コアはメインプロセス用に残す
+    log.info(f"  → {num_workers}ワーカーで並列処理を開始...")
+
+    with Pool(processes=num_workers) as pool:
+        results_iter = pool.imap_unordered(_worker_parse_race, race_html_files_to_process)
+        
+        for result in tqdm(results_iter, total=len(race_html_files_to_process), desc="レース結果パース", unit="件"):
+            if result["status"] == "success":
+                all_records.extend(result["data"])
+                success_count += 1
+            elif result["status"] == "empty":
+                empty_count += 1
+            else:  # error
+                parse_errors.append((result["file"], result["error"], result.get("traceback", "")))
+                error_count += 1
+
+    log.info(f"  → 並列パース完了: 成功 {success_count:,}件 / 空 {empty_count:,}件 / エラー {error_count:,}件")
+
+    # ============================================================
+    # メインプロセスでエラーをDBに記録
+    # ============================================================
+    if parse_errors:
+        log.info(f"  → {len(parse_errors):,}件のエラーをDBに記録中...")
+        for file_path, error_msg, stack_trace in parse_errors:
+            _save_parse_error_to_db(conn, file_path, 'results_parser', error_msg, stack_trace)
+
+    # ============================================================
+    # メインプロセスでParquet保存
+    # ============================================================
     error_cleared_count = 0
-
-    for html_file in tqdm(race_html_files_to_process, desc="レース結果パース", unit="件"):
-        df = pipeline_core.parse_with_error_handling(
-            str(html_file), "results_parser", results_parser.parse_results_html, conn
-        )
-        if df is not None and not df.empty:
-            all_results_df.append(df)
-            success_count += 1
-            # パース成功したファイルを記録（保存成功後にエラーレコードをクリアするため）
-            if html_file in error_files:
-                # 一旦、成功したエラーファイルのリストに追加（後でクリア）
-                pass  # 後で処理
-        else:
-            error_count += 1
-
-    # 保存 (既存データと結合) - エラーハンドリング強化
-    if all_results_df:
+    if all_records:
         try:
-            new_results_df = pd.concat(all_results_df, ignore_index=True)
+            new_results_df = pd.DataFrame(all_records)
 
             if skip_existing and output_path.exists():
                 # 既存データを読み込んで結合
@@ -239,7 +357,7 @@ def parse_phase_races(cfg, conn, skip_existing: bool = False, retry_errors: bool
 
         except Exception as e:
             log.error(f"  ❌ Parquet保存エラー: {e}", exc_info=True)
-            log.warning(f"  ⚠️ {len(all_results_df):,}件のパース結果が保存できませんでした")
+            log.warning(f"  ⚠️ {len(all_records):,}件のパース結果が保存できませんでした")
             log.warning(f"  💡 次回実行時に再処理されます")
     else:
         log.warning("処理できるレース結果データがありませんでした。")
@@ -248,10 +366,10 @@ def parse_phase_races(cfg, conn, skip_existing: bool = False, retry_errors: bool
 
 
 def parse_phase_shutuba(cfg, conn, skip_existing: bool = False, retry_errors: bool = False):
-    """フェーズ2: 出馬表HTMLのパース"""
+    """フェーズ2: 出馬表HTMLのパース（並列処理版）"""
     log = logging.getLogger(__name__)
     log.info("\n" + "=" * 80)
-    log.info("【フェーズ2/5】出馬表HTMLのパース処理を開始")
+    log.info("【フェーズ2/5】出馬表HTMLのパース処理を開始（並列処理）")
     log.info("=" * 80)
 
     raw_shutuba_html_dir = Path(cfg["default"]["raw_data_path"]) / "html" / "shutuba"
@@ -289,25 +407,48 @@ def parse_phase_shutuba(cfg, conn, skip_existing: bool = False, retry_errors: bo
         log.info(f"  → 処理対象: {len(shutuba_html_files_to_process):,}件 (エラー再処理のみ)")
     else:
         shutuba_html_files_to_process = shutuba_html_files
+        log.info(f"  → 処理対象: {len(shutuba_html_files_to_process):,}件 (全ファイル)")
 
-    all_shutuba_df = []
+    if not shutuba_html_files_to_process:
+        log.info("  → 処理対象がありません。スキップします。")
+        return
+
+    # 並列パース実行
+    all_records = []
+    parse_errors = []
     success_count = 0
     error_count = 0
+    empty_count = 0
+
+    num_workers = max(1, cpu_count() - 1)
+    log.info(f"  → {num_workers}ワーカーで並列処理を開始...")
+
+    with Pool(processes=num_workers) as pool:
+        results_iter = pool.imap_unordered(_worker_parse_shutuba, shutuba_html_files_to_process)
+        
+        for result in tqdm(results_iter, total=len(shutuba_html_files_to_process), desc="出馬表パース", unit="件"):
+            if result["status"] == "success":
+                all_records.extend(result["data"])
+                success_count += 1
+            elif result["status"] == "empty":
+                empty_count += 1
+            else:
+                parse_errors.append((result["file"], result["error"], result.get("traceback", "")))
+                error_count += 1
+
+    log.info(f"  → 並列パース完了: 成功 {success_count:,}件 / 空 {empty_count:,}件 / エラー {error_count:,}件")
+
+    # エラーをDBに記録
+    if parse_errors:
+        log.info(f"  → {len(parse_errors):,}件のエラーをDBに記録中...")
+        for file_path, error_msg, stack_trace in parse_errors:
+            _save_parse_error_to_db(conn, file_path, 'shutuba_parser', error_msg, stack_trace)
+
+    # Parquet保存
     error_cleared_count = 0
-
-    for html_file in tqdm(shutuba_html_files_to_process, desc="出馬表パース", unit="件"):
-        df = pipeline_core.parse_with_error_handling(
-            str(html_file), "shutuba_parser", shutuba_parser.parse_shutuba_html, conn
-        )
-        if df is not None and not df.empty:
-            all_shutuba_df.append(df)
-            success_count += 1
-        else:
-            error_count += 1
-
-    if all_shutuba_df:
+    if all_records:
         try:
-            new_shutuba_df = pd.concat(all_shutuba_df, ignore_index=True)
+            new_shutuba_df = pd.DataFrame(all_records)
 
             if skip_existing and output_path.exists():
                 existing_df = pd.read_parquet(output_path)
@@ -322,7 +463,7 @@ def parse_phase_shutuba(cfg, conn, skip_existing: bool = False, retry_errors: bo
             final_shutuba_df.to_parquet(output_path, index=False)
             log.info(f"  ✓ 保存完了: {output_path} ({len(final_shutuba_df):,}レコード)")
 
-            # 保存成功後、エラーレコードをクリア
+            # エラーレコードをクリア
             for html_file in shutuba_html_files_to_process:
                 if html_file in error_files:
                     race_id = extract_race_id_from_filename(html_file)
@@ -334,7 +475,7 @@ def parse_phase_shutuba(cfg, conn, skip_existing: bool = False, retry_errors: bo
 
         except Exception as e:
             log.error(f"  ❌ Parquet保存エラー: {e}", exc_info=True)
-            log.warning(f"  ⚠️ {len(all_shutuba_df):,}件のパース結果が保存できませんでした")
+            log.warning(f"  ⚠️ {len(all_records):,}件のパース結果が保存できませんでした")
             log.warning(f"  💡 次回実行時に再処理されます")
     else:
         log.warning("処理できる出馬表データがありませんでした。")
@@ -343,10 +484,10 @@ def parse_phase_shutuba(cfg, conn, skip_existing: bool = False, retry_errors: bo
 
 
 def parse_phase_horses(cfg, conn, skip_existing: bool = False, retry_errors: bool = False):
-    """フェーズ3: 馬プロフィールHTMLのパース"""
+    """フェーズ3: 馬プロフィールHTMLのパース（並列処理版）"""
     log = logging.getLogger(__name__)
     log.info("\n" + "=" * 80)
-    log.info("【フェーズ3/5】馬プロフィールHTMLのパース処理を開始")
+    log.info("【フェーズ3/5】馬プロフィールHTMLのパース処理を開始（並列処理）")
     log.info("=" * 80)
 
     raw_horse_html_dir = Path(cfg["default"]["raw_data_path"]) / "html" / "horse"
@@ -386,23 +527,45 @@ def parse_phase_horses(cfg, conn, skip_existing: bool = False, retry_errors: boo
         log.info(f"  → 処理対象: {len(horse_html_files_to_process):,}頭 (エラー再処理のみ)")
     else:
         horse_html_files_to_process = horse_html_files
+        log.info(f"  → 処理対象: {len(horse_html_files_to_process):,}頭 (全ファイル)")
 
+    if not horse_html_files_to_process:
+        log.info("  → 処理対象がありません。スキップします。")
+        return
+
+    # 並列パース実行
     all_horses_data = []
+    parse_errors = []
     success_count = 0
     error_count = 0
-    error_cleared_count = 0
+    empty_count = 0
 
-    for html_file in tqdm(horse_html_files_to_process, desc="馬プロフィールパース", unit="頭"):
-        data = pipeline_core.parse_with_error_handling(
-            str(html_file), "horse_info_parser", horse_info_parser.parse_horse_profile, conn
-        )
-        if data and 'horse_id' in data and data['horse_id']:
-            if not data.get('_is_empty', False):
-                all_horses_data.append(data)
+    num_workers = max(1, cpu_count() - 1)
+    log.info(f"  → {num_workers}ワーカーで並列処理を開始...")
+
+    with Pool(processes=num_workers) as pool:
+        results_iter = pool.imap_unordered(_worker_parse_horse_profile, horse_html_files_to_process)
+        
+        for result in tqdm(results_iter, total=len(horse_html_files_to_process), desc="馬プロフィールパース", unit="頭"):
+            if result["status"] == "success":
+                all_horses_data.append(result["data"])  # dict を追加
                 success_count += 1
-        else:
-            error_count += 1
+            elif result["status"] == "empty":
+                empty_count += 1
+            else:
+                parse_errors.append((result["file"], result["error"], result.get("traceback", "")))
+                error_count += 1
 
+    log.info(f"  → 並列パース完了: 成功 {success_count:,}頭 / 空 {empty_count:,}頭 / エラー {error_count:,}頭")
+
+    # エラーをDBに記録
+    if parse_errors:
+        log.info(f"  → {len(parse_errors):,}件のエラーをDBに記録中...")
+        for file_path, error_msg, stack_trace in parse_errors:
+            _save_parse_error_to_db(conn, file_path, 'horse_info_parser', error_msg, stack_trace)
+
+    # Parquet保存
+    error_cleared_count = 0
     if all_horses_data:
         try:
             new_horses_df = pd.DataFrame(all_horses_data)
@@ -418,7 +581,7 @@ def parse_phase_horses(cfg, conn, skip_existing: bool = False, retry_errors: boo
             final_horses_df.to_parquet(output_path, index=False)
             log.info(f"  ✓ 保存完了: {output_path} ({len(final_horses_df):,}レコード)")
 
-            # 保存成功後、エラーレコードをクリア
+            # エラーレコードをクリア
             for html_file in horse_html_files_to_process:
                 if html_file in error_files:
                     horse_id = extract_race_id_from_filename(html_file)
@@ -439,10 +602,10 @@ def parse_phase_horses(cfg, conn, skip_existing: bool = False, retry_errors: boo
 
 
 def parse_phase_pedigrees(cfg, conn, skip_existing: bool = False, retry_errors: bool = False):
-    """フェーズ4: 血統HTMLのパース"""
+    """フェーズ4: 血統HTMLのパース（並列処理版）"""
     log = logging.getLogger(__name__)
     log.info("\n" + "=" * 80)
-    log.info("【フェーズ4/5】血統HTMLのパース処理を開始")
+    log.info("【フェーズ4/5】血統HTMLのパース処理を開始（並列処理）")
     log.info("=" * 80)
 
     raw_ped_html_dir = Path(cfg["default"]["raw_data_path"]) / "html" / "ped"
@@ -480,37 +643,58 @@ def parse_phase_pedigrees(cfg, conn, skip_existing: bool = False, retry_errors: 
         log.info(f"  → 処理対象: {len(ped_html_files_to_process):,}頭 (エラー再処理のみ)")
     else:
         ped_html_files_to_process = ped_html_files
+        log.info(f"  → 処理対象: {len(ped_html_files_to_process):,}頭 (全ファイル)")
 
-    all_pedigrees_df = []
+    if not ped_html_files_to_process:
+        log.info("  → 処理対象がありません。スキップします。")
+        return
+
+    # 並列パース実行
+    all_records = []
+    parse_errors = []
     success_count = 0
     error_count = 0
+    empty_count = 0
+
+    num_workers = max(1, cpu_count() - 1)
+    log.info(f"  → {num_workers}ワーカーで並列処理を開始...")
+
+    with Pool(processes=num_workers) as pool:
+        results_iter = pool.imap_unordered(_worker_parse_pedigree, ped_html_files_to_process)
+        
+        for result in tqdm(results_iter, total=len(ped_html_files_to_process), desc="血統パース", unit="頭"):
+            if result["status"] == "success":
+                all_records.extend(result["data"])
+                success_count += 1
+            elif result["status"] == "empty":
+                empty_count += 1
+            else:
+                parse_errors.append((result["file"], result["error"], result.get("traceback", "")))
+                error_count += 1
+
+    log.info(f"  → 並列パース完了: 成功 {success_count:,}頭 / 空 {empty_count:,}頭 / エラー {error_count:,}頭")
+
+    # エラーをDBに記録
+    if parse_errors:
+        log.info(f"  → {len(parse_errors):,}件のエラーをDBに記録中...")
+        for file_path, error_msg, stack_trace in parse_errors:
+            _save_parse_error_to_db(conn, file_path, 'pedigree_parser', error_msg, stack_trace)
+
+    # Parquet保存
     error_cleared_count = 0
-
-    for html_file in tqdm(ped_html_files_to_process, desc="血統パース", unit="頭"):
-        df = pipeline_core.parse_with_error_handling(
-            str(html_file), "pedigree_parser", pedigree_parser.parse_pedigree_html, conn
-        )
-        if df is not None and not df.empty:
-            all_pedigrees_df.append(df)
-            success_count += 1
-        else:
-            error_count += 1
-
-    if all_pedigrees_df:
+    if all_records:
         try:
-            new_pedigrees_df = pd.concat(all_pedigrees_df, ignore_index=True)
+            new_pedigrees_df = pd.DataFrame(all_records)
 
             if skip_existing and output_path.exists():
                 existing_df = pd.read_parquet(output_path)
                 final_pedigrees_df = pd.concat([existing_df, new_pedigrees_df], ignore_index=True)
-                # 血統データは1頭に対して複数レコード（5世代分）があるので、horse_id + generation + ancestor_id で重複判定
-                # 修正: positionカラムはパーサーから出力されないため、ancestor_idを使用
+                # 血統データは1頭に対して複数レコード（5世代分）があるので重複判定
                 if 'generation' in final_pedigrees_df.columns and 'ancestor_id' in final_pedigrees_df.columns:
                     final_pedigrees_df = final_pedigrees_df.drop_duplicates(
                         subset=['horse_id', 'generation', 'ancestor_id'], keep='last'
                     )
                 elif 'generation' in final_pedigrees_df.columns:
-                    # ancestor_idがない場合はgenerationと組み合わせ（フォールバック）
                     final_pedigrees_df = final_pedigrees_df.drop_duplicates(
                         subset=['horse_id', 'generation'], keep='last'
                     )
@@ -523,7 +707,7 @@ def parse_phase_pedigrees(cfg, conn, skip_existing: bool = False, retry_errors: 
             final_pedigrees_df.to_parquet(output_path, index=False)
             log.info(f"  ✓ 保存完了: {output_path} ({len(final_pedigrees_df):,}レコード)")
 
-            # 保存成功後、エラーレコードをクリア
+            # エラーレコードをクリア
             for html_file in ped_html_files_to_process:
                 if html_file in error_files:
                     horse_id = extract_race_id_from_filename(html_file)
@@ -535,7 +719,7 @@ def parse_phase_pedigrees(cfg, conn, skip_existing: bool = False, retry_errors: 
 
         except Exception as e:
             log.error(f"  ❌ Parquet保存エラー: {e}", exc_info=True)
-            log.warning(f"  ⚠️ {len(all_pedigrees_df):,}頭のパース結果が保存できませんでした")
+            log.warning(f"  ⚠️ {len(all_records):,}件のパース結果が保存できませんでした")
             log.warning(f"  💡 次回実行時に再処理されます")
     else:
         log.warning("処理できる血統データがありませんでした。")
@@ -544,10 +728,10 @@ def parse_phase_pedigrees(cfg, conn, skip_existing: bool = False, retry_errors: 
 
 
 def parse_phase_performance(cfg, conn, skip_existing: bool = False, retry_errors: bool = False):
-    """フェーズ5: 馬過去成績のパース"""
+    """フェーズ5: 馬過去成績のパース（並列処理版）"""
     log = logging.getLogger(__name__)
     log.info("\n" + "=" * 80)
-    log.info("【フェーズ5/5】馬過去成績HTMLのパース処理を開始")
+    log.info("【フェーズ5/5】馬過去成績HTMLのパース処理を開始（並列処理）")
     log.info("=" * 80)
 
     raw_horse_html_dir = Path(cfg["default"]["raw_data_path"]) / "html" / "horse"
@@ -585,25 +769,48 @@ def parse_phase_performance(cfg, conn, skip_existing: bool = False, retry_errors
         log.info(f"  → 処理対象: {len(horse_perf_files_to_process):,}頭 (エラー再処理のみ)")
     else:
         horse_perf_files_to_process = horse_perf_files
+        log.info(f"  → 処理対象: {len(horse_perf_files_to_process):,}頭 (全ファイル)")
 
-    all_perf_df = []
+    if not horse_perf_files_to_process:
+        log.info("  → 処理対象がありません。スキップします。")
+        return
+
+    # 並列パース実行
+    all_records = []
+    parse_errors = []
     success_count = 0
     error_count = 0
+    empty_count = 0
+
+    num_workers = max(1, cpu_count() - 1)
+    log.info(f"  → {num_workers}ワーカーで並列処理を開始...")
+
+    with Pool(processes=num_workers) as pool:
+        results_iter = pool.imap_unordered(_worker_parse_performance, horse_perf_files_to_process)
+        
+        for result in tqdm(results_iter, total=len(horse_perf_files_to_process), desc="馬過去成績パース", unit="頭"):
+            if result["status"] == "success":
+                all_records.extend(result["data"])
+                success_count += 1
+            elif result["status"] == "empty":
+                empty_count += 1
+            else:
+                parse_errors.append((result["file"], result["error"], result.get("traceback", "")))
+                error_count += 1
+
+    log.info(f"  → 並列パース完了: 成功 {success_count:,}頭 / 空 {empty_count:,}頭 / エラー {error_count:,}頭")
+
+    # エラーをDBに記録
+    if parse_errors:
+        log.info(f"  → {len(parse_errors):,}件のエラーをDBに記録中...")
+        for file_path, error_msg, stack_trace in parse_errors:
+            _save_parse_error_to_db(conn, file_path, 'horse_performance_parser', error_msg, stack_trace)
+
+    # Parquet保存
     error_cleared_count = 0
-
-    for html_file in tqdm(horse_perf_files_to_process, desc="馬過去成績パース", unit="頭"):
-        df = pipeline_core.parse_with_error_handling(
-            str(html_file), "horse_performance_parser", horse_info_parser.parse_horse_performance, conn
-        )
-        if df is not None and not df.empty:
-            all_perf_df.append(df)
-            success_count += 1
-        else:
-            error_count += 1
-
-    if all_perf_df:
+    if all_records:
         try:
-            new_perf_df = pd.concat(all_perf_df, ignore_index=True)
+            new_perf_df = pd.DataFrame(all_records)
 
             # データ型の最適化
             int_columns = ['race_number', 'head_count', 'bracket_number', 'horse_number',
@@ -615,7 +822,7 @@ def parse_phase_performance(cfg, conn, skip_existing: bool = False, retry_errors
             if skip_existing and output_path.exists():
                 existing_df = pd.read_parquet(output_path)
                 final_perf_df = pd.concat([existing_df, new_perf_df], ignore_index=True)
-                # 過去成績は1頭×複数レースなので、horse_id + race_date + race_name で重複判定
+                # 過去成績は1頭×複数レースなので重複判定
                 if 'race_date' in final_perf_df.columns and 'race_name' in final_perf_df.columns:
                     final_perf_df = final_perf_df.drop_duplicates(
                         subset=['horse_id', 'race_date', 'race_name'], keep='last'
@@ -629,7 +836,7 @@ def parse_phase_performance(cfg, conn, skip_existing: bool = False, retry_errors
             final_perf_df.to_parquet(output_path, index=False)
             log.info(f"  ✓ 保存完了: {output_path} ({len(final_perf_df):,}レコード)")
 
-            # 保存成功後、エラーレコードをクリア
+            # エラーレコードをクリア
             for html_file in horse_perf_files_to_process:
                 if html_file in error_files:
                     horse_id = extract_race_id_from_filename(html_file)
@@ -641,7 +848,7 @@ def parse_phase_performance(cfg, conn, skip_existing: bool = False, retry_errors
 
         except Exception as e:
             log.error(f"  ❌ Parquet保存エラー: {e}", exc_info=True)
-            log.warning(f"  ⚠️ {len(all_perf_df):,}頭のパース結果が保存できませんでした")
+            log.warning(f"  ⚠️ {len(all_records):,}件のパース結果が保存できませんでした")
             log.warning(f"  💡 次回実行時に再処理されます")
     else:
         log.warning("処理できる馬過去成績データがありませんでした。")

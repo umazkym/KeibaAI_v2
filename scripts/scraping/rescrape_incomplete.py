@@ -1,183 +1,115 @@
+# -*- coding: utf-8 -*-
 """
-不完全なHTMLファイルの再スクレイピングと検証
+不完全データの再スクレイピングスクリプト
 
-機能:
-1. 指定されたrace_idのHTMLを再取得
-2. 取得後に完全性を検証
-3. 検証失敗時はリトライ
+incomplete_races.log から不完全なデータのレースを読み込み、
+該当の券種のみを強制再取得します。
+
+使用方法:
+    python scripts/scraping/rescrape_incomplete.py
 """
-import time
-import random
+import sys
 import logging
+import time
 from pathlib import Path
-from typing import List, Tuple
-import requests
-from bs4 import BeautifulSoup
+from tqdm import tqdm
 
-# ロギング設定
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# プロジェクトルートをパスに追加
+PROJECT_ROOT = Path(__file__).parents[2]
+sys.path.insert(0, str(PROJECT_ROOT))
+
+from keibaai.src.preparing._scrape_odds_html import scrape_odds_html_selenium
+from keibaai.src.preparing._scrape_html import prepare_chrome_driver
+
+# ログ設定
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-RAW_DIR = PROJECT_ROOT / "keibaai" / "data" / "raw" / "html" / "race"
+RAW_ODDS_DIR = PROJECT_ROOT / 'keibaai' / 'data' / 'raw' / 'html' / 'odds'
+INCOMPLETE_LOG_PATH = RAW_ODDS_DIR / 'incomplete_races.log'
 
-# リトライ設定
-MAX_RETRIES = 3
-RETRY_DELAY = 5  # 秒
-REQUEST_DELAY = 2  # リクエスト間隔
 
-def validate_html_content(html_bytes: bytes) -> Tuple[bool, str]:
-    """
-    HTMLコンテンツの完全性を検証
+def load_incomplete_races():
+    """不完全レースログからレースIDと券種を読み込む"""
+    if not INCOMPLETE_LOG_PATH.exists():
+        logger.info("不完全レースログが存在しません")
+        return []
     
-    Returns:
-        (is_valid, error_message)
-    """
-    if len(html_bytes) < 1000:
-        return False, "ファイルサイズが小さすぎます"
+    races = []
+    with open(INCOMPLETE_LOG_PATH, 'r', encoding='utf-8') as f:
+        for line in f:
+            parts = line.strip().split(',')
+            if len(parts) >= 2:
+                race_id = parts[0]
+                bet_type = parts[1]
+                races.append((race_id, bet_type))
     
-    try:
-        html_text = html_bytes.decode('euc_jp', errors='replace')
-    except:
-        html_text = html_bytes.decode('utf-8', errors='replace')
-    
-    soup = BeautifulSoup(html_text, 'html.parser')
-    
-    # タイトルチェック
-    if not soup.find('title'):
-        return False, "titleタグがありません"
-    
-    # レース結果テーブルチェック
-    if not soup.find('table', class_='race_table_01'):
-        # エラーページかどうか確認
-        title = soup.find('title')
-        if title and ('エラー' in title.get_text() or '見つかりません' in title.get_text()):
-            return True, "エラーページ（レース中止等）"
-        return False, "race_table_01がありません"
-    
-    return True, "OK"
+    # 重複を除去
+    return list(set(races))
 
-def scrape_race_html(race_id: str) -> Tuple[bool, bytes, str]:
-    """
-    レースHTMLをスクレイピング
-    
-    Returns:
-        (success, html_bytes, message)
-    """
-    url = f"https://db.netkeiba.com/race/{race_id}/"
-    
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'ja,en-US;q=0.7,en;q=0.3',
-    }
-    
-    for attempt in range(MAX_RETRIES):
-        try:
-            response = requests.get(url, headers=headers, timeout=30)
-            response.raise_for_status()
-            
-            html_bytes = response.content
-            
-            # 完全性検証
-            is_valid, message = validate_html_content(html_bytes)
-            
-            if is_valid:
-                return True, html_bytes, message
-            else:
-                logger.warning(f"検証失敗 (attempt {attempt + 1}/{MAX_RETRIES}): {message}")
-                if attempt < MAX_RETRIES - 1:
-                    time.sleep(RETRY_DELAY)
-                    continue
-                return False, html_bytes, message
-                
-        except requests.RequestException as e:
-            logger.error(f"リクエストエラー (attempt {attempt + 1}/{MAX_RETRIES}): {e}")
-            if attempt < MAX_RETRIES - 1:
-                time.sleep(RETRY_DELAY)
-                continue
-            return False, b'', str(e)
-    
-    return False, b'', "最大リトライ回数に達しました"
-
-def rescrape_files(race_ids: List[str], dry_run: bool = False) -> dict:
-    """
-    指定されたrace_idのファイルを再スクレイピング
-    
-    Args:
-        race_ids: 再スクレイピング対象のrace_idリスト
-        dry_run: Trueの場合、実際の保存は行わない
-    
-    Returns:
-        結果の辞書
-    """
-    results = {
-        'success': [],
-        'failed': [],
-        'skipped': []
-    }
-    
-    logger.info(f"再スクレイピング開始: {len(race_ids)}件")
-    
-    for i, race_id in enumerate(race_ids, 1):
-        logger.info(f"[{i}/{len(race_ids)}] race_id: {race_id}")
-        
-        success, html_bytes, message = scrape_race_html(race_id)
-        
-        if success:
-            if not dry_run:
-                output_path = RAW_DIR / f"{race_id}.bin"
-                with open(output_path, 'wb') as f:
-                    f.write(html_bytes)
-                logger.info(f"  ✓ 保存完了: {output_path.name} ({len(html_bytes)} bytes)")
-            else:
-                logger.info(f"  ✓ [DRY RUN] 取得成功 ({len(html_bytes)} bytes)")
-            results['success'].append(race_id)
-        else:
-            logger.error(f"  ✗ 失敗: {message}")
-            results['failed'].append((race_id, message))
-        
-        # リクエスト間隔
-        if i < len(race_ids):
-            jitter = random.uniform(0.5, 1.5)
-            time.sleep(REQUEST_DELAY * jitter)
-    
-    return results
 
 def main():
-    print("=" * 80)
-    print("  不完全HTMLファイルの再スクレイピング")
-    print("=" * 80)
+    races = load_incomplete_races()
     
-    # 再スクレイピング対象を読み込み
-    targets_file = PROJECT_ROOT / "keibaai" / "data" / "rescrape_targets.txt"
-    
-    if not targets_file.exists():
-        print(f"\n  対象ファイルが見つかりません: {targets_file}")
+    if not races:
+        logger.info("再スクレイピング対象がありません")
         return
     
-    with open(targets_file, 'r') as f:
-        race_ids = [line.strip() for line in f if line.strip()]
+    logger.info(f"再スクレイピング対象: {len(races)}件")
+    logger.info("これには数時間かかる可能性があります。Ctrl+Cで中断可能、再実行で続行可能。")
     
-    print(f"\n  対象ファイル数: {len(race_ids)}")
-    for rid in race_ids:
-        print(f"    - {rid}")
+    driver = prepare_chrome_driver(headless=True)
+    success_count = 0
+    failed_races = []
     
-    print(f"\n  再スクレイピングを開始します...")
-    results = rescrape_files(race_ids, dry_run=False)
+    try:
+        for race_id, bet_type in tqdm(races, desc="再スクレイピング"):
+            output_dir = RAW_ODDS_DIR / bet_type
+            
+            try:
+                # 強制再取得（skip_existing=False）
+                result = scrape_odds_html_selenium(
+                    driver, race_id, bet_type, output_dir, skip_existing=False
+                )
+                
+                if result:
+                    success_count += 1
+                else:
+                    failed_races.append((race_id, bet_type))
+                    
+            except Exception as e:
+                logger.warning(f"エラー: {race_id} ({bet_type}): {e}")
+                failed_races.append((race_id, bet_type))
+                # ドライバー再起動
+                try:
+                    driver.quit()
+                except:
+                    pass
+                time.sleep(5)
+                driver = prepare_chrome_driver(headless=True)
     
-    print(f"\n  【結果】")
-    print(f"    成功: {len(results['success'])}件")
-    print(f"    失敗: {len(results['failed'])}件")
+    except KeyboardInterrupt:
+        logger.warning("ユーザーによる中断")
+    finally:
+        driver.quit()
     
-    if results['failed']:
-        print(f"\n  失敗したファイル:")
-        for race_id, message in results['failed']:
-            print(f"    - {race_id}: {message}")
+    logger.info(f"完了: {success_count}/{len(races)}件成功")
     
-    print("\n" + "=" * 80)
-    print("  完了")
-    print("=" * 80)
+    # 失敗分を新しいログに保存
+    if failed_races:
+        failed_log = RAW_ODDS_DIR / 'still_incomplete.log'
+        with open(failed_log, 'w', encoding='utf-8') as f:
+            for race_id, bet_type in failed_races:
+                f.write(f"{race_id},{bet_type}\n")
+        logger.info(f"失敗分を保存: {failed_log}")
+    else:
+        # 全成功ならログをクリア
+        INCOMPLETE_LOG_PATH.unlink(missing_ok=True)
+        logger.info("全て成功。不完全レースログをクリアしました。")
+
 
 if __name__ == "__main__":
     main()

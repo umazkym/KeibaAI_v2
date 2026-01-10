@@ -483,7 +483,7 @@ class NetkeibaAnalyzer:
     def parse_horse_history(self, html_content: bytes, horse_id: str) -> List[Dict]:
         """Parses the horse result table with advanced column extraction."""
         try:
-            soup = BeautifulSoup(html_content, 'html.parser')
+            soup = BeautifulSoup(html_content, 'html.parser', from_encoding='euc-jp')
             table = soup.find('table', class_='db_h_race_results')
             if not table:
                 return []
@@ -594,6 +594,7 @@ class NetkeibaAnalyzer:
 
     def load_stats_lookup(self):
         """Load pre-calculated statistics lookup table."""
+        # 1. Existing Venue-Specific Stats
         path = r"keibaai\data\processed\stats_lookup.pkl"
         if os.path.exists(path):
             try:
@@ -604,8 +605,33 @@ class NetkeibaAnalyzer:
                 logger.error(f"Failed to load stats lookup: {e}")
                 self.stats_lookup = {}
         else:
-            logger.warning("stats_lookup.pkl not found. Statistical metrics will be empty.")
             self.stats_lookup = {}
+            
+        # 2. Global Stats (New)
+        global_path = r"keibaai\data\processed\global_stats_lookup.pkl"
+        if os.path.exists(global_path):
+            try:
+                with open(global_path, 'rb') as f:
+                    self.global_stats = pickle.load(f)
+                logger.info(f"Loaded global stats lookup with {len(self.global_stats)} conditions.")
+            except Exception as e:
+                logger.error(f"Failed to load global stats: {e}")
+                self.global_stats = {}
+        else:
+            self.global_stats = {}
+
+        # 3. Venue Adjustment (New)
+        adj_path = r"keibaai\data\processed\venue_adjustment.pkl"
+        if os.path.exists(adj_path):
+            try:
+                with open(adj_path, 'rb') as f:
+                    self.venue_adjustment = pickle.load(f)
+                logger.info(f"Loaded venue adjustment with {len(self.venue_adjustment)} conditions.")
+            except Exception as e:
+                logger.error(f"Failed to load venue adjustment: {e}")
+                self.venue_adjustment = {}
+        else:
+            self.venue_adjustment = {}
 
     def calculate_metrics(self, history: List[Dict]) -> List[Dict]:
         """Calculates statistical metrics for each race in history."""
@@ -647,7 +673,7 @@ class NetkeibaAnalyzer:
             race['上り秒'] = round(l3f_sec, 1) if l3f_sec else None
             
             # Initialize metrics with None
-            for col in ['タイム指数', '上り指数', '馬場差', 'RPCI',
+            for col in ['タイム指数', '上り指数', '場別タイム指数', '場別上り指数', '馬場差', 'RPCI',
                        '平均t', '平均場t', '基準t', '基準場t', '基準3F', '基準場3F', 
                        '平t差', '平場t差', '基t差', '基場t差', '基3F差', '基場3F差']:
                 race[col] = None
@@ -704,25 +730,70 @@ class NetkeibaAnalyzer:
                         race['基準場3F'] = round(std_cond_3f, 1)
                         race['基場3F差'] = round(l3f_sec - std_cond_3f, 1)
 
-            # Lookup Stats (Time Index, L3F Index, RPCI)
+            # --- 1. Calculate Venue-Specific Index (Legacy) ---
             key = (venue, distance, surface, full_cond)
             stats = self.stats_lookup.get(key)
             
             if stats and time_sec:
-                # Time Index: 50 + 10 * (Mean - Time) / Std
                 mean = stats['time_mean']
                 std = stats['time_std']
                 if std > 0:
                     idx = 50 + 10 * (mean - time_sec) / std
-                    race['タイム指数'] = round(idx, 1)
+                    # Clip to reasonable range (20-80)
+                    idx = max(20.0, min(80.0, idx))
+                    race['場別タイム指数'] = round(idx, 1)
                     
             if stats and l3f_sec:
-                # L3F Index
                 mean_3f = stats['l3f_mean']
                 std_3f = stats['l3f_std']
                 if std_3f > 0:
                     idx_3f = 50 + 10 * (mean_3f - l3f_sec) / std_3f
-                    race['上り指数'] = round(idx_3f, 1)
+                    # Clip to reasonable range (20-80)
+                    idx_3f = max(20.0, min(80.0, idx_3f))
+                    race['場別上り指数'] = round(idx_3f, 1)
+
+            # --- 2. Calculate Global Index (New standard) ---
+            # Global Key: (Distance, Surface, Condition)
+            global_key = (distance, surface, full_cond)
+            
+            # Venue Adjustment Key: (Venue, Distance, Surface, Condition)
+            # Fallback Key: (Venue, Distance, Surface)
+            adj_data = None
+            if hasattr(self, 'venue_adjustment'):
+                adj_data = self.venue_adjustment.get(key)
+                if not adj_data:
+                    adj_data = self.venue_adjustment.get((venue, distance, surface))
+            
+            if hasattr(self, 'global_stats') and global_key in self.global_stats and adj_data:
+                g_stats = self.global_stats[global_key]
+                time_adj = adj_data.get('time_adjustment', 0.0)
+                l3f_adj = adj_data.get('l3f_adjustment', 0.0)
+                
+                # Time Index (Global)
+                if time_sec:
+                    # Adjusted Time = Real Time - Adjustment 
+                    # (If venue is slow/positive adj, we subtract to make it faster/normalized)
+                    adj_time = time_sec - time_adj
+                    g_mean = g_stats['time_mean']
+                    g_std = g_stats['time_std']
+                    
+                    if g_std > 0:
+                        g_idx = 50 + 10 * (g_mean - adj_time) / g_std
+                        # Clip to reasonable range (20-80)
+                        g_idx = max(20.0, min(80.0, g_idx))
+                        race['タイム指数'] = round(g_idx, 1)
+                
+                # L3F Index (Global)
+                if l3f_sec:
+                    adj_l3f = l3f_sec - l3f_adj
+                    g_mean3f = g_stats['l3f_mean']
+                    g_std3f = g_stats['l3f_std']
+                    
+                    if g_std3f > 0:
+                        g_idx3f = 50 + 10 * (g_mean3f - adj_l3f) / g_std3f
+                        # Clip to reasonable range (20-80)
+                        g_idx3f = max(20.0, min(80.0, g_idx3f))
+                        race['上り指数'] = round(g_idx3f, 1)
 
             # RPCI: (First 3F / Last 3F) * 50
             if pace_str and l3f_sec:

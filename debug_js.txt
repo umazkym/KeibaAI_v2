@@ -1,0 +1,15 @@
+function view_3odds()
+{
+umaban = $('#list_select_horse').val();
+$("#odds_view_result").html('');
+var url = "../odds/odds_get_form.html?type=b8&race_id=202406050810&jiku=" + umaban;
+// var url = "../odds/odds_get_form.html?type=" + _odds_ranking_bet_type + "&race_id=" + _odds_ranking_page_race_id + "&housiki=c99&ninki=" + umaban + "#odds_view";
+$.ajax({
+type: "GET",
+url: url,
+data: null,
+cache: false,
+success: function(data)
+{
+$("#odds_view_form").html(data); // show response from the php script.
+}

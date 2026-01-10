@@ -1,0 +1,165 @@
+all_features:
+- rest_days_optimal
+- is_class_down
+- trainer_top3_rate
+- horse_position_improvement_avg
+- course_turn_direction
+- horse_last3f_rank_avg
+- weight_trend
+- course_corner_count
+- track_condition_encoded
+- horse_upset_mid
+- horse_upset_rate
+- horse_c4_gap_avg
+- horse_upset_long
+- pace_style_match_score
+- is_long_straight
+- heavy_track_fit
+- jockey_top3_rate
+- trainer_win_rate
+- distance_extend_flag
+- surface_switch_flag
+- horse_c4_leader_rate
+- trainer_races
+- jockey_races
+- bracket_bias
+- sex_encoded
+- straight_ratio
+- horse_avg_finish
+- venue_expected_pace
+- course_is_outer
+- basis_weight
+- field_size
+- horse_running_style
+- sire_win_rate
+- distance_change
+- horse_last_finish
+- prev_race_class
+- horse_avg_c4_pos
+- style_straight_match
+- front_slope_disadvantage
+- track_surface_encoded
+- horse_avg_c4_gap
+- is_class_up
+- sire_races
+- horse_top3_rate
+- horse_front_runner_rate
+- closer_long_straight_advantage
+- horse_upset_history
+- horse_last3f_avg
+- horse_win_rate
+- horse_last3_avg_finish
+- bracket_number
+- horse_days_since_last
+- horse_weight
+- jockey_win_rate
+- age
+- basis_weight_light_flag
+- course_start_to_corner_m
+- is_chitose_bred
+- distance_category_encoded
+- venue_pace_avg
+- class_change
+- prev_finish_category
+- front_runner_competition
+- horse_upset_current_dist
+- horse_total_races
+- race_class
+- horse_upset_mile
+- post_style_conflict
+- horse_upset_sprint
+- course_final_straight_m
+- distance_m
+- race_front_runner_count
+- course_slope_percent
+base_features:
+- horse_win_rate
+- horse_top3_rate
+- horse_avg_finish
+- horse_total_races
+- horse_last_finish
+- horse_last3_avg_finish
+- horse_days_since_last
+- horse_last3f_avg
+- jockey_win_rate
+- jockey_top3_rate
+- jockey_races
+- trainer_win_rate
+- trainer_top3_rate
+- trainer_races
+- sire_win_rate
+- sire_races
+- horse_avg_c4_pos
+- horse_avg_c4_gap
+- horse_running_style
+- venue_pace_avg
+- bracket_bias
+- distance_category_encoded
+- track_condition_encoded
+- track_surface_encoded
+- bracket_number
+- horse_weight
+- age
+- sex_encoded
+- distance_m
+- basis_weight
+- field_size
+- race_class
+- prev_race_class
+- class_change
+- is_class_up
+- is_class_down
+- weight_trend
+- horse_last3f_rank_avg
+- horse_c4_leader_rate
+- is_chitose_bred
+- rest_days_optimal
+- heavy_track_fit
+- prev_finish_category
+- distance_change
+- distance_extend_flag
+- surface_switch_flag
+- basis_weight_light_flag
+- horse_position_improvement_avg
+- horse_front_runner_rate
+- venue_expected_pace
+- pace_style_match_score
+- race_front_runner_count
+- horse_c4_gap_avg
+- post_style_conflict
+- front_runner_competition
+- course_corner_count
+- course_start_to_corner_m
+- course_final_straight_m
+- course_slope_percent
+- course_is_outer
+- course_turn_direction
+- straight_ratio
+- is_long_straight
+- style_straight_match
+- front_slope_disadvantage
+- closer_long_straight_advantage
+created_at: '2026-01-09T09:33:15.408500'
+ensemble_alpha: 0.3
+model_version: 1.0.0
+params:
+  bagging_fraction: 0.4
+  bagging_freq: 1
+  feature_fraction: 0.4
+  learning_rate: 0.03
+  max_depth: 3
+  metric: auc
+  min_child_samples: 100
+  num_leaves: 20
+  objective: binary
+  reg_alpha: 5.0
+  reg_lambda: 8.0
+  verbosity: -1
+underdog_features:
+- horse_upset_history
+- horse_upset_rate
+- horse_upset_sprint
+- horse_upset_mile
+- horse_upset_mid
+- horse_upset_long
+- horse_upset_current_dist

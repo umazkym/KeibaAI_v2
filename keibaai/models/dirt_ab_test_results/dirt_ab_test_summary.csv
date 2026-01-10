@@ -1,0 +1,9 @@
+improvement,avg_roi
+baseline,0.740687414367502
+A_prev_finish_log,0.736963329021696
+B_rest_optimal_gap,0.7423935748955701
+C_jockey_trainer_log,0.7383357797993201
+D_is_comeback,0.7391785127489093
+E_strong_reg,0.7364293694641254
+F_slow_lr,0.7273215875637211
+ALL_combined,0.7298601403391204

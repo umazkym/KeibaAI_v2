@@ -130,6 +130,11 @@ def prepare_chrome_driver(headless: bool = True) -> webdriver.Chrome:
     options.add_argument('--disable-gpu')
     options.add_argument('--window-size=1280x800')
     options.add_argument(f"user-agent={random.choice(USER_AGENTS)}")
+    
+    # --- SSL/証明書エラー対策 ---
+    options.add_argument('--ignore-certificate-errors')
+    options.add_argument('--ignore-ssl-errors')
+    options.add_argument('--allow-insecure-localhost')
 
     # --- ページロード戦略の設定（タイムアウト対策） ---
     options.page_load_strategy = 'eager'  # DOMが読み込まれたら続行（画像やCSSを待たない）
@@ -701,6 +706,53 @@ def extract_horse_ids_from_html(html_dir: str) -> set:
         results_iterator = pool.imap_unordered(_worker_extract_horse_ids, filepaths, chunksize=chunksize)
         
         for horse_id_set in tqdm(results_iterator, total=len(filepaths), desc=f"馬IDを抽出中 ({os.path.basename(html_dir)})"):
+            all_horse_ids.update(horse_id_set)
+            
+    logger.info(f'抽出完了: {len(all_horse_ids)}頭')
+    return all_horse_ids
+
+
+def extract_horse_ids_from_race_ids(race_ids: List[str], html_dir: str) -> set:
+    """
+    指定されたレースIDに対応するHTMLファイルから馬IDを抽出
+    
+    Args:
+        race_ids: レースIDのリスト
+        html_dir: HTMLディレクトリパス
+        
+    Returns:
+        馬IDのセット
+    """
+    logger.info(f'指定レースID {len(race_ids)}件から馬IDを抽出中')
+    
+    all_horse_ids = set()
+    
+    # 対象ファイルパスを構築（存在するファイルのみ）
+    filepaths = []
+    for race_id in race_ids:
+        filepath = os.path.join(html_dir, f"{race_id}.bin")
+        if os.path.exists(filepath):
+            filepaths.append(filepath)
+    
+    logger.info(f'対象ファイル数: {len(filepaths)}件 (レースID {len(race_ids)}件中)')
+    
+    if not filepaths:
+        logger.warning(f"対象ファイルが見つかりません")
+        return all_horse_ids
+
+    # CPUのコア数に基づいてプロセス数を決定
+    num_processes = cpu_count()
+    logger.info(f"{num_processes}個のプロセスを使用して並列処理を開始します。")
+
+    # チャンクサイズを計算してオーバーヘッドを削減
+    chunksize, extra = divmod(len(filepaths), num_processes * 4)
+    if extra:
+        chunksize += 1
+
+    with Pool(processes=num_processes) as pool:
+        results_iterator = pool.imap_unordered(_worker_extract_horse_ids, filepaths, chunksize=chunksize)
+        
+        for horse_id_set in tqdm(results_iterator, total=len(filepaths), desc="馬IDを抽出中 (指定期間)"):
             all_horse_ids.update(horse_id_set)
             
     logger.info(f'抽出完了: {len(all_horse_ids)}頭')

@@ -293,7 +293,8 @@ def create_interactive_charts(source_file: str, output_file: str = None):
                                     'c1_ratio': pos_score, 
                                     'rpci': round(rpci, 1),
                                     'rank': row.get('着順', ''),
-                                    'date': row.get('日付', '')
+                                    'date': row.get('日付', ''),
+                                    'course': row.get('ｺｰｽ', '')
                                 })
                         except: pass
                 except: pass
@@ -390,6 +391,12 @@ def generate_html(source_file: str, races: list, all_data: dict) -> str:
         .nav-icon {{ font-size: 18px; display: block; margin-bottom: 2px; }}
         
         .h-num {{ width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; margin-right: 6px; }}
+        
+        .filter-sticky {{ position: sticky; top: 42px; background: var(--bg); z-index: 90; padding: 6px 10px; margin: 0 -10px; border-bottom: 1px solid var(--border); }}
+        .filter-row {{ display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-bottom: 4px; }}
+        .filter-label {{ font-size: 9px; font-weight: bold; color: var(--text-light); margin-right: 4px; white-space: nowrap; }}
+        .filter-chip {{ display: inline-flex; align-items: center; padding: 2px 6px; border: 1px solid #ccc; border-radius: 10px; font-size: 10px; cursor: pointer; background: #fff; }}
+        .filter-chip .dot {{ width: 6px; height: 6px; border-radius: 50%; margin-right: 3px; }}
     </style>
 </head>
 <body>
@@ -403,7 +410,10 @@ def generate_html(source_file: str, races: list, all_data: dict) -> str:
 
     let state = {{
         race: RACES[0], tab: 'chart', expanded: {{}}, filters: {{}}, sortCol: null, sortAsc: false, wakuMap: {{}},
-        filterDate: '' // 'YYYY/MM/DD'
+        filterDate: '', // 'YYYY/MM/DD'
+        venueFilters: [], // excluded venues
+        distFilters: [], // excluded distances
+        courseFilters: [] // excluded courses (芝/ダート)
     }};
 
     function init() {{ 
@@ -463,21 +473,76 @@ def generate_html(source_file: str, races: list, all_data: dict) -> str:
     function renderChart() {{
         const d = DATA.chart_data[state.race] || {{horses:[]}};
         const blocked = state.filters[state.race] || [];
-        const filters = d.horses.map(h => 
-            `<div onclick="togFilter(${{h.umaban}})" style="display:inline-flex; align-items:center; margin:2px; padding:4px 8px; border:1px solid #ccc; border-radius:16px; font-size:11px; background:#fff; opacity:${{blocked.includes(h.umaban)?0.4:1}}">
-                <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${{WAKU[h.waku]}};margin-right:4px"></span>${{h.umaban}}
+        const horseFilters = d.horses.map(h => 
+            `<div onclick="togFilter(${{h.umaban}})" class="filter-chip" style="opacity:${{blocked.includes(h.umaban)?0.4:1}}">
+                <span class="dot" style="background:${{WAKU[h.waku]}}"></span>${{h.umaban}}
              </div>`
         ).join('');
 
+        // Collect unique venues and distances from data
+        const allRecords = [];
+        d.horses.forEach(h => h.records.forEach(r => {{
+            allRecords.push({{...r, u:h.umaban, w:h.waku}});
+        }}));
+        
+        const venues = [...new Set(DATA.races[state.race]?.rows.map(r => r['場所']).filter(v => v))].sort();
+        const distances = [...new Set(DATA.races[state.race]?.rows.map(r => r['距離']).filter(v => v))].sort((a,b)=>parseInt(a)-parseInt(b));
+        const courses = [...new Set(DATA.races[state.race]?.rows.map(r => r['ｺｰｽ']).filter(v => v))].sort();
+        
+        // Count occurrences for each venue/distance/course
+        const rows = DATA.races[state.race]?.rows || [];
+        const venueCounts = {{}};
+        const distCounts = {{}};
+        const courseCounts = {{}};
+        rows.forEach(r => {{
+            const v = r['場所'];
+            const d = r['距離'];
+            const c = r['ｺｰｽ'];
+            if(v) venueCounts[v] = (venueCounts[v] || 0) + 1;
+            if(d) distCounts[d] = (distCounts[d] || 0) + 1;
+            if(c) courseCounts[c] = (courseCounts[c] || 0) + 1;
+        }});
+        
+        // Course filter with visual indicator (colored dot)
+        const courseFilters = courses.map(c => {{
+            const isHidden = state.courseFilters.includes(c);
+            const cnt = courseCounts[c] || 0;
+            const dotColor = c === '芝' ? '#00C853' : (c === 'ダート' || c === 'ダ') ? '#FF6D00' : '#888';
+            return `<div onclick="togCourse('${{c}}')" class="filter-chip" style="opacity:${{isHidden?0.4:1}}"><span class="dot" style="background:${{dotColor}}"></span>${{c}}<span style="font-size:8px;color:#888;margin-left:2px">${{cnt}}</span></div>`;
+        }}).join('');
+        
+        const venueFilters = venues.map(v => {{
+            const isHidden = state.venueFilters.includes(v);
+            const cnt = venueCounts[v] || 0;
+            return `<div onclick="togVenue('${{v}}')" class="filter-chip" style="opacity:${{isHidden?0.4:1}}">${{v}}<span style="font-size:8px;color:#888;margin-left:2px">${{cnt}}</span></div>`;
+        }}).join('');
+        
+        const distFilters = distances.map(dist => {{
+            const isHidden = state.distFilters.includes(dist);
+            const cnt = distCounts[dist] || 0;
+            return `<div onclick="togDist('${{dist}}')" class="filter-chip" style="opacity:${{isHidden?0.4:1}}">${{dist}}<span style="font-size:8px;color:#888;margin-left:2px">${{cnt}}</span></div>`;
+        }}).join('');
+
         return `
-            <div class="card">
-                <div class="flex-ac gap-2" style="margin-bottom:8px">
-                    <div class="font-bold text-xs" style="white-space:nowrap">期間抽出:</div>
+            <div class="filter-sticky">
+                <div class="filter-row">
+                    <span class="filter-label">日付:</span>
                     <input type="text" value="${{state.filterDate}}" placeholder="YYYY/MM/DD以降" 
-                           style="border:1px solid #ccc; padding:4px; border-radius:4px; font-size:12px; width:100%"
+                           style="border:1px solid #ccc; padding:2px 4px; border-radius:4px; font-size:10px; width:90px"
                            onchange="setState({{filterDate: this.value}})">
                 </div>
-                ${{filters}}
+                <div class="filter-row">
+                    <span class="filter-label">コース:</span>${{courseFilters}}
+                </div>
+                <div class="filter-row">
+                    <span class="filter-label">場所:</span>${{venueFilters}}
+                </div>
+                <div class="filter-row">
+                    <span class="filter-label">距離:</span>${{distFilters}}
+                </div>
+                <div class="filter-row">
+                    <span class="filter-label">馬番:</span>${{horseFilters}}
+                </div>
             </div>
             <div class="card">
                 <div class="font-bold text-xs">① スピード(縦) vs スタミナ(横)</div>
@@ -499,50 +564,89 @@ def generate_html(source_file: str, races: list, all_data: dict) -> str:
         const next = old.includes(u) ? old.filter(x=>x!==u) : [...old, u];
         setState({{filters: {{...state.filters, [state.race]: next}} }});
     }};
+    
+    window.togVenue = (v) => {{
+        const next = state.venueFilters.includes(v) ? state.venueFilters.filter(x=>x!==v) : [...state.venueFilters, v];
+        setState({{venueFilters: next}});
+    }};
+    
+    window.togDist = (d) => {{
+        const next = state.distFilters.includes(d) ? state.distFilters.filter(x=>x!==d) : [...state.distFilters, d];
+        setState({{distFilters: next}});
+    }};
+    
+    window.togCourse = (c) => {{
+        const next = state.courseFilters.includes(c) ? state.courseFilters.filter(x=>x!==c) : [...state.courseFilters, c];
+        setState({{courseFilters: next}});
+    }};
 
     function drawCharts() {{
         const d = DATA.chart_data[state.race];
         const blocked = state.filters[state.race] || [];
         const active = d.horses.filter(h => !blocked.includes(h.umaban));
         if(!active.length) return;
+        
+        const rows = DATA.races[state.race]?.rows || [];
+        const rowMap = {{}}; // date+umaban -> row
+        rows.forEach(r => {{
+            const key = r['日付'] + '-' + r['番'];
+            rowMap[key] = r;
+        }});
 
         const pts = [];
         active.forEach(h => h.records.forEach(r => {{
-            // Date Filter Logic
-            if(!state.filterDate || r.date >= state.filterDate) {{
-                pts.push({{...r, u:h.umaban, w:h.waku}});
-            }}
+            // Date Filter
+            if(state.filterDate && r.date < state.filterDate) return;
+            
+            // Lookup row for venue/dist
+            const rowKey = r.date + '-' + h.umaban;
+            const row = rowMap[rowKey];
+            
+            // Venue Filter (exclude if in list)
+            if(state.venueFilters.length > 0 && row && state.venueFilters.includes(row['場所'])) return;
+            
+            // Distance Filter (exclude if in list)
+            if(state.distFilters.length > 0 && row && state.distFilters.includes(row['距離'])) return;
+            
+            // Course Filter (exclude if in list)
+            if(state.courseFilters.length > 0 && state.courseFilters.includes(r.course)) return;
+            
+            pts.push({{...r, u:h.umaban, w:h.waku, course:r.course||''}});
         }}));
         
         const layout = {{ margin: {{t:10,b:30,l:30,r:10}}, xaxis:{{zeroline:false}}, yaxis:{{zeroline:false}}, showlegend:false }};
         const cfg = {{displayModeBar:false, responsive:true}};
         
+        // 芝=明るい緑, ダート=オレンジ (色覚に配慮した高彩度配色)
+        const courseColor = (c) => c === '芝' ? '#00C853' : (c === 'ダート' || c === 'ダ') ? '#FF6D00' : '#888';
+        const borderColors = pts.map(p => courseColor(p.course));
+        
         Plotly.newPlot('c1', [{{
             x: pts.map(p=>p.l3f_idx), y: pts.map(p=>p.time_idx), mode:'markers+text', type:'scatter',
-            marker: {{size:12, color:pts.map(p=>WAKU[p.w]), line:{{width:1,color:'#555'}}}},
+            marker: {{size:12, color:pts.map(p=>WAKU[p.w]), line:{{width:2,color:borderColors}}}},
             text: pts.map(p=>p.u), textposition:'middle center', textfont:{{size:9, color:pts.map(p=>TXT[p.w])}},
-            hovertext: pts.map(p=>`${{p.date}}<br>${{p.u}}番`)
+            hovertext: pts.map(p=>`${{p.date}}<br>${{p.u}}番 (${{p.course}})`)
         }}], {{...layout, xaxis:{{title:'上がり指数'}}, yaxis:{{title:'T指数'}}}}, cfg);
         
         Plotly.newPlot('c2', [{{
             x: pts.map(p=>p.c1_ratio), y: pts.map(p=>p.time_idx), mode:'markers+text', type:'scatter',
-            marker: {{size:12, color:pts.map(p=>WAKU[p.w]), line:{{width:1,color:'#555'}}}},
+            marker: {{size:12, color:pts.map(p=>WAKU[p.w]), line:{{width:2,color:borderColors}}}},
             text: pts.map(p=>p.u), textposition:'middle center', textfont:{{size:9, color:pts.map(p=>TXT[p.w])}},
-            hovertext: pts.map(p=>`${{p.date}}<br>${{p.u}}番`)
+            hovertext: pts.map(p=>`${{p.date}}<br>${{p.u}}番 (${{p.course}})`)
         }}], {{...layout, xaxis:{{title:'位置取り'}}, yaxis:{{title:'T指数'}}}}, cfg);
 
         Plotly.newPlot('c3', [{{
             x: pts.map(p=>p.c1_ratio), y: pts.map(p=>p.l3f_idx), mode:'markers+text', type:'scatter',
-            marker: {{size:12, color:pts.map(p=>WAKU[p.w]), line:{{width:1,color:'#555'}}}},
+            marker: {{size:12, color:pts.map(p=>WAKU[p.w]), line:{{width:2,color:borderColors}}}},
             text: pts.map(p=>p.u), textposition:'middle center', textfont:{{size:9, color:pts.map(p=>TXT[p.w])}},
-            hovertext: pts.map(p=>`${{p.date}}<br>${{p.u}}番`)
+            hovertext: pts.map(p=>`${{p.date}}<br>${{p.u}}番 (${{p.course}})`)
         }}], {{...layout, xaxis:{{title:'位置取り'}}, yaxis:{{title:'上がり指数'}}, autorange:'reversed'}}, cfg);
 
         Plotly.newPlot('c4', [{{
             x: pts.map(p=>p.rpci), y: pts.map(p=>p.l3f_idx), mode:'markers+text', type:'scatter',
-            marker: {{size:12, color:pts.map(p=>WAKU[p.w]), line:{{width:1,color:'#555'}}}},
+            marker: {{size:12, color:pts.map(p=>WAKU[p.w]), line:{{width:2,color:borderColors}}}},
             text: pts.map(p=>p.u), textposition:'middle center', textfont:{{size:9, color:pts.map(p=>TXT[p.w])}},
-            hovertext: pts.map(p=>`${{p.date}}<br>${{p.u}}番`)
+            hovertext: pts.map(p=>`${{p.date}}<br>${{p.u}}番 (${{p.course}})`)
         }}], {{...layout, xaxis:{{title:'RPCI'}}, yaxis:{{title:'上がり指数'}}}}, cfg);
     }}
 

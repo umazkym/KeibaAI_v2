@@ -466,7 +466,13 @@ def main():
                 log.error(f"  ❌ レースディレクトリが存在しません: {raw_race_dir}")
                 return
 
-            horse_ids = _scrape_html.extract_horse_ids_from_html(str(raw_race_dir))
+            # 指定期間のレースIDに対応するHTMLファイルのみから馬IDを抽出
+            if race_ids:
+                log.info(f"  → 指定期間のレースID {len(race_ids):,}件から馬IDを抽出します")
+                horse_ids = _scrape_html.extract_horse_ids_from_race_ids(race_ids, str(raw_race_dir))
+            else:
+                log.warning("  ⚠️ レースIDがありません。全ディレクトリから抽出します（非推奨）。")
+                horse_ids = _scrape_html.extract_horse_ids_from_html(str(raw_race_dir))
             log.info(f"  ✅ {len(horse_ids)}頭のユニークな馬IDを取得しました")
 
             if not horse_ids:
