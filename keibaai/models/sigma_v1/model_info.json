@@ -1,8 +1,0 @@
-{
-  "version": "v1",
-  "created_at": "2025-12-04T20:15:14.879155",
-  "based_on": "mu_v3_3",
-  "valid_rmse": 1.4261713435455594,
-  "test_rmse": 1.4150224392733102,
-  "feature_count": 12
-}

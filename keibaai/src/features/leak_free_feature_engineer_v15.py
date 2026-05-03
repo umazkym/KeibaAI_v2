@@ -306,16 +306,45 @@ class LeakFreeFeatureEngineerV15(LeakFreeFeatureEngineerV14):
         
         df = df.copy()
         
-        # CourseFeatureProviderで特徴量を付与
-        features_list = []
+        # [3-2改修] iterrows()からベクトル化されたgroupby-mergeに変更
+        # 旧実装: iterrows()でN行ループ → O(N) Python呼び出し → 大規模データで極めて低速
+        # 新実装: ユニークな(venue, surface, distance, is_outer)の組み合わせでグループ化し、
+        #         各組み合わせに対して1回だけルックアップ → O(unique_combos) ≪ O(N)
         
-        for idx, row in df.iterrows():
-            venue = row.get('venue', '')
-            surface = row.get('track_surface', '')
-            distance = row.get('distance_m', 0)
-            is_outer = row.get('is_outer_course')  # パーサーから追加されたカラム
+        # ルックアップキーとなるカラムを抽出
+        venue_col = df['venue'].fillna('') if 'venue' in df.columns else pd.Series('', index=df.index)
+        surface_col = df['track_surface'].fillna('') if 'track_surface' in df.columns else pd.Series('', index=df.index)
+        distance_col = df['distance_m'].fillna(0) if 'distance_m' in df.columns else pd.Series(0, index=df.index)
+        is_outer_col = df['is_outer_course'] if 'is_outer_course' in df.columns else pd.Series(None, index=df.index)
+        
+        # ユニークな組み合わせを取得
+        lookup_df = pd.DataFrame({
+            'venue': venue_col,
+            'track_surface': surface_col,
+            'distance_m': distance_col,
+            'is_outer_course': is_outer_col
+        })
+        unique_combos = lookup_df.drop_duplicates()
+        
+        # 各ユニーク組み合わせに対して1回だけルックアップ
+        combo_features = {}
+        default_features = {
+            'corner_count': None,
+            'start_to_corner_m': None,
+            'final_straight_m': None,
+            'slope_percent': None,
+            'course_type': None,
+            'turn_direction': None,
+        }
+        
+        for _, combo_row in unique_combos.iterrows():
+            venue = combo_row['venue']
+            surface = combo_row['track_surface']
+            distance = combo_row['distance_m']
+            is_outer = combo_row['is_outer_course']
             
-            # マスターデータから特徴量を取得
+            key = (venue, surface, distance, is_outer if pd.notna(is_outer) else None)
+            
             if venue and surface and distance:
                 features = self._course_provider.get_course_features(
                     venue=venue,
@@ -324,18 +353,35 @@ class LeakFreeFeatureEngineerV15(LeakFreeFeatureEngineerV14):
                     is_outer=is_outer
                 )
             else:
-                features = {
-                    'corner_count': None,
-                    'start_to_corner_m': None,
-                    'final_straight_m': None,
-                    'slope_percent': None,
-                    'course_type': None,
-                    'turn_direction': None,
-                }
-            features_list.append(features)
+                features = default_features.copy()
+            
+            combo_features[key] = features
         
-        # DataFrameに変換
-        features_df = pd.DataFrame(features_list, index=df.index)
+        logger.info(f"    コースルックアップ: {len(combo_features)}種類 (全{len(df):,}行)")
+        
+        # 各行にルックアップ結果をマッピング（ベクトル化）
+        keys = list(zip(
+            venue_col.values,
+            surface_col.values,
+            distance_col.values,
+            [v if pd.notna(v) else None for v in is_outer_col.values]
+        ))
+        
+        feature_arrays = {
+            'corner_count': [],
+            'start_to_corner_m': [],
+            'final_straight_m': [],
+            'slope_percent': [],
+            'course_type': [],
+            'turn_direction': [],
+        }
+        
+        for key in keys:
+            feat = combo_features.get(key, default_features)
+            for col_name in feature_arrays:
+                feature_arrays[col_name].append(feat.get(col_name))
+        
+        features_df = pd.DataFrame(feature_arrays, index=df.index)
         
         # カラム名のリネームと付与
         df['course_corner_count'] = features_df['corner_count']

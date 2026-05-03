@@ -1,7 +1,0 @@
-,mean,median,missing_rate
-horse_win_rate,0.1465,0.125,0.3655
-horse_avg_finish,5.7512,5.5,0.1932
-jockey_win_rate,0.0708,0.0653,0.0054
-trainer_win_rate,0.0776,0.0731,0.0033
-prev_finish,6.8223,6.0,0.1932
-days_since_last,62.2505,43.0,0.1924

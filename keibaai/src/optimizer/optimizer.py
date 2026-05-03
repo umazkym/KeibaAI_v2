@@ -131,7 +131,7 @@ class PortfolioOptimizer:
     ) -> np.ndarray:
         """
         シミュレーションペイオフ行列を作成 (K x M)
-        仕様書 10.2 (ただし simulator.py の出力形式に合わせる)
+        仕様書 10.2 準拠
         
         各行(k): シミュレーション試行
         各列(m): 投資候補
@@ -140,33 +140,106 @@ class PortfolioOptimizer:
         Args:
             candidates: 投資候補リスト (M)
             simulation_results: シミュレーション結果 (Kを含む)
+                - 'rankings' キーがある場合: 相関を考慮した正確なペイオフ計算
+                - ない場合: 独立ベルヌーイによる近似（後方互換）
         
         Returns:
             ペイオフ行列 (K, M)
-        """
-        # ★注意★
-        # 本来は simulator.py から生のランキング行列 (K, n_horses) を受け取り、
-        # それに基づいてペイオフを計算する (仕様書 10.2) のが最も正確（相関を考慮できる）。
-        #
-        # しかし、simulator.py の現実装 ではメモリ節約のため生行列を返さず、
-        # 集計済みの確率 (win_probs, exacta_probs) のみを返す。
-        #
-        # そのため、ここでは「各馬券は独立」と仮定し、
-        # 集計済み確率に基づいてランダムにペイオフ行列を「再生成」する
-        # （これは仕様書 10.2 とは異なる簡易実装）。
         
+        Note (v5.2改修):
+            [1-1] ランキング行列がある場合は相関を考慮した正確なペイオフを計算。
+            同一レースの馬券は「馬1が1着なら馬2は非1着」という制約が自然に満たされる。
+            旧実装の独立ベルヌーイでは「馬1も馬2も同時に1着」が発生し得た。
+        """
         K = simulation_results['K']
         M = len(candidates)
         
         payoffs = np.zeros((K, M))
         
-        for j, cand in enumerate(candidates):
-            prob = cand['prob']
-            odds = cand['odds']
-            
-            # 確率 prob で的中 (odds)、 確率 (1-prob) でハズレ (0)
-            hits = np.random.binomial(n=1, p=prob, size=K)
-            payoffs[:, j] = hits * odds
+        # [1-1修正] ランキング行列がある場合は相関を考慮
+        rankings = simulation_results.get('rankings', None)
+        
+        if rankings is not None:
+            # ランキング行列 (K, n_horses) からペイオフを直接計算
+            # rankings[k, pos] = pos位の馬のインデックス
+            for j, cand in enumerate(candidates):
+                odds = cand['odds']
+                bet_type = cand.get('type', 'win')
+                selection = cand.get('selection', [])
+                
+                if bet_type == 'win':
+                    # 単勝: selection[0] が1着
+                    horse_idx = int(selection[0])
+                    for k_idx in range(K):
+                        if rankings[k_idx, 0] == horse_idx:
+                            payoffs[k_idx, j] = odds
+                            
+                elif bet_type == 'place':
+                    # 複勝: selection[0] が3着以内
+                    horse_idx = int(selection[0])
+                    for k_idx in range(K):
+                        if (rankings[k_idx, 0] == horse_idx or 
+                            rankings[k_idx, 1] == horse_idx or
+                            rankings[k_idx, 2] == horse_idx):
+                            payoffs[k_idx, j] = odds
+                            
+                elif bet_type == 'quinella':
+                    # 馬連: selection[0],selection[1] が1-2着（順不同）
+                    h1, h2 = int(selection[0]), int(selection[1])
+                    for k_idx in range(K):
+                        top2 = {rankings[k_idx, 0], rankings[k_idx, 1]}
+                        if h1 in top2 and h2 in top2:
+                            payoffs[k_idx, j] = odds
+                            
+                elif bet_type == 'exacta':
+                    # 馬単: selection[0]が1着, selection[1]が2着
+                    h1, h2 = int(selection[0]), int(selection[1])
+                    for k_idx in range(K):
+                        if rankings[k_idx, 0] == h1 and rankings[k_idx, 1] == h2:
+                            payoffs[k_idx, j] = odds
+                            
+                elif bet_type == 'wide':
+                    # ワイド: selection[0],selection[1] がともに3着以内
+                    h1, h2 = int(selection[0]), int(selection[1])
+                    for k_idx in range(K):
+                        top3 = {rankings[k_idx, 0], rankings[k_idx, 1], rankings[k_idx, 2]}
+                        if h1 in top3 and h2 in top3:
+                            payoffs[k_idx, j] = odds
+                
+                elif bet_type == 'trio':
+                    # 三連複: selection[0,1,2] が1-3着（順不同）
+                    h1, h2, h3 = int(selection[0]), int(selection[1]), int(selection[2])
+                    for k_idx in range(K):
+                        top3 = {rankings[k_idx, 0], rankings[k_idx, 1], rankings[k_idx, 2]}
+                        if h1 in top3 and h2 in top3 and h3 in top3:
+                            payoffs[k_idx, j] = odds
+                
+                elif bet_type == 'trifecta':
+                    # 三連単: selection[0]が1着, selection[1]が2着, selection[2]が3着
+                    h1, h2, h3 = int(selection[0]), int(selection[1]), int(selection[2])
+                    for k_idx in range(K):
+                        if (rankings[k_idx, 0] == h1 and 
+                            rankings[k_idx, 1] == h2 and 
+                            rankings[k_idx, 2] == h3):
+                            payoffs[k_idx, j] = odds
+                
+                else:
+                    # 未知の券種: 確率ベースの近似（後方互換）
+                    prob = cand['prob']
+                    hits = np.random.binomial(n=1, p=prob, size=K)
+                    payoffs[:, j] = hits * odds
+        else:
+            # [後方互換] ランキング行列がない場合は独立ベルヌーイで近似
+            # Note: この方式では馬券間の相関が無視される
+            logging.warning(
+                "ランキング行列がありません。独立ベルヌーイで近似します。"
+                "正確なペイオフ計算にはsimulation_results['rankings']を渡してください。"
+            )
+            for j, cand in enumerate(candidates):
+                prob = cand['prob']
+                odds = cand['odds']
+                hits = np.random.binomial(n=1, p=prob, size=K)
+                payoffs[:, j] = hits * odds
             
         return payoffs
         
@@ -406,3 +479,104 @@ class PortfolioOptimizer:
             logging.info(f"配分結果保存: {output_file}")
         except Exception as e:
             logging.error(f"配分結果のJSON保存に失敗: {e}")
+    
+    @staticmethod
+    def optimize_kelly_fraction(
+        backtest_results: List[Dict],
+        fraction_range: Tuple[float, float] = (0.01, 0.5),
+        max_drawdown_limit: float = 0.3,
+        n_steps: int = 50
+    ) -> Dict:
+        """
+        [5-1改修] バックテスト結果からKelly Fractionを最適化
+        
+        固定のfraction (0.1) ではなく、過去の的中/外れデータに基づいて
+        幾何平均リターンを最大化しつつ最大ドローダウンを制限する
+        最適なfractionを探索する。
+        
+        Args:
+            backtest_results: バックテスト結果のリスト
+                各要素: {
+                    'odds': float,       # 的中時のオッズ 
+                    'hit': bool,         # 的中/不的中
+                    'prob': float,       # モデル予測確率
+                }
+            fraction_range: 探索範囲 (min, max)
+            max_drawdown_limit: 最大ドローダウン制限
+            n_steps: 探索のグリッド数
+        
+        Returns:
+            Dict: {
+                'optimal_fraction': float,
+                'geometric_growth_rate': float,
+                'max_drawdown': float,
+                'n_bets': int,
+                'win_rate': float,
+                'fraction_curve': List[Dict]  # fraction vs growth rate
+            }
+        """
+        if not backtest_results:
+            logging.warning("バックテスト結果が空です。デフォルトfraction=0.1を返します。")
+            return {'optimal_fraction': 0.1}
+        
+        fractions = np.linspace(fraction_range[0], fraction_range[1], n_steps)
+        results_curve = []
+        
+        best_fraction = 0.1
+        best_growth = -np.inf
+        
+        for fraction in fractions:
+            # シミュレーション: 各ベットでのリターンを計算
+            bankroll = 1.0
+            peak = 1.0
+            max_dd = 0.0
+            
+            for bet in backtest_results:
+                odds = bet['odds']
+                hit = bet['hit']
+                prob = bet['prob']
+                
+                # Kelly bet size
+                kelly_f = (prob * (odds - 1) - (1 - prob)) / (odds - 1)
+                kelly_f = max(0, kelly_f) * fraction
+                kelly_f = min(kelly_f, 0.25)  # 単一ベットの上限
+                
+                if hit:
+                    bankroll *= (1 + kelly_f * (odds - 1))
+                else:
+                    bankroll *= (1 - kelly_f)
+                
+                peak = max(peak, bankroll)
+                dd = (peak - bankroll) / peak
+                max_dd = max(max_dd, dd)
+            
+            # 幾何平均リターン
+            n_bets = len(backtest_results)
+            geometric_growth = bankroll ** (1.0 / n_bets) - 1 if bankroll > 0 else -1
+            
+            results_curve.append({
+                'fraction': float(fraction),
+                'geometric_growth': float(geometric_growth),
+                'max_drawdown': float(max_dd),
+                'final_bankroll': float(bankroll),
+            })
+            
+            # ドローダウン制限を満たす最良のfractionを選択
+            if max_dd <= max_drawdown_limit and geometric_growth > best_growth:
+                best_growth = geometric_growth
+                best_fraction = float(fraction)
+        
+        win_rate = sum(1 for b in backtest_results if b['hit']) / len(backtest_results)
+        
+        logging.info(f"[5-1] Kelly Fraction最適化完了:")
+        logging.info(f"  最適fraction: {best_fraction:.4f}")
+        logging.info(f"  幾何成長率: {best_growth:.6f}")
+        logging.info(f"  ベット数: {len(backtest_results)}, 勝率: {win_rate:.1%}")
+        
+        return {
+            'optimal_fraction': best_fraction,
+            'geometric_growth_rate': float(best_growth),
+            'n_bets': len(backtest_results),
+            'win_rate': float(win_rate),
+            'fraction_curve': results_curve
+        }

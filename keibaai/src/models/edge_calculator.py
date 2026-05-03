@@ -1,5 +1,5 @@
 """
-Edge Calculator Module (v5.1)
+Edge Calculator Module (v5.2)
 
 複数の専門モデルの予測を統合し、エッジスコアを計算する核心モジュール。
 
@@ -13,6 +13,13 @@ Edge Score >= 1.2: 強いベット候補
 【統合方式】
 統合確率 = main_prob × (1 + pace_adj) × (1 + pedigree_adj) × (1 + condition_adj)
 - 各調整値は ±0.2 程度にクリップして過剰調整を防止
+
+【券種別控除率】(v5.2追加)
+JRAの控除率は券種ごとに異なるため、Edge計算時に正しい控除率を適用する。
+- 単勝/複勝: 20.0%
+- 馬連/ワイド: 22.5%
+- 馬単/三連複: 25.0%
+- 三連単: 27.5%
 """
 
 import numpy as np
@@ -30,9 +37,20 @@ class EdgeCalculator:
     複数の専門モデルの出力を統合し、市場オッズに対するエッジを計算する。
     """
     
+    # JRA券種別控除率（2024年時点）
+    TAKEOUT_RATES = {
+        'win': 0.200,        # 単勝
+        'place': 0.200,      # 複勝
+        'quinella': 0.225,   # 馬連
+        'wide': 0.225,       # ワイド
+        'exacta': 0.250,     # 馬単
+        'trio': 0.250,       # 三連複
+        'trifecta': 0.275,   # 三連単
+    }
+    
     def __init__(
         self,
-        takeout_rate: float = 0.20,  # JRA控除率
+        takeout_rate: float = 0.20,  # デフォルト控除率（後方互換）
         pace_weight: float = 1.0,
         pedigree_weight: float = 1.0,
         condition_weight: float = 1.0,
@@ -43,7 +61,8 @@ class EdgeCalculator:
         Parameters:
         -----------
         takeout_rate : float
-            控除率（JRAは約20%）
+            デフォルト控除率（券種未指定時）。JRAは約20%。
+            券種を指定する場合は calculate_odds_implied_prob(bet_type=...) を使用。
         pace_weight : float
             展開予測の重み
         pedigree_weight : float
@@ -62,16 +81,45 @@ class EdgeCalculator:
         self.max_adjustment = max_adjustment
         self.min_edge_threshold = min_edge_threshold
     
-    def calculate_odds_implied_prob(self, odds: np.ndarray) -> np.ndarray:
+    def get_takeout_rate(self, bet_type: Optional[str] = None) -> float:
+        """
+        券種に応じた控除率を返す
+        
+        Parameters:
+        -----------
+        bet_type : str, optional
+            券種名（'win', 'place', 'quinella', 'wide', 'exacta', 'trio', 'trifecta'）
+            Noneの場合はデフォルト控除率を返す
+        
+        Returns:
+        --------
+        float : 控除率
+        """
+        if bet_type is None:
+            return self.takeout_rate
+        return self.TAKEOUT_RATES.get(bet_type, self.takeout_rate)
+    
+    def calculate_odds_implied_prob(
+        self, odds: np.ndarray, bet_type: Optional[str] = None
+    ) -> np.ndarray:
         """
         オッズから暗示確率を計算
         
         オッズ暗示確率 = (1/odds) / Σ(1/odds) × (1 - 控除率)
+        
+        Parameters:
+        -----------
+        odds : np.ndarray
+            オッズ配列
+        bet_type : str, optional
+            券種名。指定すると券種別控除率を適用。
+            'win', 'place', 'quinella', 'wide', 'exacta', 'trio', 'trifecta'
         """
+        takeout = self.get_takeout_rate(bet_type)
         odds = np.clip(odds, 1.0, 1000.0)  # 極端なオッズをクリップ
         raw_prob = 1.0 / odds
         total_prob = raw_prob.sum()
-        implied_prob = (raw_prob / total_prob) * (1 - self.takeout_rate)
+        implied_prob = (raw_prob / total_prob) * (1 - takeout)
         return implied_prob
     
     def calculate_model_prob(self, scores: np.ndarray) -> np.ndarray:

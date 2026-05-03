@@ -1,0 +1,27 @@
+[
+  {
+    "timestamp": "2026-04-01T22:31:14.439464+00:00",
+    "event_type": "session_start",
+    "data": {
+      "experiment_name": "test_v52",
+      "session_id": "20260402_073114_d17f476d",
+      "tags": {}
+    }
+  },
+  {
+    "timestamp": "2026-04-01T22:31:14.439464+00:00",
+    "event_type": "params",
+    "data": {
+      "test": true,
+      "version": "5.2"
+    }
+  },
+  {
+    "timestamp": "2026-04-01T22:31:14.439464+00:00",
+    "event_type": "session_end",
+    "data": {
+      "success": true,
+      "duration_seconds": 0.0
+    }
+  }
+]

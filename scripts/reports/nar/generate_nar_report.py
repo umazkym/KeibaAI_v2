@@ -788,6 +788,44 @@ class NarNetkeibaAnalyzer:
             race_num = rid[-2:]
             sheet_name = f"Race_{race_num}"
             
+            # === AI分析シートを追加（中央競馬と同じ形式）===
+            ai_sheet_name = f"AI分析_{race_num}R"
+            ai_ws = wb.create_sheet(ai_sheet_name)
+            
+            # Row1: レース名
+            race_name = race_info.get('race_name', '')
+            ai_ws.cell(row=1, column=1, value=f"{race_num}R {race_name}")
+            
+            # Row2: ヘッダー
+            ai_headers = ['馬番', '馬名', '騎手', '現オッズ', '人気', '過去走', '平均着順']
+            for col_idx, header in enumerate(ai_headers, 1):
+                ai_ws.cell(row=2, column=col_idx, value=header)
+            
+            # Row3以降: 各馬のデータ
+            horses_sorted = sorted(horses, key=lambda x: int(x.get('出走馬番', 999)) if x.get('出走馬番', '').isdigit() else 999)
+            for row_idx, horse in enumerate(horses_sorted, 3):
+                history = horse.get('history', [])
+                past_runs = len(history)
+                
+                # 平均着順を計算
+                avg_rank = ''
+                ranks = []
+                for h in history:
+                    rank_str = h.get('着順', '')
+                    if rank_str and rank_str.isdigit():
+                        ranks.append(int(rank_str))
+                if ranks:
+                    avg_rank = round(sum(ranks) / len(ranks), 1)
+                
+                ai_ws.cell(row=row_idx, column=1, value=horse.get('出走馬番', ''))
+                ai_ws.cell(row=row_idx, column=2, value=horse.get('馬名', ''))
+                ai_ws.cell(row=row_idx, column=3, value=horse.get('騎手', ''))
+                ai_ws.cell(row=row_idx, column=4, value=horse.get('現オッズ'))
+                ai_ws.cell(row=row_idx, column=5, value=horse.get('現人気'))
+                ai_ws.cell(row=row_idx, column=6, value=past_runs)
+                ai_ws.cell(row=row_idx, column=7, value=avg_rank)
+            
+            # === Race_XX シート ===
             ws = wb.create_sheet(sheet_name)
             
             # ヘッダー行

@@ -243,12 +243,14 @@ def simulate_plackett_luce_numba(
 ) -> np.ndarray:
     """
     Plackett-Luceモデルによるランキング生成（Numba最適化）
-    仕様書 8.2
+    仕様書 08_シミュレーションと最適化.md 準拠
     
     Args:
-        mu: 各馬のμ値
-        sigma: 各馬のσ値
-        nu: レース荒れ度
+        mu: 各馬のμ値（期待完走時間）
+        sigma: 各馬のσ値（馬固有の不確実性）
+        nu: レース荒れ度（t分布の自由度パラメータ）
+            ν が小さい → 裾が重い → 荒れやすい（大穴が出やすい）
+            ν が大きい → 正規分布に近い → 堅いレース
         n_horses: 馬数
         K: シミュレーション回数
         seed: 乱数シード
@@ -256,24 +258,54 @@ def simulate_plackett_luce_numba(
     Returns:
         ランキング配列 (K, n_horses)
         各行は馬のインデックス（0-indexed）の順位
+    
+    Note (v5.2改修):
+        - [1-2] νをt分布の自由度として正しく使用（旧: 追加分散として正規分布に加算）
+          仕様書では T_i ~ t_ν(μ_i, σ_i²) と定義されている。
+          Numbaではscipy.statsが使えないため、
+          t分布 = Normal(0,1) / sqrt(Chi2(ν)/ν) の関係式で生成する。
+        - [1-3] 並列実行時の乱数シード問題を修正
+          各イテレーションで独立したシードを使用。
     """
+    # [1-3修正] シードから各イテレーション用の独立シードを事前生成
     np.random.seed(seed)
+    iter_seeds = np.random.randint(0, 2**31 - 1, size=K)
+    
+    # νの下限クリップ（2未満のt分布はMLEで不安定）
+    nu_safe = max(nu, 2.1)
+    # νを整数に丸め（chi2サンプリング用）
+    nu_int = max(int(nu_safe + 0.5), 3)
     
     rankings = np.zeros((K, n_horses), dtype=np.int32)
     
     # K回のシミュレーション (並列実行)
     for k in prange(K):
+        # [1-3修正] 各イテレーションで独立したシードを設定
+        np.random.seed(iter_seeds[k])
+        
         # 各馬の性能スコアをサンプリング
-        # θ_i ~ N(μ_i, σ_i^2 + ν^2)
+        # [1-2修正] θ_i ~ t_ν(μ_i, σ_i) をNumba互換で実装
+        # t分布 = Z / sqrt(V/ν), Z ~ N(0,1), V ~ Chi2(ν)
         theta = np.zeros(n_horses)
+        
+        # chi2(ν) = sum of ν standard normal squares
+        chi2_val = 0.0
+        for _j in range(nu_int):
+            z_chi = np.random.standard_normal()
+            chi2_val += z_chi * z_chi
+        # chi2_val / nu_int ≈ 1 for large nu, <<1 or >>1 for small nu (causes heavy tails)
+        chi2_factor = np.sqrt(chi2_val / nu_int)
+        # 下限クリップ（ゼロ除算防止）
+        if chi2_factor < 1e-6:
+            chi2_factor = 1e-6
+        
         for i in range(n_horses):
-            # (σ^2 + ν^2) の平方根
-            total_std = np.sqrt(sigma[i]**2 + nu**2)
-            theta[i] = np.random.normal(mu[i], total_std)
+            z = np.random.standard_normal()
+            # t_ν(μ_i, σ_i) = μ_i + σ_i * z / sqrt(chi2/ν)
+            theta[i] = mu[i] + sigma[i] * z / chi2_factor
         
         # Plackett-Luceサンプリング
-        # (Numbaは np.arange(n_horses).tolist() のような動的リスト操作が遅い)
-        # (代わりに、インデックス配列とマスクを使用する)
+        # (Numbaは動的リスト操作が遅いため、インデックス配列とマスクを使用)
         
         remaining_indices = np.arange(n_horses)
         
@@ -291,12 +323,12 @@ def simulate_plackett_luce_numba(
             
             # 確率計算
             sum_exp_theta = np.sum(exp_theta)
-            if sum_exp_theta == 0: # 全員 0 の場合
+            if sum_exp_theta == 0:  # 全員 0 の場合
                  probs = np.ones(remaining_count) / remaining_count
             else:
                  probs = exp_theta / sum_exp_theta
             
-            # サンプリング (Gumbel-Max-Trick の方が速いが、仕様書 に合わせる)
+            # サンプリング
             cumsum_probs = np.cumsum(probs)
             rand_val = np.random.random()
             
@@ -315,6 +347,5 @@ def simulate_plackett_luce_numba(
             # 残りから削除 (選択された要素を末尾と交換して末尾を捨てる)
             last_idx_in_remaining = remaining_count - 1
             remaining_indices[selected_idx_in_remaining] = remaining_indices[last_idx_in_remaining]
-            # (配列のサイズは変えずに、次のループで見る範囲を1つ減らす)
             
     return rankings

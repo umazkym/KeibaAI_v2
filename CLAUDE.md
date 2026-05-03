@@ -1,6 +1,6 @@
 # CLAUDE.md - KeibaAI_v2 AI開発ガイドライン
 
-**最終更新日**: 2025-12-20  
+**最終更新日**: 2026-05-04  
 **プロジェクト**: KeibaAI_v2 - 競馬AI予測＆最適投資システム  
 **目的**: AIアシスタントがこのコードベースで作業するためのガイド
 
@@ -17,10 +17,12 @@
 
 > [!IMPORTANT]
 > **モデルバージョニングルール**:
-> - モデル構築ごとに `keibaai/models/{version_name}/` フォルダを作成
-> - 必須ファイル: `config.yaml`, `report.md`, `features.txt`
-> - 推奨ファイル: `multi_period_results.csv`, `development_log.md`
-> - 詳細は [docs/system/15_モデル命名規則とベストプラクティス.md](docs/system/15_モデル命名規則とベストプラクティス.md) を参照
+> - 本番モデルは `keibaai/models/{version_name}/` に配置
+> - 実験モデルは `keibaai/models/_archive/{version_name}/` に配置
+> - 本番モデル必須ファイル: `model.pkl`(or `.txt`), `feature_names.json`, `model_info.json`
+> - 推奨ファイル: `feature_importance.csv`, `yearly_roi.csv`
+> - 命名規則: `v{N}`=Binary, `mu_v{N}_{M}`=μモデル, `sigma_v{N}`=σ, `nu_v{N}`=ν
+> - 詳細は `keibaai/models/README.md` を参照
 
 > [!CAUTION]
 > **ルートディレクトリに配置してよいファイル**:
@@ -29,10 +31,20 @@
 > - `requirements.txt`, `pyproject.toml` - 依存関係定義
 > - `.gitignore`, `.env` - Git/環境設定
 >
+> **ルートに配置してよいディレクトリ**:
+> - `keibaai/` - メインパッケージ
+> - `scripts/` - 実行スクリプト
+> - `models/` - 本番デプロイ用モデル（production/production_v2）
+> - `docs/` - ドキュメント
+> - `outputs/` - 分析出力
+> - `results/` - 検証・バックテスト結果
+>
 > **ルートに配置してはいけないファイル（発見次第移動/削除）**:
 > - `*.log` → `keibaai/data/logs/` または削除
-> - `*_list.txt` → `keibaai/data/metadata/` または削除
+> - `*_list.txt`, `*.csv`(IDリスト) → `keibaai/data/metadata/`
+> - `*.xlsx` → `outputs/analysis/`
 > - 実行スクリプト → `scripts/` 配下へ移動
+> - `debug_*.py` → 削除
 
 ---
 
@@ -68,7 +80,6 @@
 
 | 項目 | 数値 |
 |-----|------|
-| コード行数 | 約5,025行 |
 | レースレコード数 | 約278,098件 |
 | 血統レコード数 | 約1,377,361件（5世代） |
 | テストカバレッジ | ユニット・統合・回帰テスト完備 |
@@ -112,14 +123,22 @@
 KeibaAI_v2/
 ├── keibaai/                          # メインPythonパッケージ
 │   ├── src/                          # ソースコード（import用モジュール）
-│   │   ├── features/                 # 特徴量モジュール
-│   │   │   ├── feature_engine.py        # FeatureEngineクラス
-│   │   │   ├── advanced_features.py     # 高度な特徴量
-│   │   │   └── leak_free_feature_engineer_v*.py  # リークフリー版
+│   │   ├── features/                 # 特徴量モジュール（※README.md参照）
+│   │   │   ├── feature_engine.py        # FeatureEngineクラス（旧版）
+│   │   │   ├── leak_free_feature_engineer_v15.py  # ★本番V15用
+│   │   │   ├── leak_free_feature_engineer_v15_fixed.py  # ★V4.4/V16/V22のベース
+│   │   │   ├── leak_free_feature_engineer_v16.py  # V16候補
+│   │   │   ├── leak_free_feature_engineer_v22.py  # V22保険
+│   │   │   ├── leak_free_feature_engineer_v2〜v14.py  # 依存チェーン（削除不可）
+│   │   │   └── roi_features.py          # ROI最適化用特徴量
 │   │   ├── models/                  # モデルモジュール
 │   │   │   ├── model_train.py           # MuEstimatorクラス
 │   │   │   ├── sigma_estimator.py       # SigmaEstimatorクラス
 │   │   │   └── nu_estimator.py          # NuEstimatorクラス
+│   │   ├── analysis/speed_index/    # SP値（スピード指数）計算エンジン
+│   │   │   ├── calculator.py            # SP値計算（基準タイム、馬場指数、斤量補正）
+│   │   │   ├── pace_correction.py       # ペース補正エンジン
+│   │   │   └── calibration.py           # 係数キャリブレーション
 │   │   ├── parsers/                 # HTMLパーサー
 │   │   ├── preparing/               # スクレイピングモジュール
 │   │   ├── sim/                     # シミュレーションモジュール
@@ -130,25 +149,37 @@ KeibaAI_v2/
 │   │   ├── raw/html/                # 生HTMLファイル（.bin形式）
 │   │   ├── parsed/parquet/          # パース済みParquetファイル
 │   │   ├── features/parquet/        # 特徴量データ
+│   │   ├── metadata/                # IDリスト等
 │   │   └── logs/                    # アプリケーションログ
-│   ├── models/                      # モデルバージョン別フォルダ ★
-│   │   ├── v15_legacy/              # V15レガシーモデル
-│   │   ├── v26_restored/            # V2.6復元版
-│   │   └── {version}/               # 新バージョン
+│   ├── models/                      # モデルバージョン別フォルダ（※README.md参照）
+│   │   ├── v15/                     # ★V15 Binaryモデル（本番）
+│   │   ├── v16/                     # V16モデル（候補）
+│   │   ├── mu_v4_4/                 # ★V4.4 LambdaRank（本番Residual）
+│   │   ├── sigma_v2/                # σモデル（不確実性推定）
+│   │   ├── nu_v2/                   # νモデル（混沌度推定）
+│   │   ├── mu_v2/, mu_baseline/     # 参照用ベースライン
+│   │   ├── v26_restored/            # V2.6復元版（設定参照）
+│   │   └── _archive/                # 過去の実験モデル（69フォルダ）
 │   └── tests/                       # テストスイート
-├── scripts/                         # 実行スクリプト（CLIツール）★
+├── models/                          # 本番デプロイ用モデル
+│   ├── production/                  # ★V15+V4.4 Ensemble
+│   └── production_v2/               # 芝/ダート分離戦略
+├── scripts/                         # 実行スクリプト（CLIツール）
 │   ├── pipelines/                   # データパイプラインスクリプト
-│   ├── training/                    # モデル訓練・予測 ★
-│   │   ├── train_mu_model.py            # μモデル訓練
-│   │   ├── train_mu_v2_model.py         # μv2.0モデル訓練
-│   │   ├── test_multi_period_v26.py     # 複数期間テスト
-│   │   └── experimental/                # 実験的スクリプト ★
+│   ├── training/                    # モデル訓練・予測（※README.md参照）
+│   │   ├── train_v15.py                 # ★V15モデル訓練
+│   │   ├── predict.py                   # μ/σ/ν推論パイプライン
+│   │   └── _archive/                    # 過去の実験スクリプト
+│   ├── prediction/                  # 本番予測スクリプト
+│   ├── analysis/                    # 分析スクリプト
+│   ├── verification/                # 検証スクリプト
 │   ├── optimization/                # ポートフォリオ最適化
 │   ├── simulation/                  # シミュレーション
-│   ├── debug/                       # デバッグ・検証ツール
-│   └── temp/                        # 一時スクリプト
+│   └── debug/                       # デバッグ・検証ツール
 ├── docs/                            # ドキュメント
-│   └── system/                      # システムドキュメント（29ファイル）
+│   ├── system/                      # システムドキュメント
+│   └── references/                  # 参考資料（article.txt等）
+├── outputs/                         # 分析出力
 ├── CLAUDE.md                        # このファイル
 └── README.md                        # ユーザー向けREADME
 ```
@@ -163,8 +194,12 @@ KeibaAI_v2/
     NO  → keibaai/src/{category}/xxx.py（モジュール・クラス定義）
     
 [Q2] 実験的スクリプト？
-    YES → scripts/training/experimental/xxx.py
+    YES → scripts/training/_archive/xxx.py
     NO  → scripts/{category}/xxx.py
+
+[Q3] 実験的モデル？
+    YES → keibaai/models/_archive/{version}/
+    NO  → keibaai/models/{version}/
 ```
 
 ---
@@ -195,38 +230,42 @@ python scripts/pipelines/run_parsing_resumable.py
 # 特徴量生成
 python scripts/pipelines/generate_features.py
 
-# モデル訓練
-python scripts/training/train_mu_v2_model.py
+# V15 Binary モデル訓練（本番ベース）
+python scripts/training/train_v15.py
 
-# 複数期間テスト
-python scripts/training/test_multi_period_v26.py
+# V4.4 LambdaRank モデル訓練（Residual Ensemble用）
+python scripts/training/train_v4_4.py
+
+# σ/ν モデル訓練（不確実性・混沌度推定）
+python scripts/training/train_sigma_v2.py
+python scripts/training/train_nu_v2.py
+
+# 推論パイプライン
+python scripts/training/predict.py --date 2026-05-04 --model_dir models/production
+
+# Walk-forward 検証
+python scripts/training/walkforward_v15.py
 ```
 
 ---
 
 ## 📦 主要モジュール
 
-### 1. FeatureEngine（特徴量生成）
-
-**ファイル**: `keibaai/src/features/feature_engine.py`
-
-```python
-from keibaai.src.features.feature_engine import FeatureEngine
-
-fe = FeatureEngine(config_path='keibaai/configs/features.yaml')
-df = fe.generate_features(shutuba_df, results_history_df, horse_profiles_df)
-feature_cols = fe.get_feature_columns()
-```
-
-### 2. LeakFreeFeatureEngineerV15（リークフリー特徴量）
+### 1. LeakFreeFeatureEngineerV15（本番特徴量生成）
 
 **ファイル**: `keibaai/src/features/leak_free_feature_engineer_v15.py`
 
-- V15推奨モデル用の66特徴量を生成
-- リーク防止策: `expanding().mean().shift(1)`
-- 主要特徴量: `horse_c4_gap_avg`, `post_style_conflict`, `race_front_runner_count`
+```python
+from keibaai.src.features.leak_free_feature_engineer_v15 import LeakFreeFeatureEngineerV15
 
-### 3. MuEstimator（μモデル）
+engine = LeakFreeFeatureEngineerV15()
+df = engine.generate_features(results_df)  # 66特徴量を生成
+feature_cols = engine.get_feature_columns()
+```
+
+> 依存チェーン: v2→v3→...→v14→v15（詳細は `keibaai/src/features/README.md`）
+
+### 2. MuEstimator（μモデル = 期待着順予測）
 
 **ファイル**: `keibaai/src/models/model_train.py`
 
@@ -241,7 +280,7 @@ estimator.fit(X_train, y_train, group=groups)
 mu_pred = estimator.predict(X_test)
 ```
 
-### 4. RaceSimulator（モンテカルロシミュレーション）
+### 3. RaceSimulator（モンテカルロシミュレーション）
 
 **ファイル**: `keibaai/src/sim/simulator.py`
 
@@ -405,12 +444,35 @@ config_path = project_root / 'keibaai' / 'configs' / 'default.yaml'
 
 | ドキュメント | 内容 |
 |-------------|------|
+| [README.md](README.md) | **プロジェクト概要（第三者向け）** |
+| [keibaai/models/README.md](keibaai/models/README.md) | **モデル構成・命名規則** |
+| [keibaai/src/features/README.md](keibaai/src/features/README.md) | **特徴量エンジニア依存関係** |
+| [scripts/training/README.md](scripts/training/README.md) | **訓練スクリプト一覧** |
 | [docs/system/01_システム概要.md](docs/system/01_システム概要.md) | システム全体像 |
 | [docs/system/07_機械学習モデル.md](docs/system/07_機械学習モデル.md) | モデル詳細 |
-| [docs/system/15_モデル命名規則とベストプラクティス.md](docs/system/15_モデル命名規則とベストプラクティス.md) | バージョニング |
+| [docs/system/14_モデル改善戦略.md](docs/system/14_モデル改善戦略.md) | モデル改善方針・失敗事例 |
 | [docs/system/23_包括的検証レポート_v3.md](docs/system/23_包括的検証レポート_v3.md) | V15検証結果 |
-| [docs/system/99_AI開発ガイドライン.md](docs/system/99_AI開発ガイドライン.md) | AI向け詳細ガイド |
+| [docs/system/28_特徴量エンジニアリング検証レポート.md](docs/system/28_特徴量エンジニアリング検証レポート.md) | 特徴量検証・分析方法論 |
+
+---
+
+## 🔬 分析時の心がけ（2026-01-16追加）
+
+特徴量やモデル改善を検証する際は以下を遵守：
+
+> [!IMPORTANT]
+> **すぐに結論を出さない**: 複数の視点から検証を重ねる
+> 
+> **過適合を常に警戒**: 訓練/検証の完全分離、多年度検証、前半/後半比較
+> 
+> **「なぜ効果があるのか」を考える**: 効果が見られても理由を深堀り
+> 
+> **本番モデルと同条件でテスト**: V15/V4.4はpopularityを使用していない
+> 
+> 詳細は [28_特徴量エンジニアリング検証レポート.md](docs/system/28_特徴量エンジニアリング検証レポート.md) を参照
 
 ---
 
 **Note**: このファイルはAIアシスタント向けのメタドキュメントです。プロジェクトの仕様変更に合わせて適宜更新してください。
+
+**最終更新日**: 2026-05-04

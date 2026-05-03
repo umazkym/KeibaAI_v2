@@ -110,13 +110,52 @@ class MuEstimator(BaseEstimator, RegressorMixin):
             start_idx += g
         rank_target = np.array(rank_target, dtype=int)
         
+        # [4-1改修] Out-of-Fold (OOF) 予測でStacking的リークを防止
+        # 旧実装: Rankerの学習データに対する予測値をRegressorの特徴量に使用
+        #   → Rankerが学習データを「記憶」しているため、rank_scoreが不当に正確
+        # 新実装: GroupKFoldでOOF予測を生成し、honest な rank_score を使用
+        
+        # まずレースグループラベルを復元
+        group_labels = np.repeat(np.arange(len(group)), group)
+        
+        # OOF予測を生成
+        from sklearn.model_selection import GroupKFold
+        n_splits = min(5, len(np.unique(group_labels)))
+        
+        if n_splits >= 2:
+            oof_rank_scores = np.zeros(len(X))
+            gkf = GroupKFold(n_splits=n_splits)
+            
+            for fold_idx, (train_idx, val_idx) in enumerate(gkf.split(X, groups=group_labels)):
+                # Fold用のグループサイズを計算
+                fold_group_labels_train = group_labels[train_idx]
+                fold_groups_train = []
+                for g_id in np.unique(fold_group_labels_train):
+                    fold_groups_train.append(int(np.sum(fold_group_labels_train == g_id)))
+                
+                ranker_fold = lgb.LGBMRanker(**self.ranker_params)
+                ranker_fold.fit(
+                    X.iloc[train_idx], rank_target[train_idx], 
+                    group=fold_groups_train
+                )
+                oof_rank_scores[val_idx] = ranker_fold.predict(X.iloc[val_idx])
+            
+            logger.info(f"OOF rank_score generated ({n_splits}-fold GroupKFold)")
+        else:
+            # グループ数が少なすぎる場合はフォールバック（旧方式）
+            logger.warning("グループ数が不足。OOFではなく直接予測を使用。")
+            oof_rank_scores = None
+        
+        # 全データでRankerを再学習（予測時用）
         self.ranker = lgb.LGBMRanker(**self.ranker_params)
         self.ranker.fit(X, rank_target, group=group)
         
-        # 2. Feature Augmentation
-        rank_score = self.ranker.predict(X)
+        # 2. Feature Augmentation (OOF予測を使用)
         X_aug = X.copy()
-        X_aug['rank_score'] = rank_score
+        if oof_rank_scores is not None:
+            X_aug['rank_score'] = oof_rank_scores
+        else:
+            X_aug['rank_score'] = self.ranker.predict(X)
         
         logger.info(f"Feature Augmentation: X shape {X.shape} -> X_aug shape {X_aug.shape}")
         

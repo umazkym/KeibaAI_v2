@@ -1,0 +1,23 @@
+{
+  "experiment_name": "test_v52",
+  "session_id": "20260402_070035_3cd3229b",
+  "tags": {},
+  "start_time": "2026-04-01T22:00:35.533379+00:00",
+  "end_time": "2026-04-01T22:00:35.533379+00:00",
+  "duration_seconds": 0.0,
+  "params": {
+    "test": true,
+    "version": "5.2"
+  },
+  "metrics": {
+    "dummy_metric": 42.0
+  },
+  "metrics_history": {
+    "dummy_metric": [
+      {
+        "value": 42.0
+      }
+    ]
+  },
+  "artifacts": {}
+}

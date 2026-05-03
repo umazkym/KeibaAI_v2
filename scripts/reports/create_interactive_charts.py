@@ -213,6 +213,31 @@ def create_interactive_charts(source_file: str, output_file: str = None):
         'races': {}, 'matchups': {}, 'matrix': {}, 'chart_data': {}, 'race_info': {}
     }
     
+    # === RaceInfoシートからレースメタデータを読み込み ===
+    race_meta = {}  # race_num -> {race_name, course_info, venue, date}
+    if 'RaceInfo' in wb.sheetnames:
+        ri_sheet = wb['RaceInfo']
+        ri_headers, ri_rows = read_sheet_data(ri_sheet)
+        for ri_row in ri_rows:
+            rn = ri_row.get('race_num', '')
+            if rn:
+                race_meta[rn] = {
+                    'race_name': ri_row.get('race_name', ''),
+                    'course_info': ri_row.get('course_info', ''),
+                    'venue': ri_row.get('venue', ''),
+                    'date': ri_row.get('date', ''),
+                }
+    
+    # === AI分析シートからのフォールバック ===
+    for sn in wb.sheetnames:
+        if sn.startswith('AI分析_') and sn.endswith('R'):
+            ai_sheet = wb[sn]
+            race_num_str = sn.replace('AI分析_', '').replace('R', '')
+            if race_num_str not in race_meta:
+                cell_val = ai_sheet.cell(row=1, column=1).value
+                if cell_val:
+                    race_meta[race_num_str] = {'race_name': str(cell_val), 'course_info': '', 'venue': '', 'date': ''}
+    
     for sheet_name in wb.sheetnames:
         if sheet_name.startswith('Race_'):
             race_num = sheet_name.replace('Race_', '')
@@ -304,16 +329,133 @@ def create_interactive_charts(source_file: str, output_file: str = None):
             
             if rows:
                 first = processed_rows[0]
+                # RaceInfoシートからレース名を取得 (フォールバック: 最初の行のデータ)
+                meta = race_meta.get(race_num, {})
+                ri_name = meta.get('race_name', '')
+                ri_course_info = meta.get('course_info', '')
+                ri_venue = meta.get('venue', '')
+                
+                # course_infoからコース・距離を推定 (例: "ダ1800m(左)")
+                ri_course = ''
+                ri_dist = ''
+                if ri_course_info:
+                    import re as _re
+                    if 'ダ' in ri_course_info:
+                        ri_course = 'ダート'
+                    elif '芝' in ri_course_info:
+                        ri_course = '芝'
+                    dm = _re.search(r'(\d{3,4})', ri_course_info)
+                    if dm:
+                        ri_dist = dm.group(1)
+                
+                # 頭数はデータ行のユニーク馬番数から推定
+                unique_umaban = set()
+                for r in rows:
+                    u = r.get('出走馬番', r.get('番', ''))
+                    if u and str(u).strip():
+                        unique_umaban.add(str(u).strip())
+                heads_count = str(len(unique_umaban)) if unique_umaban else first.get('頭数', '')
+                
                 all_data['race_info'][race_num] = {
-                    'race_name': first.get('レース名', ''), 'date': first.get('日付', ''),
-                    'place': first.get('場所', ''), 'course': first.get('ｺｰｽ', ''),
-                    'dist': first.get('距離', ''), 'weather': first.get('天気', ''),
-                    'cond': first.get('馬場', ''), 'heads': first.get('頭数', '')
+                    'race_name': ri_name if ri_name else first.get('レース名', ''),
+                    'date': meta.get('date', first.get('日付', '')),
+                    'place': ri_venue if ri_venue else first.get('場所', ''),
+                    'course': ri_course if ri_course else first.get('ｺｰｽ', ''),
+                    'dist': ri_dist if ri_dist else first.get('距離', ''),
+                    'weather': first.get('天気', ''),
+                    'cond': first.get('馬場', ''),
+                    'heads': heads_count,
                 }
             
             m_data, matrix_data = calculate_dynamic_matchups(processed_rows, name_map)
             all_data['matchups'][race_num] = m_data
             all_data['matrix'][race_num] = matrix_data
+
+    # --- ADVANCED ANALYZER INJECTION ---
+    all_data['pacing'] = {}
+    all_data['course_stats'] = {}
+    all_data['horse_profiles'] = {}
+    all_data['summary_table'] = {}
+    all_data['race_dynamics'] = {}
+    try:
+        try:
+            from scripts.reports.advanced_analyzer import AdvancedPaceAnalyzer
+        except ImportError:
+            from advanced_analyzer import AdvancedPaceAnalyzer
+        
+        analyzer = AdvancedPaceAnalyzer()
+        
+        for race_num in all_data['races'].keys():
+            race_info = all_data['race_info'].get(race_num, {})
+            venue = race_info.get('place', '')
+            dist_str = race_info.get('dist', '')
+            course = race_info.get('course', '')
+            cond = race_info.get('cond', '')
+            
+            pacing_data = {'clusters': []}
+            
+            if venue and dist_str.isdigit() and course:
+                dist = int(dist_str)
+                pacing_data['clusters'] = analyzer.get_course_lap_clusters(venue, dist, course)
+                
+                # ① コースラップ統計
+                lap_stats = analyzer.get_course_lap_stats(venue, dist, course)
+                # ② 位置取り×着順
+                pos_stats = analyzer.get_course_position_stats(venue, dist, course)
+                
+                all_data['course_stats'][race_num] = {
+                    'lap': lap_stats,
+                    'pos': pos_stats,
+                    'venue': venue, 'dist': dist, 'surface': course, 'cond': cond,
+                }
+                
+                # ③④⑤⑥⑦ 馬別プロファイル
+                rows = all_data['races'][race_num]['rows']
+                # horse_idを馬名→番号のマッピングと共に収集
+                horse_id_map = {}  # horse_id -> umaban
+                horse_ids = []
+                seen_horses = set()
+                for r in rows:
+                    hid = r.get('horse_id', '')
+                    hname = r.get('馬名', '')
+                    umaban = r.get('番', '0')
+                    if hid and hname and hname not in seen_horses:
+                        def _cid(v):
+                            s = str(v).strip()
+                            return s[:-2] if s.endswith('.0') else s
+                        hid_clean = _cid(hid)
+                        horse_id_map[hid_clean] = {'umaban': umaban, 'name': hname}
+                        horse_ids.append(hid_clean)
+                        seen_horses.add(hname)
+                
+                if horse_ids:
+                    profiles = analyzer.get_horse_profiles(horse_ids, venue, dist, course)
+                    # umaban注入
+                    for hid, prof in profiles.items():
+                        info = horse_id_map.get(hid, {})
+                        prof['umaban'] = info.get('umaban', '0')
+                    all_data['horse_profiles'][race_num] = profiles
+                    all_data['summary_table'][race_num] = analyzer.get_summary_table(profiles)
+                    # summary_tableにもumaban注入
+                    for hid in all_data['summary_table'][race_num]:
+                        info = horse_id_map.get(hid, {})
+                        all_data['summary_table'][race_num][hid]['umaban'] = info.get('umaban', '0')
+                    
+                    # ⑧ 展開予測
+                    try:
+                        dynamics = analyzer.predict_race_dynamics(
+                            profiles, venue, dist, course, cond
+                        )
+                        all_data['race_dynamics'][race_num] = dynamics
+                    except Exception as dyn_e:
+                        print(f"Race dynamics prediction failed for {race_num}: {dyn_e}")
+            
+            all_data['pacing'][race_num] = pacing_data
+    except Exception as e:
+        import traceback
+        print(f"Failed to run AdvancedPaceAnalyzer: {e}")
+        traceback.print_exc()
+    # -----------------------------------
             
     sorted_races = sorted(all_data['races'].keys(), key=lambda x: int(x) if x.isdigit() else 99)
     html = generate_html(source_file, sorted_races, all_data)
@@ -358,18 +500,20 @@ def generate_html(source_file: str, races: list, all_data: dict) -> str:
         .gap-1 {{ gap: 4px; }} .gap-2 {{ gap: 8px; }}
         .font-bold {{ font-weight: 700; }}
         .text-xs {{ font-size: 10px; }} .text-sm {{ font-size: 12px; }}
-        .card {{ background: var(--card); border-radius: 8px; padding: 10px; margin-bottom: 10px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }}
-        .badge {{ background: #E5E7EB; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-right: 4px; }}
+        .card {{ background: var(--card); border-radius: 12px; padding: 12px; margin-bottom: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border: 1px solid rgba(0,0,0,0.04); }}
+        .badge {{ background: #E5E7EB; padding: 3px 8px; border-radius: 8px; font-size: 11px; margin-right: 4px; font-weight: 500; }}
         
-        .header {{ position: sticky; top: 0; background: var(--primary); color: white; z-index: 100; padding: 10px; }}
-        .race-tabs {{ overflow-x: auto; white-space: nowrap; padding-bottom: 2px; }}
-        .race-tab {{ display: inline-block; padding: 5px 12px; margin-right: 6px; background: rgba(255,255,255,0.2); border-radius: 12px; font-size: 12px; font-weight: bold; }}
-        .race-tab.active {{ background: white; color: var(--primary); }}
+        .header {{ position: sticky; top: 0; background: linear-gradient(135deg, #4F46E5 0%, #6366F1 50%, #818CF8 100%); color: white; z-index: 100; padding: 10px; backdrop-filter: blur(10px); }}
+        .race-tabs {{ overflow-x: auto; white-space: nowrap; padding-bottom: 2px; -webkit-overflow-scrolling: touch; }}
+        .race-tab {{ display: inline-block; padding: 5px 12px; margin-right: 6px; background: rgba(255,255,255,0.15); border-radius: 12px; font-size: 12px; font-weight: bold; cursor: pointer; transition: all 0.2s; }}
+        .race-tab:hover {{ background: rgba(255,255,255,0.3); }}
+        .race-tab.active {{ background: white; color: var(--primary); box-shadow: 0 2px 6px rgba(0,0,0,0.15); }}
         
         .main {{ padding: 10px; max-width: 600px; margin: 0 auto; }}
 
         .sort-area {{ display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }}
-        .sort-chip {{ padding: 6px 10px; background: #fff; border: 1px solid var(--border); border-radius: 14px; font-size: 11px; cursor: pointer; }}
+        .sort-chip {{ padding: 6px 10px; background: #fff; border: 1px solid var(--border); border-radius: 14px; font-size: 11px; cursor: pointer; transition: all 0.15s; }}
+        .sort-chip:hover {{ border-color: var(--primary); }}
         .sort-chip.active {{ background: var(--primary); color: #fff; border-color: var(--primary); }}
 
         .grid-dense {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(65px, 1fr)); gap: 4px; }}
@@ -385,18 +529,56 @@ def generate_html(source_file: str, races: list, all_data: dict) -> str:
         .mx-lose {{ background: #fee2e2; color: #991b1b; }}
         .mx-draw {{ background: #f3f4f6; color: #9ca3af; }}
         
-        .nav {{ position: fixed; bottom: 0; left: 0; width: 100%; background: #fff; border-top: 1px solid var(--border); display: flex; padding-bottom: var(--safe-b); z-index: 200; }}
-        .nav-btn {{ flex: 1; padding: 8px; text-align: center; font-size: 10px; color: var(--text-light); }}
+        .filter-sticky {{ position: sticky; top: 42px; background: var(--bg); z-index: 90; padding: 6px 10px; margin: 0 -10px; border-bottom: 1px solid var(--border); }}
+        .filter-section {{ margin-bottom: 6px; }}
+        .filter-section-title {{ font-size: 9px; font-weight: bold; color: var(--text-light); margin-bottom: 3px; display: flex; align-items: center; gap: 4px; }}
+        .filter-row {{
+            display: flex;
+            flex-wrap: nowrap;
+            align-items: center;
+            gap: 4px;
+            margin-bottom: 4px;
+            overflow-x: auto;
+            padding-bottom: 2px;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+        }}
+
+        .filter-row::-webkit-scrollbar {{
+            display: none;
+        }}.filter-label {{ min-width: 40px; font-size: 9px; font-weight: bold; color: var(--text-light); margin-right: 2px; white-space: nowrap; flex-shrink: 0; }}
+        .filter-chip {{ display: inline-flex; align-items: center; padding: 2px 6px; border: 1px solid #ddd; border-radius: 10px; font-size: 10px; cursor: pointer; background: #fff; transition: all 0.15s; user-select: none; }}
+        .filter-chip:hover {{ border-color: var(--primary); }}
+        .filter-chip.on {{ background: var(--primary); color: #fff; border-color: var(--primary); }}
+        .filter-chip.on .dot {{ border: 1px solid #fff; }}
+        .filter-chip .dot {{ width: 6px; height: 6px; border-radius: 50%; margin-right: 3px; }}
+        .preset-btn {{ display: inline-block; padding: 2px 6px; border: 1px solid #ddd; border-radius: 8px; font-size: 10px; cursor: pointer; background: #fff; transition: all 0.15s; user-select: none; }}
+        .preset-btn:hover {{ border-color: var(--primary); background: #f0f0ff; }}
+        .preset-btn.on {{ background: var(--primary); color: #fff; border-color: var(--primary); }}
+        .date-input {{ border: 1px solid #ccc; padding: 2px 4px; border-radius: 6px; font-size: 10px; width: 62px; text-align: center; }}
+        
+        .nav {{ position: fixed; bottom: 0; left: 0; width: 100%; background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); border-top: 1px solid var(--border); display: flex; padding-bottom: var(--safe-b); z-index: 200; }}
+        .nav-btn {{ flex: 1; padding: 8px; text-align: center; font-size: 10px; color: var(--text-light); cursor: pointer; transition: color 0.15s; }}
         .nav-btn.active {{ color: var(--primary); font-weight: bold; }}
         .nav-icon {{ font-size: 18px; display: block; margin-bottom: 2px; }}
         
         .h-num {{ width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; margin-right: 6px; }}
         
-        .filter-sticky {{ position: sticky; top: 42px; background: var(--bg); z-index: 90; padding: 6px 10px; margin: 0 -10px; border-bottom: 1px solid var(--border); }}
-        .filter-row {{ display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-bottom: 4px; }}
-        .filter-label {{ font-size: 9px; font-weight: bold; color: var(--text-light); margin-right: 4px; white-space: nowrap; }}
-        .filter-chip {{ display: inline-flex; align-items: center; padding: 2px 6px; border: 1px solid #ccc; border-radius: 10px; font-size: 10px; cursor: pointer; background: #fff; }}
-        .filter-chip .dot {{ width: 6px; height: 6px; border-radius: 50%; margin-right: 3px; }}
+        
+        
+        .badge-course {{ padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; color: #fff; }}
+        .badge-venue {{ background: #6366F1; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; color: #fff; }}
+        
+        .prediction-card {{ background: linear-gradient(135deg, #fefce8 0%, #fef3c7 100%); border: 1px solid #fde68a; border-radius: 12px; padding: 12px; margin-bottom: 10px; }}
+        .verdict-tag {{ display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 10px; font-weight: bold; }}
+        .verdict-有利 {{ background: #d1fae5; color: #065f46; }}
+        .verdict-不利 {{ background: #fee2e2; color: #991b1b; }}
+        .verdict-中立 {{ background: #f3f4f6; color: #6b7280; }}
+        
+        .pace-badge {{ display: inline-block; padding: 4px 12px; border-radius: 8px; font-size: 14px; font-weight: bold; }}
+        .pace-high {{ background: #fee2e2; color: #991b1b; }}
+        .pace-mid {{ background: #fef3c7; color: #92400e; }}
+        .pace-slow {{ background: #dbeafe; color: #1e40af; }}
     </style>
 </head>
 <body>
@@ -408,12 +590,16 @@ def generate_html(source_file: str, races: list, all_data: dict) -> str:
     const TXT = {waku_text_json};
     const COLS = {cols_json};
 
+    const CENTRAL_VENUES = ['東京','中山','阪神','京都','中京','小倉','新潟','福島','札幌','函館'];
+
     let state = {{
         race: RACES[0], tab: 'chart', expanded: {{}}, filters: {{}}, sortCol: null, sortAsc: false, wakuMap: {{}},
-        filterDate: '', // 'YYYY/MM/DD'
-        venueFilters: [], // excluded venues
-        distFilters: [], // excluded distances
-        courseFilters: [] // excluded courses (芝/ダート)
+        dateFrom: '',
+        dateTo: '',
+        venueInc: [],
+        distInc: [],
+        courseInc: [],
+        showFilters: true
     }};
 
     function init() {{ 
@@ -449,6 +635,7 @@ def generate_html(source_file: str, races: list, all_data: dict) -> str:
             ${{renderNav()}}
         `;
         if(state.tab === 'chart') setTimeout(drawCharts, 50);
+        if(state.tab === 'pacing') setTimeout(window.drawPacingCharts, 50);
     }}
 
     function renderHeader() {{
@@ -459,103 +646,527 @@ def generate_html(source_file: str, races: list, all_data: dict) -> str:
 
     function renderInfo() {{
         const i = DATA.race_info[state.race] || {{}};
-        return `<div class="card"><div class="font-bold text-sm">${{state.race}}R ${{i.race_name||''}}</div>
-        <div><span class="badge">${{i.course||''}}${{i.dist||''}}</span><span class="badge">${{i.cond||''}}</span><span class="badge">${{i.heads||''}}頭</span></div></div>`;
+        const courseBg = (i.course||'').includes('ダ') ? '#FF6D00' : '#16A34A';
+        const courseLabel = (i.course||'') + (i.dist||'') + 'm';
+        return `<div class="card" style="padding:12px;">
+            <div class="font-bold" style="font-size:14px;margin-bottom:8px;">${{state.race}}R ${{i.race_name||''}}</div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
+                <div class="badge-course" style="background:${{courseBg}};">${{courseLabel}}</div>
+                <div class="badge-venue">${{i.place||''}}</div>
+                <span class="badge" style="font-size:11px;">${{i.cond||''}}</span>
+                <span class="badge" style="font-size:11px;">${{i.heads||''}}頭</span>
+            </div>
+        </div>`;
     }}
 
     function renderMain() {{
         if(state.tab === 'chart') return renderChart();
         if(state.tab === 'data') return renderData();
         if(state.tab === 'matchup') return renderMatchup();
+        if(state.tab === 'pacing') return renderPacing();
     }}
+
+    // --- PACING (v3: 網羅的分析ダッシュボード) ---
+    function renderPacing() {{
+        const isMobile = window.innerWidth <= 600;
+        const h = isMobile ? '280px' : '360px';
+        const noData = '<div style="display:flex;align-items:center;justify-content:center;height:200px;color:#999;font-size:12px;">データなし</div>';
+        
+        // ⑦ 総合テーブル
+        const st = DATA.summary_table?.[state.race] || {{}};
+        let tableHTML = '';
+        const stKeys = Object.keys(st).sort((a,b) => parseInt(st[a].umaban||0) - parseInt(st[b].umaban||0));
+        if(stKeys.length > 0) {{
+            const cs = DATA.course_stats?.[state.race] || {{}};
+            const curCond = cs.cond || '';
+            tableHTML = `<div style="overflow-x:auto"><table style="border-collapse:collapse;font-size:10px;width:100%;min-width:500px">
+            <thead><tr style="background:#f3f4f6">
+                <th style="padding:4px;border:1px solid #e5e7eb">番</th>
+                <th style="padding:4px;border:1px solid #e5e7eb">馬名</th>
+                <th style="padding:4px;border:1px solid #e5e7eb" title="走破タイムの相対評価 (負=速い)">走力</th>
+                <th style="padding:4px;border:1px solid #e5e7eb" title="上がり3Fの相対評価 (負=速い)">末脚</th>
+                <th style="padding:4px;border:1px solid #e5e7eb" title="3角通過時の相対位置 (0=先頭, 1=最後尾)">位置取り</th>
+                <th style="padding:4px;border:1px solid #e5e7eb" title="同コースでの走力評価と出走回数">同コース</th>
+                <th style="padding:4px;border:1px solid #e5e7eb" title="ペース指数 (低=前傾, 高=後傾)">ペース</th>
+                <th style="padding:4px;border:1px solid #e5e7eb">勝率</th>
+            </tr></thead><tbody>`;
+            stKeys.forEach(hid => {{
+                const s = st[hid];
+                const zColor = (v) => {{
+                    if(v===null||v===undefined) return '#f9fafb';
+                    if(v<=-0.5) return '#d1fae5'; if(v<=-0.2) return '#ecfdf5';
+                    if(v>=0.5) return '#fee2e2'; if(v>=0.2) return '#fef2f2';
+                    return '#f9fafb';
+                }};
+                const posColor = (v) => {{
+                    if(v===null||v===undefined) return '#f9fafb';
+                    return `hsl(${{v*120}},60%,90%)`;
+                }};
+                const wr = s.career?.runs > 0 ? ((s.career.wins/s.career.runs)*100).toFixed(0)+'%' : '-';
+                tableHTML += `<tr>
+                    <td style="padding:3px;border:1px solid #e5e7eb;text-align:center;font-weight:bold">${{s.umaban}}</td>
+                    <td style="padding:3px;border:1px solid #e5e7eb;white-space:nowrap">${{s.name||''}}</td>
+                    <td style="padding:3px;border:1px solid #e5e7eb;text-align:center;background:${{zColor(s.tz_med)}}">${{s.tz_med??'-'}}</td>
+                    <td style="padding:3px;border:1px solid #e5e7eb;text-align:center;background:${{zColor(s.lz_med)}}">${{s.lz_med??'-'}}</td>
+                    <td style="padding:3px;border:1px solid #e5e7eb;text-align:center;background:${{posColor(s.pos3_med)}}">${{s.pos3_med??'-'}}</td>
+                    <td style="padding:3px;border:1px solid #e5e7eb;text-align:center;background:${{zColor(s.sc_z)}}">${{s.sc_z!=null?s.sc_z+'('+s.sc_n+')':'-'}}</td>
+                    <td style="padding:3px;border:1px solid #e5e7eb;text-align:center">${{s.pi_med??'-'}}</td>
+                    <td style="padding:3px;border:1px solid #e5e7eb;text-align:center">${{wr}} (${{s.career?.runs||0}}走)</td>
+                </tr>`;
+            }});
+            tableHTML += '</tbody></table></div>';
+        }}
+
+        // === 展開予測 ===
+        const dyn = DATA.race_dynamics?.[state.race] || {{}};
+        let dynHTML = '';
+        if(dyn.pace_prediction && dyn.formation) {{
+            const pp = dyn.pace_prediction;
+            const paceClass = pp.type === 'high' ? 'pace-high' : pp.type === 'slow' ? 'pace-slow' : 'pace-mid';
+            
+            // 想定隊列
+            let formationHTML = '<div style="display:flex;flex-wrap:wrap;gap:4px;margin:8px 0;">';
+            (dyn.formation||[]).forEach((f,i) => {{
+                const posColors = {{'逃げ':'#EF4444','先行':'#F59E0B','中団':'#6B7280','差し':'#3B82F6','追込':'#8B5CF6'}};
+                formationHTML += `<div style="display:flex;align-items:center;gap:3px;padding:3px 8px;background:#fff;border-radius:8px;border:1px solid #e5e7eb;font-size:10px;">
+                    <span style="color:${{posColors[f.position_label]||'#666'}};font-weight:bold">${{f.position_label}}</span>
+                    <span style="font-weight:600">${{f.umaban}}</span>
+                    <span>${{f.name}}</span>
+                </div>`;
+            }});
+            formationHTML += '</div>';
+            
+            // 有利/不利テーブル
+            let advHTML = '<div style="overflow-x:auto"><table style="border-collapse:collapse;font-size:10px;width:100%;">';
+            advHTML += '<thead><tr style="background:#f3f4f6"><th style="padding:4px;border:1px solid #e5e7eb">番</th><th style="padding:4px;border:1px solid #e5e7eb">馬名</th><th style="padding:4px;border:1px solid #e5e7eb">脚質</th><th style="padding:4px;border:1px solid #e5e7eb">展開</th><th style="padding:4px;border:1px solid #e5e7eb">理由</th><th style="padding:4px;border:1px solid #e5e7eb">想定T</th><th style="padding:4px;border:1px solid #e5e7eb">想定3F</th></tr></thead><tbody>';
+            (dyn.advantages||[]).forEach(a => {{
+                const tStr = a.est_time ? (Math.floor(a.est_time/60) + ':' + (a.est_time%60).toFixed(1).padStart(4,'0')) : '-';
+                const lStr = a.est_l3f ? a.est_l3f.toFixed(1) : '-';
+                advHTML += `<tr>
+                    <td style="padding:3px;border:1px solid #e5e7eb;text-align:center;font-weight:bold">${{a.umaban}}</td>
+                    <td style="padding:3px;border:1px solid #e5e7eb;white-space:nowrap">${{a.name}}</td>
+                    <td style="padding:3px;border:1px solid #e5e7eb;text-align:center">${{a.position_label}}</td>
+                    <td style="padding:3px;border:1px solid #e5e7eb;text-align:center"><span class="verdict-tag verdict-${{a.verdict}}">${{a.verdict}}</span></td>
+                    <td style="padding:3px;border:1px solid #e5e7eb;font-size:9px;color:#666">${{a.reason}}</td>
+                    <td style="padding:3px;border:1px solid #e5e7eb;text-align:center">${{tStr}}</td>
+                    <td style="padding:3px;border:1px solid #e5e7eb;text-align:center">${{lStr}}</td>
+                </tr>`;
+            }});
+            advHTML += '</tbody></table></div>';
+            
+            dynHTML = `
+            <div class="prediction-card">
+                <div class="font-bold" style="font-size:13px;margin-bottom:8px;">🔮 展開予測</div>
+                <div style="margin-bottom:8px;">
+                    <span class="pace-badge ${{paceClass}}">${{pp.label}}</span>
+                    <span style="font-size:11px;color:#666;margin-left:8px;">${{pp.reason}}</span>
+                </div>
+                <div class="font-bold text-xs" style="margin-bottom:4px;">想定隊列（前→後）</div>
+                ${{formationHTML}}
+                <div class="font-bold text-xs" style="margin-top:8px;margin-bottom:4px;">各馬の展開適性</div>
+                ${{advHTML}}
+            </div>`;
+        }}
+
+        return `
+            ${{dynHTML}}
+            <div class="card">
+                <div class="font-bold text-xs" style="margin-bottom:4px;">📊 出走馬 総合比較</div>
+                <div style="font-size:9px;color:var(--text-light);margin-bottom:6px">走力/末脚: 負=速い（緑）, 正=遅い（赤） | 位置取り: 0=先頭, 1=最後尾 | 同コース=同コース評価(出走数)</div>
+                ${{tableHTML || noData}}
+            </div>
+            <div class="card">
+                <div class="font-bold text-xs" style="margin-bottom:4px;">🏇 コースのペースパターン</div>
+                <div style="font-size:9px;color:var(--text-light);margin-bottom:4px">同コース・同距離の過去レースからペースの傾向を分析。灰色帯=平均±1σ</div>
+                <div id="pac1" style="height:${{h}}"></div>
+            </div>
+            <div class="card">
+                <div class="font-bold text-xs" style="margin-bottom:4px;">📍 位置取り × 着順の関係</div>
+                <div style="font-size:9px;color:var(--text-light);margin-bottom:4px">最終コーナーでの位置（0=先頭, 1=最後尾）と着順の関係。赤線=トレンド</div>
+                <div id="pac2" style="height:${{h}}"></div>
+            </div>
+            <div class="card">
+                <div class="font-bold text-xs" style="margin-bottom:4px;">🏃 各馬の通過パターン</div>
+                <div style="font-size:9px;color:var(--text-light);margin-bottom:4px">各馬の過去走における1角→4角→ゴールの位置推移。太線=直近, 実線=同コース</div>
+                <div id="pac3" style="height:${{h}}"></div>
+            </div>
+            <div class="card">
+                <div class="font-bold text-xs" style="margin-bottom:4px;">⏱️ 走破タイム評価</div>
+                <div style="font-size:9px;color:var(--text-light);margin-bottom:4px">コース・距離・馬場別に標準化したタイム。0=平均, 負=速い(良い)</div>
+                <div id="pac4" style="height:${{h}}"></div>
+            </div>
+            <div class="card">
+                <div class="font-bold text-xs" style="margin-bottom:4px;">🏁 末脚（上がり3F）評価</div>
+                <div style="font-size:9px;color:var(--text-light);margin-bottom:4px">コース・距離・馬場別に標準化した上がり3F。0=平均, 負=速い(良い)</div>
+                <div id="pac4b" style="height:${{h}}"></div>
+            </div>
+            <div class="card">
+                <div class="font-bold text-xs" style="margin-bottom:4px;">🌧️ 馬場状態別パフォーマンス</div>
+                <div style="font-size:9px;color:var(--text-light);margin-bottom:4px">馬場条件ごとのタイム評価。青=速い, 赤=遅い</div>
+                <div id="pac5" style="height:${{h}}"></div>
+            </div>
+            <div class="card">
+                <div class="font-bold text-xs" style="margin-bottom:4px;">📈 ペース適性</div>
+                <div style="font-size:9px;color:var(--text-light);margin-bottom:4px">ペース指数（低=前傾ハイペース, 高=後傾スロー）vs 着順の関係</div>
+                <div id="pac6" style="height:${{h}}"></div>
+            </div>`;
+    }}
+
+    window.drawPacingCharts = () => {{
+        const pData = DATA.pacing?.[state.race];
+        const cs = DATA.course_stats?.[state.race];
+        const hp = DATA.horse_profiles?.[state.race];
+        const isMobile = window.innerWidth <= 600;
+        const baseLayout = {{
+            margin: isMobile ? {{t:10,b:35,l:40,r:15}} : {{t:10,b:45,l:50,r:20}},
+            xaxis:{{zeroline:false, tickfont:{{size:9,color:'#6B7280'}}, gridcolor:'#F3F4F6'}},
+            yaxis:{{zeroline:false, tickfont:{{size:9,color:'#6B7280'}}, gridcolor:'#F3F4F6'}},
+            showlegend:true, legend:{{orientation:'h',y:-0.25,font:{{size:8}}}},
+            autosize:true, paper_bgcolor:'transparent', plot_bgcolor:'transparent'
+        }};
+        const cfg = {{displayModeBar:false, responsive:true}};
+
+        // ① ラップクラスター + 平均±σ帯
+        const pac1 = document.getElementById('pac1');
+        if(pac1) {{
+            const traces = [];
+            if(cs?.lap) {{
+                const labels = cs.lap.mean.map((_,i) => (i+1)*200+'m');
+                const upper = cs.lap.mean.map((m,i) => m - (cs.lap.std?.[i]||0));
+                const lower = cs.lap.mean.map((m,i) => m + (cs.lap.std?.[i]||0));
+                traces.push({{x:labels,y:upper,type:'scatter',mode:'lines',line:{{width:0}},showlegend:false,hoverinfo:'skip'}});
+                traces.push({{x:labels,y:lower,type:'scatter',mode:'lines',line:{{width:0}},fill:'tonexty',fillcolor:'rgba(0,0,0,0.06)',name:`平均±1σ(N=${{cs.lap.count}})`,hoverinfo:'skip'}});
+                traces.push({{x:labels,y:cs.lap.mean,type:'scatter',mode:'lines+markers',name:'平均',line:{{color:'#888',width:2,dash:'dash'}},marker:{{size:5}}}});
+                // 馬場別
+                const condColors = {{'良':'#3B82F6','稍重':'#F59E0B','重':'#EF4444','不良':'#7C3AED'}};
+                Object.entries(cs.lap.by_condition||{{}}).forEach(([cond,d]) => {{
+                    traces.push({{x:labels,y:d.mean,type:'scatter',mode:'lines',name:`${{cond}}(N=${{d.count}})`,line:{{color:condColors[cond]||'#999',width:1.5}}}});
+                }});
+            }}
+            if(pData?.clusters?.length > 0) {{
+                pData.clusters.forEach((c,i) => {{
+                    const labels = c.center_laps.map((_,idx) => (idx+1)*200+'m');
+                    traces.push({{x:labels,y:c.center_laps,type:'scatter',mode:'lines+markers',name:`C${{i+1}}(${{c.count}}R)`,marker:{{size:6}},line:{{width:2}},opacity:0.7}});
+                }});
+            }}
+            if(traces.length) Plotly.newPlot('pac1',traces,{{...baseLayout,yaxis:{{...baseLayout.yaxis,title:'秒',autorange:'reversed'}}}},cfg);
+        }}
+
+        // ② 位置×着順散布
+        const pac2 = document.getElementById('pac2');
+        if(pac2 && cs?.pos) {{
+            const pts = cs.pos.points;
+            const traces2 = [];
+            if(pts.length > 0) {{
+                const condColors = {{'良':'rgba(59,130,246,0.3)','稍重':'rgba(245,158,11,0.3)','重':'rgba(239,68,68,0.3)','不良':'rgba(124,58,237,0.3)'}};
+                const condGroups = {{}};
+                pts.forEach(p => {{ (condGroups[p.cond] = condGroups[p.cond]||[]).push(p); }});
+                Object.entries(condGroups).forEach(([cond,ps]) => {{
+                    traces2.push({{x:ps.map(p=>p.nlc),y:ps.map(p=>p.fp),mode:'markers',type:'scatter',name:cond,marker:{{size:4,color:condColors[cond]||'rgba(0,0,0,0.2)'}},hovertext:ps.map(p=>`位置:${{p.nlc}} 着:${{p.fp}} ${{p.cond}}`),hoverinfo:'text'}});
+                }});
+            }}
+            if(cs.pos.trend?.length > 0) {{
+                traces2.push({{x:cs.pos.trend.map(t=>t.x),y:cs.pos.trend.map(t=>t.y_mean),mode:'lines+markers',type:'scatter',name:'平均着順',line:{{color:'#EF4444',width:3}},marker:{{size:6}}}});
+            }}
+            // 各馬の位置をマーカー
+            if(hp) {{
+                const blocked = state.filters[state.race] || [];
+                const hpArr = Object.values(hp).filter(h => !blocked.includes(h.umaban)).sort((a,b)=>parseInt(a.umaban)-parseInt(b.umaban));
+                hpArr.forEach(h => {{
+                    const df = state.dateFrom ? state.dateFrom.replaceAll('/','') : '';
+                    const dt = state.dateTo ? state.dateTo.replaceAll('/','') : '';
+                    const trajs = (df || dt) ? h.trajs.filter(t => {{
+                        const dStr = String(t.date).replaceAll('/','');
+                        return (!df || dStr >= df) && (!dt || dStr <= dt);
+                    }}) : h.trajs;
+                    
+                    const pos3s = trajs.filter(t=>t.pos[2]!=null).map(t=>t.pos[2]);
+                    if(pos3s.length > 0) {{
+                        const med = pos3s.sort((a,b)=>a-b)[Math.floor(pos3s.length/2)];
+                        const w = getWaku(h.umaban);
+                        traces2.push({{x:[med,med],y:[1,18],mode:'lines',type:'scatter',name:`${{h.umaban}}${{h.name.slice(0,3)}}`,line:{{color:WAKU[w],width:2,dash:'dot'}},showlegend:true}});
+                    }}
+                }});
+            }}
+            if(traces2.length) Plotly.newPlot('pac2',traces2,{{...baseLayout,xaxis:{{...baseLayout.xaxis,title:'正規化最終コーナー位置(0=先頭)'}},yaxis:{{...baseLayout.yaxis,title:'着順',autorange:'reversed'}}}},cfg);
+        }}
+
+        // ③ 通過軌跡 (直近2走のみ + 同コース)
+        const pac3 = document.getElementById('pac3');
+        if(pac3 && hp) {{
+            const xLabels = ['1角','2角','3角','4角','ゴール'];
+            const traces3 = [];
+            const blocked = state.filters[state.race] || [];
+            const df = state.dateFrom ? state.dateFrom.replaceAll('/','') : '';
+            const dt = state.dateTo ? state.dateTo.replaceAll('/','') : '';
+            
+            Object.values(hp).filter(h => !blocked.includes(h.umaban)).sort((a,b)=>parseInt(a.umaban)-parseInt(b.umaban)).forEach(h => {{
+                const w = getWaku(h.umaban);
+                const color = WAKU[w]||'#888';
+                const maxShow = 2;
+                let shown = 0;
+                
+                const trajs = (df || dt) ? h.trajs.filter(t => {{
+                    if(!t.date) return true;
+                    const dStr = String(t.date).replaceAll('/','');
+                    return (!df || dStr >= df) && (!dt || dStr <= dt);
+                }}) : h.trajs;
+                
+                trajs.forEach((t,i) => {{
+                    if(shown >= maxShow && !t.same) return;
+                    const validPos = t.pos.filter(p=>p!=null);
+                    const validLabels = t.pos.map((p,j)=>(p!=null?xLabels[j]:null)).filter(l=>l!=null);
+                    if(validPos.length < 2) return;
+                    const isFirst = shown === 0;
+                    shown++;
+                    traces3.push({{
+                        x:validLabels, y:validPos, mode:'lines+markers', type:'scatter',
+                        name: isFirst ? `${{h.umaban}}${{h.name.slice(0,3)}}` : '',
+                        showlegend: isFirst,
+                        legendgroup: `h${{h.umaban}}`,
+                        line:{{color:color, width:isFirst?2.5:1.5, dash:t.same?'solid':'dot'}},
+                        marker:{{size:isFirst?6:4}},
+                        opacity: isFirst ? 1 : 0.5,
+                        hovertext: validPos.map(p=>`${{h.umaban}} ${{h.name.slice(0,3)}}\n${{t.date}} ${{t.venue}}${{t.dist}} ${{t.cond}} ${{t.finish}}着`),
+                        hoverinfo:'text'
+                    }});
+                }});
+            }});
+            if(traces3.length) Plotly.newPlot('pac3',traces3,{{...baseLayout,xaxis:{{...baseLayout.xaxis,categoryorder:'array',categoryarray:['1角','2角','3角','4角','ゴール']}},yaxis:{{...baseLayout.yaxis,title:'位置(0=先頭)',range:[1.05,-0.05]}}}},cfg);
+        }}
+
+        // ④ タイムZ-score Box Plot
+        const pac4 = document.getElementById('pac4');
+        if(pac4 && hp) {{
+            const traces4 = [];
+            const blocked = state.filters[state.race] || [];
+            const hpArr = Object.values(hp).filter(h => !blocked.includes(h.umaban)).sort((a,b)=>parseInt(a.umaban)-parseInt(b.umaban));
+            const df = state.dateFrom ? state.dateFrom.replaceAll('/','') : '';
+            const dt = state.dateTo ? state.dateTo.replaceAll('/','') : '';
+            hpArr.forEach(h => {{
+                const validTimeZ = (df || dt) ? h.time_z.filter(t => {{
+                    if(!t.date) return true;
+                    const dStr = String(t.date).replaceAll('/','');
+                    return (!df || dStr >= df) && (!dt || dStr <= dt);
+                }}) : h.time_z;
+                const zs = validTimeZ.map(x=>x.z);
+                if(zs.length > 0) {{
+                    const w = getWaku(h.umaban);
+                    traces4.push({{y:zs, type:'box', name:`${{h.umaban}}${{h.name.slice(0,3)}}`, marker:{{color:WAKU[w]}}, boxpoints:'all', jitter:0.3, pointpos:-1.5, line:{{width:1}}, whiskerwidth:0.5}});
+                }}
+            }});
+            if(traces4.length) {{
+                Plotly.newPlot('pac4',traces4,{{
+                    ...baseLayout,
+                    yaxis:{{...baseLayout.yaxis,title:'タイムZ (負=速い)',zeroline:true,zerolinecolor:'#EF4444',zerolinewidth:1}},
+                    xaxis:{{...baseLayout.xaxis,tickangle:-45,tickfont:{{size:8}}}},
+                    showlegend:false
+                }},cfg);
+            }}
+        }}
+        // ④-b 3F Z-score Box Plot
+        const pac4b = document.getElementById('pac4b');
+        if(pac4b && hp) {{
+            const traces4b = [];
+            const blocked = state.filters[state.race] || [];
+            const hpArr2 = Object.values(hp).filter(h => !blocked.includes(h.umaban)).sort((a,b)=>parseInt(a.umaban)-parseInt(b.umaban));
+            const df = state.dateFrom ? state.dateFrom.replaceAll('/','') : '';
+            const dt = state.dateTo ? state.dateTo.replaceAll('/','') : '';
+            hpArr2.forEach(h => {{
+                const validL3fZ = (df || dt) ? h.l3f_z.filter(t => {{
+                    if(!t.date) return true;
+                    const dStr = String(t.date).replaceAll('/','');
+                    return (!df || dStr >= df) && (!dt || dStr <= dt);
+                }}) : h.l3f_z;
+                const zs = validL3fZ.map(x=>x.z);
+                if(zs.length > 0) {{
+                    const w = getWaku(h.umaban);
+                    traces4b.push({{y:zs, type:'box', name:`${{h.umaban}}${{h.name.slice(0,3)}}`, marker:{{color:WAKU[w]}}, boxpoints:'all', jitter:0.3, pointpos:-1.5, line:{{width:1}}, whiskerwidth:0.5}});
+                }}
+            }});
+            if(traces4b.length) {{
+                Plotly.newPlot('pac4b',traces4b,{{
+                    ...baseLayout,
+                    yaxis:{{...baseLayout.yaxis,title:'3F Z (負=速い)',zeroline:true,zerolinecolor:'#EF4444',zerolinewidth:1}},
+                    xaxis:{{...baseLayout.xaxis,tickangle:-45,tickfont:{{size:8}}}},
+                    showlegend:false
+                }},cfg);
+            }}
+        }}
+
+        // ⑤ 馬場別ヒートマップ
+        const pac5 = document.getElementById('pac5');
+        if(pac5 && hp) {{
+            const conditions = ['良','稍重','重','不良'];
+            const blocked = state.filters[state.race] || [];
+            const hpArr = Object.values(hp).filter(h => !blocked.includes(h.umaban)).sort((a,b)=>parseInt(a.umaban)-parseInt(b.umaban));
+            const zValues = []; const hoverTexts = []; const yLabels = [];
+            hpArr.forEach(h => {{
+                const row = []; const hrow = [];
+                conditions.forEach(c => {{
+                    const cd = h.by_cond[c];
+                    if(cd) {{ row.push(cd.z_med); hrow.push(`${{h.umaban}} ${{h.name.slice(0,3)}} ${{c}}: Z=${{cd.z_med}} (N=${{cd.n}})`); }}
+                    else {{ row.push(null); hrow.push(`${{h.umaban}} ${{h.name.slice(0,3)}} ${{c}}: データなし`); }}
+                }});
+                zValues.push(row); hoverTexts.push(hrow); yLabels.push(`${{h.umaban}}${{h.name.slice(0,3)}}`);
+            }});
+            const curCond = DATA.course_stats?.[state.race]?.cond || '';
+            if(zValues.length > 0) {{
+                Plotly.newPlot('pac5',[{{
+                    z:zValues, x:conditions, y:yLabels, type:'heatmap',
+                    colorscale:[[0,'#065f46'],[0.3,'#d1fae5'],[0.5,'#f9fafb'],[0.7,'#fee2e2'],[1,'#991b1b']],
+                    zmin:-1.5, zmax:1.5, hovertext:hoverTexts, hoverinfo:'text',
+                    colorbar:{{title:'Z',thickness:10,len:0.8,tickfont:{{size:8}}}}
+                }}],{{
+                    ...baseLayout, margin:{{...baseLayout.margin,l:isMobile?80:100}},
+                    yaxis:{{...baseLayout.yaxis,tickfont:{{size:8}}}},
+                    annotations: curCond ? [{{x:curCond,y:yLabels.length,text:'▼本走',showarrow:false,font:{{size:9,color:'#EF4444'}}}}] : []
+                }},cfg);
+            }}
+        }}
+
+        // ⑥ ペース適性散布図
+        const pac6 = document.getElementById('pac6');
+        if(pac6 && hp) {{
+            const traces6 = [];
+            const blocked = state.filters[state.race] || [];
+            const df = state.dateFrom ? state.dateFrom.replaceAll('/','') : '';
+            const dt = state.dateTo ? state.dateTo.replaceAll('/','') : '';
+            Object.values(hp).filter(h => !blocked.includes(h.umaban)).forEach(h => {{
+                if(!h.pace || h.pace.length === 0) return;
+                
+                const validPace = (df || dt) ? h.pace.filter(t => {{
+                    if(!t.date) return true;
+                    const dStr = String(t.date).replaceAll('/','');
+                    return (!df || dStr >= df) && (!dt || dStr <= dt);
+                }}) : h.pace;
+                if(validPace.length === 0) return;
+                
+                const w = getWaku(h.umaban);
+                traces6.push({{
+                    x:validPace.map(p=>p.pi), y:validPace.map(p=>p.fp),
+                    mode:'markers', type:'scatter',
+                    name:`${{h.umaban}} ${{h.name.slice(0,3)}}`,
+                    marker:{{size:7,color:WAKU[w],line:{{width:1,color:'#888'}}}},
+                    hovertext:validPace.map(p=>`${{h.umaban}} ${{h.name.slice(0,3)}} PI=${{p.pi}} ${{p.fp}}着`), hoverinfo:'text'
+                }});
+            }});
+            if(traces6.length) Plotly.newPlot('pac6',traces6,{{
+                ...baseLayout,
+                xaxis:{{...baseLayout.xaxis,title:'ペース指数(低=前傾)',tickangle:0}},
+                yaxis:{{...baseLayout.yaxis,title:'着順',autorange:'reversed'}}
+            }},cfg);
+        }}
+    }};
 
     // --- CHART ---
     function renderChart() {{
         const d = DATA.chart_data[state.race] || {{horses:[]}};
         const blocked = state.filters[state.race] || [];
-        const horseFilters = d.horses.map(h => 
-            `<div onclick="togFilter(${{h.umaban}})" class="filter-chip" style="opacity:${{blocked.includes(h.umaban)?0.4:1}}">
-                <span class="dot" style="background:${{WAKU[h.waku]}}"></span>${{h.umaban}}
-             </div>`
-        ).join('');
+        const ri = DATA.race_info?.[state.race] || {{}};
 
-        // Collect unique venues and distances from data
-        const allRecords = [];
-        d.horses.forEach(h => h.records.forEach(r => {{
-            allRecords.push({{...r, u:h.umaban, w:h.waku}});
-        }}));
-        
-        const venues = [...new Set(DATA.races[state.race]?.rows.map(r => r['場所']).filter(v => v))].sort();
-        const distances = [...new Set(DATA.races[state.race]?.rows.map(r => r['距離']).filter(v => v))].sort((a,b)=>parseInt(a)-parseInt(b));
-        const courses = [...new Set(DATA.races[state.race]?.rows.map(r => r['ｺｰｽ']).filter(v => v))].sort();
-        
-        // Count occurrences for each venue/distance/course
         const rows = DATA.races[state.race]?.rows || [];
-        const venueCounts = {{}};
-        const distCounts = {{}};
-        const courseCounts = {{}};
+        const allVenues = [...new Set(rows.map(r => r['場所']).filter(v => v))].sort();
+        const allDists = [...new Set(rows.map(r => r['距離']).filter(v => v))].sort((a,b)=>parseInt(a)-parseInt(b));
+        const allCourses = [...new Set(rows.map(r => r['ｺｰｽ']).filter(v => v))].sort();
+
+        const vc={{}},dc={{}},cc={{}};
         rows.forEach(r => {{
-            const v = r['場所'];
-            const d = r['距離'];
-            const c = r['ｺｰｽ'];
-            if(v) venueCounts[v] = (venueCounts[v] || 0) + 1;
-            if(d) distCounts[d] = (distCounts[d] || 0) + 1;
-            if(c) courseCounts[c] = (courseCounts[c] || 0) + 1;
+            const v=r['場所'],dd=r['距離'],c=r['ｺｰｽ'];
+            if(v) vc[v]=(vc[v]||0)+1;
+            if(dd) dc[dd]=(dc[dd]||0)+1;
+            if(c) cc[c]=(cc[c]||0)+1;
         }});
-        
-        // Course filter with visual indicator (colored dot)
-        const courseFilters = courses.map(c => {{
-            const isHidden = state.courseFilters.includes(c);
-            const cnt = courseCounts[c] || 0;
-            const dotColor = c === '芝' ? '#00C853' : (c === 'ダート' || c === 'ダ') ? '#FF6D00' : '#888';
-            return `<div onclick="togCourse('${{c}}')" class="filter-chip" style="opacity:${{isHidden?0.4:1}}"><span class="dot" style="background:${{dotColor}}"></span>${{c}}<span style="font-size:8px;color:#888;margin-left:2px">${{cnt}}</span></div>`;
+
+        const horseChips = d.horses.map(h => {{
+            const isOn = !blocked.includes(h.umaban);
+            return `<div onclick="togFilter(${{h.umaban}})" class="filter-chip ${{isOn?'on':''}}"
+                style="${{isOn?'background:'+WAKU[h.waku]+';color:'+TXT[h.waku]+';border-color:'+WAKU[h.waku]:'opacity:0.4'}}">
+                <b>${{h.umaban}}</b></div>`;
         }}).join('');
-        
-        const venueFilters = venues.map(v => {{
-            const isHidden = state.venueFilters.includes(v);
-            const cnt = venueCounts[v] || 0;
-            return `<div onclick="togVenue('${{v}}')" class="filter-chip" style="opacity:${{isHidden?0.4:1}}">${{v}}<span style="font-size:8px;color:#888;margin-left:2px">${{cnt}}</span></div>`;
+
+        const venueChips = allVenues.map(v => {{
+            const isOn = state.venueInc.length===0 || state.venueInc.includes(v);
+            return `<div onclick="togVenue('${{v}}')" class="filter-chip ${{isOn?'on':''}}"
+                style="${{isOn?'':'opacity:0.4'}}">${{v}}<span style="font-size:7px;margin-left:2px;opacity:0.6">${{vc[v]||0}}</span></div>`;
         }}).join('');
-        
-        const distFilters = distances.map(dist => {{
-            const isHidden = state.distFilters.includes(dist);
-            const cnt = distCounts[dist] || 0;
-            return `<div onclick="togDist('${{dist}}')" class="filter-chip" style="opacity:${{isHidden?0.4:1}}">${{dist}}<span style="font-size:8px;color:#888;margin-left:2px">${{cnt}}</span></div>`;
+
+        const distChips = allDists.map(dd => {{
+            const isOn = state.distInc.length===0 || state.distInc.includes(dd);
+            return `<div onclick="togDist('${{dd}}')" class="filter-chip ${{isOn?'on':''}}"
+                style="${{isOn?'':'opacity:0.4'}}">${{dd}}<span style="font-size:7px;margin-left:2px;opacity:0.6">${{dc[dd]||0}}</span></div>`;
         }}).join('');
+
+        const courseChips = allCourses.map(c => {{
+            const isOn = state.courseInc.length===0 || state.courseInc.includes(c);
+            const col = c==='芝'?'#00C853':(c==='ダート'||c==='ダ')?'#FF6D00':'#888';
+            return `<div onclick="togCourse('${{c}}')" class="filter-chip ${{isOn?'on':''}}"
+                style="${{isOn?'border-color:'+col+';background:'+col+';color:#fff':'opacity:0.4'}}">
+                ${{c}}<span style="font-size:7px;margin-left:2px;opacity:0.7">${{cc[c]||0}}</span></div>`;
+        }}).join('');
+
+        const hasAny = blocked.length>0 || state.venueInc.length>0 || state.distInc.length>0 || state.courseInc.length>0 || state.dateFrom || state.dateTo;
 
         return `
             <div class="filter-sticky">
-                <div class="filter-row">
-                    <span class="filter-label">日付:</span>
-                    <input type="text" value="${{state.filterDate}}" placeholder="YYYY/MM/DD以降" 
-                           style="border:1px solid #ccc; padding:2px 4px; border-radius:4px; font-size:10px; width:90px"
-                           onchange="setState({{filterDate: this.value}})">
+                <div class="flex-sb flex-ac" onclick="setState({{showFilters: !state.showFilters}})" style="cursor:pointer; padding:4px 0;">
+                    <div class="flex-ac gap-1">
+                        <span class="font-bold text-sm">🔍 絞り込み</span>
+                        ${{hasAny ? '<span style="background:#EF4444;color:#fff;font-size:8px;padding:1px 5px;border-radius:8px;margin-left:4px">ON</span>' : ''}}
+                    </div>
+                    <div style="font-size:14px;color:#6B7280">${{state.showFilters ? '▲' : '▼'}}</div>
                 </div>
-                <div class="filter-row">
-                    <span class="filter-label">コース:</span>${{courseFilters}}
+                ${{state.showFilters ? `
+                <div style="margin-top:4px;">
+                    <div class="filter-row">
+                        <div class="filter-label">⚡ 一括</div>
+                        <div class="preset-btn" onclick="presetCentral()">中央</div>
+                        <div class="preset-btn" onclick="presetLocal()">地方</div>
+                        <div class="preset-btn" onclick="presetSameVenue()">同場所</div>
+                        <div class="preset-btn" onclick="presetSameDist()">同距離</div>
+                        <div class="preset-btn" onclick="presetReset()">全表示</div>
+                    </div>
+                    <div class="filter-row flex-ac">
+                        <div class="filter-label">📅 期間</div>
+                        <input type="text" class="date-input" value="${{state.dateFrom}}" placeholder="YY/MM/DD"
+                               onchange="setState({{dateFrom:this.value}})">
+                        <span style="margin:0 2px;font-size:10px;color:#999">-</span>
+                        <input type="text" class="date-input" value="${{state.dateTo}}" placeholder="YY/MM/DD"
+                               onchange="setState({{dateTo:this.value}})">
+                        <div class="preset-btn" style="margin-left:4px" onclick="setPeriod(1)">1</div>
+                        <div class="preset-btn" onclick="setPeriod(3)">3</div>
+                        <div class="preset-btn" onclick="setPeriod(6)">半</div>
+                        <div class="preset-btn" onclick="setPeriod(12)">年</div>
+                        <div class="preset-btn" onclick="setPeriod(0)">全</div>
+                    </div>
+                    <div class="filter-row">
+                        <div class="filter-label">📍 場所</div>
+                        ${{venueChips}}
+                    </div>
+                    <div class="filter-row">
+                        <div class="filter-label">📏 距離</div>
+                        ${{distChips}}
+                    </div>
+                    <div class="filter-row">
+                        <div class="filter-label">🏇 コース</div>
+                        ${{courseChips}}
+                    </div>
+                    <div class="filter-row">
+                        <div class="filter-label">🏁 馬番</div>
+                        ${{horseChips}}
+                    </div>
                 </div>
-                <div class="filter-row">
-                    <span class="filter-label">場所:</span>${{venueFilters}}
-                </div>
-                <div class="filter-row">
-                    <span class="filter-label">距離:</span>${{distFilters}}
-                </div>
-                <div class="filter-row">
-                    <span class="filter-label">馬番:</span>${{horseFilters}}
-                </div>
+                ` : ''}}
             </div>
             <div class="card">
-                <div class="font-bold text-xs">① スピード(縦) vs スタミナ(横)</div>
-                <div id="c1" style="height:260px;margin-bottom:10px"></div>
-                
-                <div class="font-bold text-xs">② タイム(縦) vs 位置取り(横)</div>
-                <div id="c2" style="height:260px;margin-bottom:10px"></div>
-                
-                <div class="font-bold text-xs">③ 末脚(縦) vs 位置取り(横)</div>
-                <div id="c3" style="height:260px;margin-bottom:10px"></div>
-
-                <div class="font-bold text-xs">④ 上がり指数(縦) vs RPCI(横)</div>
-                <div id="c4" style="height:260px"></div>
+                <div class="font-bold text-xs">① 走力(T指数) vs 末脚(上がり指数)</div>
+                <div id="c1" style="height:280px;margin-bottom:10px"></div>
+                <div class="font-bold text-xs">② 走力(T指数) vs 位置取り</div>
+                <div id="c2" style="height:280px;margin-bottom:10px"></div>
+                <div class="font-bold text-xs">③ 末脚(上がり指数) vs 位置取り</div>
+                <div id="c3" style="height:280px;margin-bottom:10px"></div>
+                <div class="font-bold text-xs">④ 末脚(上がり指数) vs ペース(RPCI)</div>
+                <div id="c4" style="height:280px"></div>
             </div>`;
     }}
     
@@ -564,20 +1175,66 @@ def generate_html(source_file: str, races: list, all_data: dict) -> str:
         const next = old.includes(u) ? old.filter(x=>x!==u) : [...old, u];
         setState({{filters: {{...state.filters, [state.race]: next}} }});
     }};
-    
     window.togVenue = (v) => {{
-        const next = state.venueFilters.includes(v) ? state.venueFilters.filter(x=>x!==v) : [...state.venueFilters, v];
-        setState({{venueFilters: next}});
+        let cur = [...state.venueInc];
+        if(cur.length===0) cur=[v];
+        else if(cur.includes(v)) cur=cur.filter(x=>x!==v);
+        else cur.push(v);
+        setState({{venueInc: cur}});
     }};
-    
     window.togDist = (d) => {{
-        const next = state.distFilters.includes(d) ? state.distFilters.filter(x=>x!==d) : [...state.distFilters, d];
-        setState({{distFilters: next}});
+        let cur = [...state.distInc];
+        if(cur.length===0) cur=[d];
+        else if(cur.includes(d)) cur=cur.filter(x=>x!==d);
+        else cur.push(d);
+        setState({{distInc: cur}});
     }};
-    
     window.togCourse = (c) => {{
-        const next = state.courseFilters.includes(c) ? state.courseFilters.filter(x=>x!==c) : [...state.courseFilters, c];
-        setState({{courseFilters: next}});
+        let cur = [...state.courseInc];
+        if(cur.length===0) cur=[c];
+        else if(cur.includes(c)) cur=cur.filter(x=>x!==c);
+        else cur.push(c);
+        setState({{courseInc: cur}});
+    }};
+    window.presetCentral = () => {{
+        const allV = [...new Set(DATA.races[state.race]?.rows.map(r=>r['場所']).filter(x=>x))];
+        setState({{venueInc: allV.filter(v=>CENTRAL_VENUES.includes(v))}});
+    }};
+    window.presetLocal = () => {{
+        const allV = [...new Set(DATA.races[state.race]?.rows.map(r=>r['場所']).filter(x=>x))];
+        setState({{venueInc: allV.filter(v=>!CENTRAL_VENUES.includes(v))}});
+    }};
+    window.presetSameVenue = () => {{
+        const v = (DATA.race_info?.[state.race]||{{}}).place||'';
+        setState({{venueInc: v?[v]:[]}});
+    }};
+    window.presetSameDist = () => {{
+        const d = (DATA.race_info?.[state.race]||{{}}).dist||'';
+        setState({{distInc: d?[d]:[]}});
+    }};
+    window.presetReset = () => {{
+        setState({{filters:{{...state.filters,[state.race]:[]}},venueInc:[],distInc:[],courseInc:[],dateFrom:'',dateTo:''}});
+    }};
+    window.setPeriod = (months) => {{
+        if(months===0) {{ setState({{dateFrom:'',dateTo:''}}); return; }}
+        
+        let maxStr = '';
+        const hps = DATA.horse_profiles?.[state.race] || {{}};
+        Object.values(hps).forEach(h => {{
+             (h.trajs||[]).forEach(t => {{ 
+                  if(t.date && String(t.date) > maxStr) maxStr = String(t.date); 
+             }});
+        }});
+        if(!maxStr) {{
+             const now = new Date();
+             maxStr = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
+        }}
+        const rd = maxStr.replaceAll('-', '/');
+        const p = rd.split('/');
+        let y=parseInt(p[0]), m=parseInt(p[1]), d=parseInt(p[2]);
+        let fy=y, fm=m-months;
+        while(fm<=0){{ fy--; fm+=12; }}
+        setState({{dateFrom:fy+'/'+String(fm).padStart(2,'0')+'/'+String(d).padStart(2,'0'), dateTo:rd}});
     }};
 
     function drawCharts() {{
@@ -587,70 +1244,127 @@ def generate_html(source_file: str, races: list, all_data: dict) -> str:
         if(!active.length) return;
         
         const rows = DATA.races[state.race]?.rows || [];
-        const rowMap = {{}}; // date+umaban -> row
-        rows.forEach(r => {{
-            const key = r['日付'] + '-' + r['番'];
-            rowMap[key] = r;
-        }});
+        const rowMap = {{}};
+        rows.forEach(r => {{ rowMap[r['日付']+'-'+r['番']] = r; }});
 
         const pts = [];
         active.forEach(h => h.records.forEach(r => {{
-            // Date Filter
-            if(state.filterDate && r.date < state.filterDate) return;
-            
-            // Lookup row for venue/dist
-            const rowKey = r.date + '-' + h.umaban;
-            const row = rowMap[rowKey];
-            
-            // Venue Filter (exclude if in list)
-            if(state.venueFilters.length > 0 && row && state.venueFilters.includes(row['場所'])) return;
-            
-            // Distance Filter (exclude if in list)
-            if(state.distFilters.length > 0 && row && state.distFilters.includes(row['距離'])) return;
-            
-            // Course Filter (exclude if in list)
-            if(state.courseFilters.length > 0 && state.courseFilters.includes(r.course)) return;
-            
-            pts.push({{...r, u:h.umaban, w:h.waku, course:r.course||''}});
+            const df = state.dateFrom ? state.dateFrom.replaceAll('/','') : '';
+            const dt = state.dateTo ? state.dateTo.replaceAll('/','') : '';
+            const rd = String(r.date).replaceAll('/','');
+            if(df && rd < df) return;
+            if(dt && rd > dt) return;
+            const row = rowMap[r.date+'-'+h.umaban];
+            if(state.venueInc.length>0 && row && !state.venueInc.includes(row['場所'])) return;
+            if(state.distInc.length>0 && row && !state.distInc.includes(row['距離'])) return;
+            if(state.courseInc.length>0 && !state.courseInc.includes(r.course)) return;
+            pts.push({{...r, u:h.umaban, w:h.waku, course:r.course||'', row: row||{{}}}});
         }}));
         
         const layout = {{ margin: {{t:10,b:30,l:30,r:10}}, xaxis:{{zeroline:false}}, yaxis:{{zeroline:false}}, showlegend:false }};
         const cfg = {{displayModeBar:false, responsive:true}};
-        
-        // 芝=明るい緑, ダート=オレンジ (色覚に配慮した高彩度配色)
         const courseColor = (c) => c === '芝' ? '#00C853' : (c === 'ダート' || c === 'ダ') ? '#FF6D00' : '#888';
-        const borderColors = pts.map(p => courseColor(p.course));
         
-        Plotly.newPlot('c1', [{{
-            x: pts.map(p=>p.l3f_idx), y: pts.map(p=>p.time_idx), mode:'markers+text', type:'scatter',
-            marker: {{size:12, color:pts.map(p=>WAKU[p.w]), line:{{width:2,color:borderColors}}}},
-            text: pts.map(p=>p.u), textposition:'middle center', textfont:{{size:9, color:pts.map(p=>TXT[p.w])}},
-            hovertext: pts.map(p=>`${{p.date}}<br>${{p.u}}番 (${{p.course}})`)
-        }}], {{...layout, xaxis:{{title:'上がり指数'}}, yaxis:{{title:'T指数'}}}}, cfg);
-        
-        Plotly.newPlot('c2', [{{
-            x: pts.map(p=>p.c1_ratio), y: pts.map(p=>p.time_idx), mode:'markers+text', type:'scatter',
-            marker: {{size:12, color:pts.map(p=>WAKU[p.w]), line:{{width:2,color:borderColors}}}},
-            text: pts.map(p=>p.u), textposition:'middle center', textfont:{{size:9, color:pts.map(p=>TXT[p.w])}},
-            hovertext: pts.map(p=>`${{p.date}}<br>${{p.u}}番 (${{p.course}})`)
-        }}], {{...layout, xaxis:{{title:'位置取り'}}, yaxis:{{title:'T指数'}}}}, cfg);
+        const getHoverText = (p) => {{
+            const r = p.row;
+            const pop = r['人気'] ? `${{r['人気']}}人気(${{r['ｵｯｽﾞ']}}倍)` : '';
+            const rank = r['着順'] ? `${{r['着順']}}着(差${{r['着差']}})` : '';
+            const raceInfo = r['場所'] ? `${{p.course}}${{r['場所']}}${{r['距離']}}m` : p.course;
+            return `${{p.date}} ${{p.u}}番 ${{r['馬名']||''}}<br>${{raceInfo}} ${{pop}}<br>${{rank}}`;
+        }};
 
-        Plotly.newPlot('c3', [{{
-            x: pts.map(p=>p.c1_ratio), y: pts.map(p=>p.l3f_idx), mode:'markers+text', type:'scatter',
-            marker: {{size:12, color:pts.map(p=>WAKU[p.w]), line:{{width:2,color:borderColors}}}},
-            text: pts.map(p=>p.u), textposition:'middle center', textfont:{{size:9, color:pts.map(p=>TXT[p.w])}},
-            hovertext: pts.map(p=>`${{p.date}}<br>${{p.u}}番 (${{p.course}})`)
-        }}], {{...layout, xaxis:{{title:'位置取り'}}, yaxis:{{title:'上がり指数'}}, autorange:'reversed'}}, cfg);
+        const createChart = (id, xKey, yKey, titleX, titleY) => {{
+            const tr = [{{
+                x: pts.map(p=>p[xKey]), y: pts.map(p=>p[yKey]), mode:'markers+text', type:'scatter',
+                marker: {{size:10, color:pts.map(p=>WAKU[p.w]), line:{{width:0}}}},
+                text: pts.map(p=>p.u), textposition:'middle center', textfont:{{size:8, color:pts.map(p=>TXT[p.w])}},
+                hovertext: pts.map(p=>getHoverText(p)), hoverinfo:'text', showlegend:false
+            }}];
+            Plotly.newPlot(id, tr, {{...layout, xaxis:{{title:titleX}}, yaxis:{{title:titleY}}}}, cfg);
+            addDistArcs(id, pts, xKey, yKey);
+        }};
 
-        Plotly.newPlot('c4', [{{
-            x: pts.map(p=>p.rpci), y: pts.map(p=>p.l3f_idx), mode:'markers+text', type:'scatter',
-            marker: {{size:12, color:pts.map(p=>WAKU[p.w]), line:{{width:2,color:borderColors}}}},
-            text: pts.map(p=>p.u), textposition:'middle center', textfont:{{size:9, color:pts.map(p=>TXT[p.w])}},
-            hovertext: pts.map(p=>`${{p.date}}<br>${{p.u}}番 (${{p.course}})`)
-        }}], {{...layout, xaxis:{{title:'RPCI'}}, yaxis:{{title:'上がり指数'}}}}, cfg);
+        function addDistArcs(plotId, dataPts, xKey, yKey) {{
+            const gd = document.getElementById(plotId);
+            if(!gd || !gd._fullLayout) return;
+            const xa = gd._fullLayout.xaxis;
+            const ya = gd._fullLayout.yaxis;
+            const mainSvg = gd.querySelector('.main-svg');
+            if(!mainSvg) return;
+
+            const old = mainSvg.querySelector('.dist-arcs');
+            if(old) old.remove();
+
+            const ns = 'http://www.w3.org/2000/svg';
+            const g = document.createElementNS(ns, 'g');
+            g.setAttribute('class', 'dist-arcs');
+            mainSvg.appendChild(g);
+
+            const R = 6;
+
+            dataPts.forEach(p => {{
+                const dist = parseInt(p.row['距離']) || 0;
+                if(dist <= 0) return;
+                const px = xa.l2p(p[xKey]) + xa._offset;
+                const py = ya.l2p(p[yKey]) + ya._offset;
+                const cc = courseColor(p.course);
+
+                if(dist >= 2400) {{
+                    const c = document.createElementNS(ns, 'circle');
+                    c.setAttribute('cx', px);
+                    c.setAttribute('cy', py);
+                    c.setAttribute('r', R);
+                    c.setAttribute('fill', 'none');
+                    c.setAttribute('stroke', cc);
+                    c.setAttribute('stroke-width', '2.5');
+                    g.appendChild(c);
+                    if(dist > 2400) {{
+                        const extraDist = dist - 2400;
+                        const extraAngle = (extraDist / 600) * 90;
+                        const outerR = R + 4;
+                        const sRad = -Math.PI / 2;
+                        const eRad = sRad + (extraAngle * Math.PI / 180);
+                        const ox1 = px + outerR * Math.cos(sRad);
+                        const oy1 = py + outerR * Math.sin(sRad);
+                        const ox2 = px + outerR * Math.cos(eRad);
+                        const oy2 = py + outerR * Math.sin(eRad);
+                        const oLa = extraAngle > 180 ? 1 : 0;
+                        const od = 'M '+ox1+' '+oy1+' A '+outerR+' '+outerR+' 0 '+oLa+' 1 '+ox2+' '+oy2;
+                        const op = document.createElementNS(ns, 'path');
+                        op.setAttribute('d', od);
+                        op.setAttribute('fill', 'none');
+                        op.setAttribute('stroke', cc);
+                        op.setAttribute('stroke-width', '2');
+                        op.setAttribute('stroke-linecap', 'round');
+                        g.appendChild(op);
+                    }}
+                }} else {{
+                    const angleDeg = (dist / 600) * 90;
+                    const startRad = -Math.PI / 2;
+                    const endRad = startRad + (angleDeg * Math.PI / 180);
+                    const x1 = px + R * Math.cos(startRad);
+                    const y1 = py + R * Math.sin(startRad);
+                    const x2 = px + R * Math.cos(endRad);
+                    const y2 = py + R * Math.sin(endRad);
+                    const la = angleDeg > 180 ? 1 : 0;
+                    const d = 'M '+x1+' '+y1+' A '+R+' '+R+' 0 '+la+' 1 '+x2+' '+y2;
+                    const path = document.createElementNS(ns, 'path');
+                    path.setAttribute('d', d);
+                    path.setAttribute('fill', 'none');
+                    path.setAttribute('stroke', cc);
+                    path.setAttribute('stroke-width', '2.5');
+                    path.setAttribute('stroke-linecap', 'round');
+                    g.appendChild(path);
+                }}
+            }});
+        }}
+
+        createChart('c1', 'l3f_idx', 'time_idx', '上がり指数', 'T指数');
+        createChart('c2', 'c1_ratio', 'time_idx', '位置取り', 'T指数');
+        createChart('c3', 'c1_ratio', 'l3f_idx', '位置取り', '上がり指数');
+        createChart('c4', 'rpci', 'l3f_idx', 'RPCI', '上がり指数');
     }}
 
-    // --- DATA ---
     function renderData() {{
         const rows = DATA.races[state.race]?.rows || [];
         const headers = COLS.map(c => 
@@ -833,7 +1547,7 @@ def generate_html(source_file: str, races: list, all_data: dict) -> str:
     }}
 
     function renderNav() {{
-        const tabs = [{{id:'chart',l:'チャート',i:'📊'}},{{id:'data',l:'データ',i:'📋'}},{{id:'matchup',l:'比較',i:'⚔️'}}];
+        const tabs = [{{id:'chart',l:'チャート',i:'📊'}},{{id:'data',l:'データ',i:'📋'}},{{id:'matchup',l:'比較',i:'⚔️'}},{{id:'pacing',l:'ラップ',i:'⏱️'}}];
         return `<div class="nav">${{tabs.map(t=>
             `<div class="nav-btn ${{state.tab==t.id?'active':''}}" onclick="setState({{tab:'${{t.id}}'}})">
                 <div class="nav-icon">${{t.i}}</div>${{t.l}}

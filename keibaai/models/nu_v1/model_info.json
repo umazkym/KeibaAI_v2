@@ -1,9 +1,0 @@
-{
-  "version": "v1_leak_free",
-  "created_at": "2025-12-04T20:20:00.677627",
-  "based_on": "mu_v3_3 + sigma_v1",
-  "valid_mae": 1.8448536458788167,
-  "test_mae": 2.029887960601142,
-  "feature_count": 4,
-  "leak_check": "PASSED - No win_odds/popularity features"
-}

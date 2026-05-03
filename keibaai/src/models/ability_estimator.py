@@ -61,8 +61,9 @@ class Layer1_AbilityEstimator:
         'popularity_finish_diff',
     ]
     
-    # モデルの重み
-    MODEL_WEIGHTS = {
+    # モデルの重み（デフォルト値）
+    # [4-3改修] optimize_weights()でデータ駆動の最適化が可能
+    DEFAULT_MODEL_WEIGHTS = {
         'lgbm_lambda_graded': 0.30,
         'lgbm_lambda_win': 0.20,
         'catboost_yeti': 0.30,
@@ -76,9 +77,11 @@ class Layer1_AbilityEstimator:
         """
         self.config = config or {}
         self.models: Dict = {}
+        self.MODEL_WEIGHTS = self.DEFAULT_MODEL_WEIGHTS.copy()
         self.feature_names_: Optional[List[str]] = None
         self.feature_importance_: Optional[pd.Series] = None
         self.is_trained: bool = False
+        self._weights_optimized: bool = False
         
     def _filter_features(self, X: pd.DataFrame) -> pd.DataFrame:
         """
@@ -394,6 +397,122 @@ class Layer1_AbilityEstimator:
         ).astype(int)
         
         return predictions
+    
+    def optimize_weights(
+        self,
+        X_val: pd.DataFrame,
+        y_val: np.ndarray,
+        groups_val: pd.Series,
+        odds_val: Optional[np.ndarray] = None,
+        metric: str = 'spearman'
+    ) -> Dict[str, float]:
+        """
+        [4-3改修] 検証データ上でアンサンブル重みを最適化
+        
+        固定重みではデータごとのモデル品質差を反映できないため、
+        scipy.optimizeでSpearman相関またはROIを最大化する重みを探索。
+        
+        Args:
+            X_val: 検証用特徴量
+            y_val: 検証用着順（または完走時間）
+            groups_val: 検証用レースID
+            odds_val: オッズ（ROI最適化時）
+            metric: 'spearman' or 'roi'
+        
+        Returns:
+            最適化された重みDict
+        """
+        from scipy.optimize import minimize
+        from scipy.stats import spearmanr
+        
+        if not self.is_trained:
+            raise ValueError("モデルが学習されていません")
+        
+        # 禁止特徴量を除外
+        X_filtered = self._filter_features(X_val)
+        missing_cols = set(self.feature_names_) - set(X_filtered.columns)
+        for col in missing_cols:
+            X_filtered[col] = 0
+        X_filtered = X_filtered[self.feature_names_]
+        
+        # 各モデルの予測を取得
+        model_names = list(self.models.keys())
+        model_preds = {}
+        for model_name, model in self.models.items():
+            if 'lgbm' in model_name:
+                model_preds[model_name] = model.predict(X_filtered)
+            elif 'catboost' in model_name and CATBOOST_AVAILABLE:
+                model_preds[model_name] = model.predict(X_filtered)
+        
+        n_models = len(model_preds)
+        pred_matrix = np.column_stack([model_preds[name] for name in model_names if name in model_preds])
+        active_names = [name for name in model_names if name in model_preds]
+        
+        def objective(w):
+            """目的関数: 負のSpearman相関（または負のROI）"""
+            # 重みを正規化
+            w_norm = np.abs(w) / np.sum(np.abs(w))
+            ensemble_score = pred_matrix @ w_norm
+            
+            if metric == 'spearman':
+                # レースごとのSpearman相関の平均
+                unique_groups = np.unique(groups_val)
+                correlations = []
+                for g in unique_groups:
+                    mask = groups_val.values == g
+                    if mask.sum() < 3:
+                        continue
+                    corr, _ = spearmanr(ensemble_score[mask], y_val[mask])
+                    if not np.isnan(corr):
+                        correlations.append(corr)
+                return -np.mean(correlations) if correlations else 0.0
+            
+            elif metric == 'roi' and odds_val is not None:
+                # 単勝“スコア1位買い”のROI
+                unique_groups = np.unique(groups_val)
+                total_bet = 0
+                total_return = 0
+                for g in unique_groups:
+                    mask = groups_val.values == g
+                    if mask.sum() < 2:
+                        continue
+                    group_scores = ensemble_score[mask]
+                    group_y = y_val[mask]
+                    group_odds = odds_val[mask]
+                    best_idx = np.argmax(group_scores)
+                    total_bet += 100
+                    if group_y[best_idx] == 1:  # 1着の場合
+                        total_return += 100 * group_odds[best_idx]
+                return -(total_return / max(total_bet, 1))
+            
+            return 0.0
+        
+        # 初期値: 等重み
+        w0 = np.ones(len(active_names)) / len(active_names)
+        
+        # 制約: 重みの和 = 1, 各重み >= 0
+        constraints = {'type': 'eq', 'fun': lambda w: np.sum(w) - 1.0}
+        bounds = [(0.01, 0.99)] * len(active_names)
+        
+        try:
+            result = minimize(objective, w0, method='SLSQP', bounds=bounds, constraints=constraints)
+            optimal_weights = result.x / result.x.sum()
+            
+            new_weights = {name: float(w) for name, w in zip(active_names, optimal_weights)}
+            
+            logger.info(f"\n[4-3] 重み最適化結果 ({metric}):")
+            for name, w in new_weights.items():
+                old_w = self.MODEL_WEIGHTS.get(name, 0.25)
+                logger.info(f"  {name}: {old_w:.3f} -> {w:.3f}")
+            
+            self.MODEL_WEIGHTS = new_weights
+            self._weights_optimized = True
+            
+            return new_weights
+            
+        except Exception as e:
+            logger.warning(f"重み最適化失敗: {e}. デフォルト重みを維持。")
+            return dict(self.MODEL_WEIGHTS)
     
     def get_feature_importance(self, top_n: int = 20) -> pd.Series:
         """特徴量重要度上位を取得"""

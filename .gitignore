@@ -243,3 +243,11 @@ node_modules/
 # これらのファイルから、プロジェクトの全体像・ロジック・アルゴリズムを
 # 完全に理解・再現できます。
 # ============================================================================
+
+.antigravity/
+keibaai/models/_archive/
+outputs/analysis/
+outputs/reports/
+scripts/_archive/
+scripts/_archive_legacy/
+scripts/training/_archive/

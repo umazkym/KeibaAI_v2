@@ -94,14 +94,60 @@ class Layer2_ProbabilityCalibrator:
         return self
     
     def _estimate_temperature(self, scores, labels, groups):
-        """最適な温度パラメータを推定（簡易版）"""
-        # スコアの標準偏差に基づいて温度を設定
-        # 温度が高いほど確率が均等に近づく
-        score_std = np.std(scores)
-        if score_std > 0:
-            # スコアの分散が大きければ温度を上げて平滑化
-            return max(0.5, min(2.0, score_std))
-        return 1.0
+        """
+        最適な温度パラメータを推定（NLL最小化）
+        
+        [2-1改修] スコアの標準偏差による粗い推定から、
+        検証データ上のNegative Log-Likelihoodを最小化する温度を
+        勾配降下法で求める方式に変更。
+        これにより確率のキャリブレーションが改善され、
+        EV計算→投資判断に連鎖的に影響する。
+        """
+        from scipy.optimize import minimize_scalar
+        
+        unique_groups = np.unique(groups)
+        
+        def nll(T):
+            """Negative Log-Likelihood at temperature T"""
+            if T <= 0:
+                return 1e10
+            total_nll = 0.0
+            n_races = 0
+            for race_id in unique_groups:
+                mask = groups == race_id
+                s = scores[mask] / T
+                lab = labels[mask]
+                
+                # 勝馬がいないレースはスキップ
+                if lab.sum() == 0:
+                    continue
+                
+                # 数値安定性のために最大値を引く
+                s_stable = s - np.max(s)
+                exp_s = np.exp(s_stable)
+                sum_exp = np.sum(exp_s)
+                probs = exp_s / sum_exp
+                
+                # 勝馬のインデックス
+                winner_indices = np.where(lab == 1)[0]
+                for wi in winner_indices:
+                    total_nll -= np.log(probs[wi] + 1e-10)
+                n_races += 1
+            
+            return total_nll / max(n_races, 1)
+        
+        try:
+            result = minimize_scalar(nll, bounds=(0.1, 10.0), method='bounded')
+            optimal_T = result.x
+            logger.info(f"  NLL最適化温度: T={optimal_T:.4f}, NLL={result.fun:.4f}")
+            return float(np.clip(optimal_T, 0.1, 10.0))
+        except Exception as e:
+            logger.warning(f"  温度最適化失敗, フォールバック使用: {e}")
+            # フォールバック: 標準偏差ベース
+            score_std = np.std(scores)
+            if score_std > 0:
+                return max(0.5, min(2.0, score_std))
+            return 1.0
     
     def transform(
         self, 
@@ -253,6 +299,15 @@ def evaluate_calibration(
     # Brier Score: 確率予測の精度（低いほど良い）
     brier = float(np.mean((predicted_probs - actual_wins) ** 2))
     
+    # [2-2改修] Brier Skill Score (BSS): ベースラインに対する改善度
+    # ベースライン = 常に平均確率を予測するモデル
+    baseline_prob = float(np.mean(actual_wins))
+    brier_baseline = float(np.mean((baseline_prob - actual_wins) ** 2))
+    if brier_baseline > 0:
+        brier_skill_score = 1.0 - (brier / brier_baseline)
+    else:
+        brier_skill_score = 0.0
+    
     # Expected Calibration Error (ECE)
     ece = float(_calculate_ece(predicted_probs, actual_wins, n_bins))
     
@@ -261,9 +316,12 @@ def evaluate_calibration(
     
     return {
         'brier_score': brier,
+        'brier_skill_score': brier_skill_score,  # v5.2追加: BSS > 0 ならベースラインより良い
+        'brier_baseline': brier_baseline,         # v5.2追加: ベースラインのBrier
         'ece': ece,
         'mce': mce,
         'passed_brier': bool(brier < 0.2),
+        'passed_brier_skill': bool(brier_skill_score > 0),  # v5.2追加
         'passed_ece': bool(ece < 0.05)
     }
 

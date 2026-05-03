@@ -3,7 +3,7 @@ import pandas as pd
 import lightgbm as lgb
 from sklearn.base import BaseEstimator, RegressorMixin
 from sklearn.linear_model import Ridge
-from sklearn.model_selection import KFold
+from sklearn.model_selection import TimeSeriesSplit
 from typing import List, Dict, Optional, Union, Any
 import logging
 
@@ -15,6 +15,10 @@ class StackingEnsemble(BaseEstimator, RegressorMixin):
     
     複数のベースモデル（LightGBMの異なる設定など）の予測値を特徴量として、
     メタモデル（Ridge Regressionなど）で最終予測を行う。
+    
+    [4-2改修] KFold → TimeSeriesSplit に変更。
+    競馬データは時系列順であるため、未来のデータで学習してOOF予測を
+    生成するリスクを排除。
     """
     
     def __init__(self, base_models: List[Any], meta_model: Optional[Any] = None, n_folds: int = 5):
@@ -27,9 +31,12 @@ class StackingEnsemble(BaseEstimator, RegressorMixin):
         """
         Stacking学習
         
-        1. K-FoldでOut-of-Fold (OOF) 予測を作成
+        1. TimeSeriesSplitでOut-of-Fold (OOF) 予測を作成
         2. OOF予測をメタモデルの学習データとする
         3. 全データでベースモデルを再学習（予測用）
+        
+        Note: [4-2改修] 時系列データのためTimeSeriesSplitを使用。
+        KFoldでは未来のデータで学習するリスクがあった。
         """
         logger.info(f"Training Stacking Ensemble with {len(self.base_models)} base models...")
         
@@ -38,29 +45,30 @@ class StackingEnsemble(BaseEstimator, RegressorMixin):
         
         # OOF Predictions Matrix
         oof_preds = np.zeros((n_samples, n_models))
+        oof_mask = np.zeros(n_samples, dtype=bool)
         
-        # K-Fold (Shuffle=False for Time Series nature, or use TimeSeriesSplit)
-        # Stackingでは通常KFoldを使うが、時系列データの場合は注意が必要。
-        # ここではシンプルにKFoldを使用するが、本来は時系列CVが望ましい。
-        kf = KFold(n_splits=self.n_folds, shuffle=False)
+        # [4-2改修] TimeSeriesSplitを使用（時系列の順序を保持）
+        tscv = TimeSeriesSplit(n_splits=self.n_folds)
         
-        for i, (train_idx, valid_idx) in enumerate(kf.split(X)):
+        for i, (train_idx, valid_idx) in enumerate(tscv.split(X)):
             X_train, X_valid = X.iloc[train_idx], X.iloc[valid_idx]
             y_train, y_valid = y.iloc[train_idx], y.iloc[valid_idx]
             
             for j, model in enumerate(self.base_models):
-                # Clone model (re-instantiate)
-                # ここでは簡易的に同じクラス・パラメータで新規作成と仮定
-                # 実際は sklearn.base.clone を使うのが良い
                 import copy
                 model_instance = copy.deepcopy(model)
                 
                 model_instance.fit(X_train, y_train)
                 oof_preds[valid_idx, j] = model_instance.predict(X_valid)
+            
+            # TimeSeriesSplitではvalidation setのみOOF予測がある
+            oof_mask[valid_idx] = True
                 
         # Train Meta Model on OOF predictions
-        logger.info("Training Meta Model...")
-        self.meta_model.fit(oof_preds, y)
+        # [4-2改修] TimeSeriesSplitでは最初のfoldにvalidation setがないため
+        # OOF予測が存在するサンプルのみでメタモデルを学習
+        logger.info(f"Training Meta Model on {oof_mask.sum()}/{n_samples} samples with OOF predictions...")
+        self.meta_model.fit(oof_preds[oof_mask], y.iloc[np.where(oof_mask)[0]])
         
         # Retrain Base Models on Full Data
         logger.info("Retraining Base Models on full data...")
