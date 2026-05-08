@@ -249,5 +249,5 @@ keibaai/models/_archive/
 outputs/analysis/
 outputs/reports/
 scripts/_archive/
-scripts/_archive_legacy/
+# scripts/_archive_legacy/
 scripts/training/_archive/
