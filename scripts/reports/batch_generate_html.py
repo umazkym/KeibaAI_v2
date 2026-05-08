@@ -17,7 +17,7 @@ from datetime import datetime
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
-sys.path.insert(0, str(PROJECT_ROOT / 'archive' / 'scripts'))
+sys.path.insert(0, str(PROJECT_ROOT / 'scripts' / '_archive_legacy'))
 
 OUTPUT_DIR = PROJECT_ROOT / 'outputs' / 'reports'
 
@@ -37,11 +37,11 @@ def generate_one(date_str: str, venue: str):
     
     # Step 1: Excel生成
     print("[1/2] Excelレポート生成中...")
-    excel_script = PROJECT_ROOT / 'archive' / 'scripts' / 'generate_race_report.py'
+    excel_script = PROJECT_ROOT / 'scripts' / '_archive_legacy' / 'generate_race_report.py'
     result = subprocess.run(
         [sys.executable, str(excel_script), '--date', date_str, '--venue', venue],
         cwd=str(PROJECT_ROOT),
-        capture_output=True, text=True, encoding='utf-8'
+        capture_output=True, text=True, encoding='utf-8', errors='replace'
     )
     
     if result.returncode != 0:
@@ -66,7 +66,7 @@ def generate_one(date_str: str, venue: str):
     result = subprocess.run(
         [sys.executable, str(html_script), str(excel_path)],
         cwd=str(OUTPUT_DIR),
-        capture_output=True, text=True, encoding='utf-8'
+        capture_output=True, text=True, encoding='utf-8', errors='replace'
     )
     
     if result.returncode != 0:

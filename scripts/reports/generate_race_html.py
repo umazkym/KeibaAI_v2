@@ -15,7 +15,7 @@ from datetime import datetime
 # プロジェクトルート設定
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
-sys.path.insert(0, str(PROJECT_ROOT / 'archive' / 'scripts'))
+sys.path.insert(0, str(PROJECT_ROOT / 'scripts' / '_archive_legacy'))
 
 def ask_input(prompt, default=None):
     """対話形式で入力を受け取る"""
@@ -101,7 +101,7 @@ def run_legacy(date_input, venue_input, output_dir):
     
     # Step 1: Excel生成
     print("[1/2] Excelレポート生成中...")
-    excel_script = PROJECT_ROOT / 'archive' / 'scripts' / 'generate_race_report.py'
+    excel_script = PROJECT_ROOT / 'scripts' / '_archive_legacy' / 'generate_race_report.py'
     result = subprocess.run([
         sys.executable, str(excel_script),
         '--date', date_input,
