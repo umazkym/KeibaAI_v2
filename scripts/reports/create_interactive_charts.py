@@ -300,6 +300,7 @@ def create_interactive_charts(source_file: str, output_file: str = None):
                             c4 = safe_float(row, ['4C', '4角'])
                             
                             valid_corners = [c for c in [c1, c2, c3, c4] if c > 0]
+                            has_corners = len(valid_corners) > 0
                             if valid_corners:
                                 avg_rank = statistics.mean(valid_corners)
                             else: avg_rank = heads / 2 
@@ -309,7 +310,9 @@ def create_interactive_charts(source_file: str, output_file: str = None):
                             pos_score = max(0.0, min(1.0, pos_score))
                             pos_score = round(pos_score, 3)
 
-                            rpci = safe_float(row, ['RPCI'], 50.0)
+                            rpci = safe_float(row, ['RPCI'], 0.0)
+                            has_rpci = rpci > 0
+                            if not has_rpci: rpci = 50.0
                             
                             if time_idx > 0:
                                 horse_chart_info[umaban]['records'].append({
@@ -317,6 +320,9 @@ def create_interactive_charts(source_file: str, output_file: str = None):
                                     'l3f_idx': round(l3f_idx, 1),
                                     'c1_ratio': pos_score, 
                                     'rpci': round(rpci, 1),
+                                    'has_l3f': l3f_idx != 0.0,
+                                    'has_corners': has_corners,
+                                    'has_rpci': has_rpci,
                                     'rank': row.get('着順', ''),
                                     'date': row.get('日付', ''),
                                     'course': row.get('ｺｰｽ', '')
@@ -1159,14 +1165,7 @@ def generate_html(source_file: str, races: list, all_data: dict) -> str:
                 ` : ''}}
             </div>
             <div class="card">
-                <div class="font-bold text-xs">① 走力(T指数) vs 末脚(上がり指数)</div>
-                <div id="c1" style="height:280px;margin-bottom:10px"></div>
-                <div class="font-bold text-xs">② 走力(T指数) vs 位置取り</div>
-                <div id="c2" style="height:280px;margin-bottom:10px"></div>
-                <div class="font-bold text-xs">③ 末脚(上がり指数) vs 位置取り</div>
-                <div id="c3" style="height:280px;margin-bottom:10px"></div>
-                <div class="font-bold text-xs">④ 末脚(上がり指数) vs ペース(RPCI)</div>
-                <div id="c4" style="height:280px"></div>
+                <div id="chart-section"></div>
             </div>`;
     }}
     
@@ -1218,23 +1217,13 @@ def generate_html(source_file: str, races: list, all_data: dict) -> str:
     window.setPeriod = (months) => {{
         if(months===0) {{ setState({{dateFrom:'',dateTo:''}}); return; }}
         
-        let maxStr = '';
-        const hps = DATA.horse_profiles?.[state.race] || {{}};
-        Object.values(hps).forEach(h => {{
-             (h.trajs||[]).forEach(t => {{ 
-                  if(t.date && String(t.date) > maxStr) maxStr = String(t.date); 
-             }});
-        }});
-        if(!maxStr) {{
-             const now = new Date();
-             maxStr = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
-        }}
-        const rd = maxStr.replaceAll('-', '/');
-        const p = rd.split('/');
-        let y=parseInt(p[0]), m=parseInt(p[1]), d=parseInt(p[2]);
-        let fy=y, fm=m-months;
+        // 本日日付を基準に期間を設定
+        const now = new Date();
+        const toStr = now.getFullYear() + '/' + String(now.getMonth()+1).padStart(2,'0') + '/' + String(now.getDate()).padStart(2,'0');
+        let fy = now.getFullYear(), fm = now.getMonth()+1 - months;
         while(fm<=0){{ fy--; fm+=12; }}
-        setState({{dateFrom:fy+'/'+String(fm).padStart(2,'0')+'/'+String(d).padStart(2,'0'), dateTo:rd}});
+        const fromStr = fy + '/' + String(fm).padStart(2,'0') + '/' + String(now.getDate()).padStart(2,'0');
+        setState({{dateFrom:fromStr, dateTo:toStr}});
     }};
 
     function drawCharts() {{
@@ -1359,10 +1348,125 @@ def generate_html(source_file: str, races: list, all_data: dict) -> str:
             }});
         }}
 
-        createChart('c1', 'l3f_idx', 'time_idx', '上がり指数', 'T指数');
-        createChart('c2', 'c1_ratio', 'time_idx', '位置取り', 'T指数');
-        createChart('c3', 'c1_ratio', 'l3f_idx', '位置取り', '上がり指数');
-        createChart('c4', 'rpci', 'l3f_idx', 'RPCI', '上がり指数');
+        // --- Detect data availability ---
+        let hasL3f = false, hasCorners = false, hasRpci = false;
+        pts.forEach(p => {{ if(p.has_l3f) hasL3f=true; if(p.has_corners) hasCorners=true; if(p.has_rpci) hasRpci=true; }});
+
+        // --- Build chart section dynamically ---
+        const chartSection = document.getElementById('chart-section');
+        if(!chartSection) return;
+        let chartHTML = '';
+        
+        // Chart 1: Always show T指数 box plot per horse (useful for all data)
+        chartHTML += `<div class="font-bold text-xs">① 走力(T指数) 馬別比較</div>
+            <div id="c_tidx" style="height:280px;margin-bottom:10px"></div>`;
+        
+        if(hasL3f) {{
+            chartHTML += `<div class="font-bold text-xs">② 走力(T指数) vs 末脚(上がり指数)</div>
+                <div id="c1" style="height:280px;margin-bottom:10px"></div>`;
+        }}
+        if(hasCorners) {{
+            chartHTML += `<div class="font-bold text-xs">${{hasL3f?'③':'②'}} 走力(T指数) vs 位置取り</div>
+                <div id="c2" style="height:280px;margin-bottom:10px"></div>`;
+        }}
+        if(hasL3f && hasCorners) {{
+            chartHTML += `<div class="font-bold text-xs">④ 末脚(上がり指数) vs 位置取り</div>
+                <div id="c3" style="height:280px;margin-bottom:10px"></div>`;
+        }}
+        if(hasL3f && hasRpci) {{
+            chartHTML += `<div class="font-bold text-xs">${{hasCorners?'⑤':'③'}} 末脚(上がり指数) vs ペース(RPCI)</div>
+                <div id="c4" style="height:280px;margin-bottom:10px"></div>`;
+        }}
+        // T指数 vs 着順 scatter (always available)
+        chartHTML += `<div class="font-bold text-xs">${{hasL3f&&hasCorners?'⑥':'②'}} 走力(T指数) vs 着順</div>
+            <div id="c_rank" style="height:280px"></div>`;
+        
+        if(!hasL3f && !hasCorners) {{
+            chartHTML += `<div style="margin-top:8px;padding:8px;background:#fef3c7;border-radius:8px;font-size:11px;color:#92400e">
+                ⚠ 地方競馬データのため、上がり3F・通過順・RPCIは未提供です。T指数と着順のチャートを表示しています。</div>`;
+        }}
+        
+        chartSection.innerHTML = chartHTML;
+
+        // --- Draw T指数 box plot (with detailed hover like scatter charts) ---
+        setTimeout(() => {{
+            const cTidx = document.getElementById('c_tidx');
+            if(cTidx) {{
+                const rowMap2 = {{}};
+                const rows2 = DATA.races[state.race]?.rows || [];
+                rows2.forEach(r => {{ rowMap2[r['日付']+'-'+r['番']] = r; }});
+
+                const activeHorses = d.horses.filter(h => !blocked.includes(h.umaban)).sort((a,b) => a.umaban - b.umaban);
+                const boxTraces = [];
+                
+                activeHorses.forEach(h => {{
+                    const recs = h.records.filter(r => {{
+                        const rd = String(r.date).replaceAll('/','');
+                        const df = state.dateFrom ? state.dateFrom.replaceAll('/','') : '';
+                        const dt = state.dateTo ? state.dateTo.replaceAll('/','') : '';
+                        if(df && rd < df) return false;
+                        if(dt && rd > dt) return false;
+                        // 場所・距離・コースフィルタも適用
+                        const row = rowMap2[r.date+'-'+h.umaban];
+                        if(state.venueInc.length>0 && row && !state.venueInc.includes(row['場所'])) return false;
+                        if(state.distInc.length>0 && row && !state.distInc.includes(row['距離'])) return false;
+                        if(state.courseInc.length>0 && !state.courseInc.includes(r.course)) return false;
+                        return true;
+                    }});
+                    const vals = recs.filter(r => r.time_idx > 0);
+                    if(vals.length > 0) {{
+                        const hoverTexts = vals.map(r => {{
+                            const row = rowMap2[r.date+'-'+h.umaban] || {{}};
+                            const pop = row['人気'] ? `${{row['人気']}}人気(${{row['ｵｯｽﾞ']}}倍)` : '';
+                            const rank = row['着順'] ? `${{row['着順']}}着(差${{row['着差']}})` : '';
+                            const raceInfo = row['場所'] ? `${{r.course}}${{row['場所']}}${{row['距離']}}m` : r.course;
+                            return `${{r.date}} ${{h.umaban}}番 ${{h.name}}<br>${{raceInfo}} ${{pop}}<br>${{rank}} T:${{r.time_idx}}`;
+                        }});
+                        boxTraces.push({{
+                            y: vals.map(v=>v.time_idx), type:'box',
+                            name: `${{h.umaban}}${{h.name.slice(0,4)}}`,
+                            marker: {{color:WAKU[h.waku]}},
+                            boxpoints: 'all', jitter:0.3, pointpos:-1.5,
+                            line: {{width:1}}, whiskerwidth:0.5,
+                            text: hoverTexts, hoverinfo:'text'
+                        }});
+                    }}
+                }});
+                if(boxTraces.length) {{
+                    Plotly.newPlot('c_tidx', boxTraces, {{
+                        ...layout, showlegend:false,
+                        yaxis:{{title:'T指数',zeroline:true,zerolinecolor:'#ddd'}},
+                        xaxis:{{tickangle:-45,tickfont:{{size:8}}}}
+                    }}, cfg);
+                }}
+            }}
+        }}, 10);
+
+        // --- Draw T指数 vs 着順 scatter ---
+        setTimeout(() => {{
+            const cRank = document.getElementById('c_rank');
+            if(cRank && pts.length > 0) {{
+                const rankPts = pts.filter(p => p.row['着順'] && String(p.row['着順']).match(/^\d+$/));
+                if(rankPts.length > 0) {{
+                    const tr = [{{
+                        x: rankPts.map(p => parseInt(p.row['着順'])),
+                        y: rankPts.map(p => p.time_idx),
+                        mode:'markers+text', type:'scatter',
+                        marker: {{size:10, color:rankPts.map(p=>WAKU[p.w]), line:{{width:0}}}},
+                        text: rankPts.map(p=>p.u), textposition:'middle center',
+                        textfont:{{size:8, color:rankPts.map(p=>TXT[p.w])}},
+                        hovertext: rankPts.map(p=>getHoverText(p)), hoverinfo:'text', showlegend:false
+                    }}];
+                    Plotly.newPlot('c_rank', tr, {{...layout, xaxis:{{title:'着順',dtick:1}}, yaxis:{{title:'T指数'}}}}, cfg);
+                }}
+            }}
+        }}, 20);
+
+        // --- Draw original charts only if data exists ---
+        if(hasL3f) {{ setTimeout(() => createChart('c1', 'l3f_idx', 'time_idx', '上がり指数', 'T指数'), 30); }}
+        if(hasCorners) {{ setTimeout(() => createChart('c2', 'c1_ratio', 'time_idx', '位置取り', 'T指数'), 40); }}
+        if(hasL3f && hasCorners) {{ setTimeout(() => createChart('c3', 'c1_ratio', 'l3f_idx', '位置取り', '上がり指数'), 50); }}
+        if(hasL3f && hasRpci) {{ setTimeout(() => createChart('c4', 'rpci', 'l3f_idx', 'RPCI', '上がり指数'), 60); }}
     }}
 
     function renderData() {{

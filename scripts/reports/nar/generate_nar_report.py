@@ -234,8 +234,9 @@ class NarNetkeibaAnalyzer:
         
         try:
             resp = self.session.get(url, timeout=15)
-            resp.encoding = 'utf-8'
-            soup = BeautifulSoup(resp.content, 'html.parser')
+            # nar.netkeiba.comはEUC-JP（meta charsetで確認済み）
+            resp.encoding = 'euc-jp'
+            soup = BeautifulSoup(resp.text, 'html.parser')
             
             race_ids = []
             num_wrap = soup.find('div', class_='RaceNumWrap')
@@ -275,8 +276,9 @@ class NarNetkeibaAnalyzer:
         try:
             # まずrequestsで基本情報を取得
             resp = self.session.get(url, timeout=15)
-            resp.encoding = 'utf-8'
-            soup = BeautifulSoup(resp.content, 'html.parser')
+            # nar.netkeiba.comはEUC-JP（meta charsetで確認済み）
+            resp.encoding = 'euc-jp'
+            soup = BeautifulSoup(resp.text, 'html.parser')
             
             # レース情報
             race_name = soup.select_one('.RaceName')
@@ -507,7 +509,7 @@ class NarNetkeibaAnalyzer:
     def _parse_horse_history(self, html_content: bytes, horse_id: str) -> List[Dict]:
         """過去成績をパース（完全版）"""
         try:
-            soup = BeautifulSoup(html_content, 'html.parser')
+            soup = BeautifulSoup(html_content, 'html.parser', from_encoding='euc-jp')
             table = soup.find('table', class_='db_h_race_results')
             if not table:
                 return []
@@ -521,7 +523,7 @@ class NarNetkeibaAnalyzer:
             
             for row in rows:
                 cols = row.find_all('td')
-                if len(cols) < 25:
+                if len(cols) < 29:
                     continue
                 
                 data = [c.text.strip() for c in cols]
@@ -547,7 +549,9 @@ class NarNetkeibaAnalyzer:
                     distance = re.sub(r'\D', '', dist_raw)
                 
                 # 通過順位の分解
-                passing = data[21] if len(data) > 21 else ""
+                # db.netkeibaのテーブルにはタイム指数マスター系の隠しカラム(4列)があるため、
+                # 実際のインデックスは+4オフセット
+                passing = data[25] if len(data) > 25 else ""
                 p1, p2, p3, p4 = "", "", "", ""
                 if passing:
                     parts = passing.split('-')
@@ -557,15 +561,25 @@ class NarNetkeibaAnalyzer:
                     if len(parts) >= 4: p4 = parts[3]
                 
                 # ペースの分解
-                pace = data[22] if len(data) > 22 else ""
+                pace = data[26] if len(data) > 26 else ""
                 pace1, pace2 = "", ""
                 if pace and '-' in pace:
                     pp = pace.split('-')
                     if len(pp) == 2:
                         pace1, pace2 = pp[0], pp[1]
                 
+                # RPCI計算（前半 / 全体 * 100）
+                rpci_val = None
+                if pace1 and pace2:
+                    try:
+                        p1f, p2f = float(pace1), float(pace2)
+                        if p1f + p2f > 0:
+                            rpci_val = round(p1f / (p1f + p2f) * 100, 1)
+                    except:
+                        pass
+                
                 # 馬体重の分解
-                weight_raw = data[24] if len(data) > 24 else ""
+                weight_raw = data[28] if len(data) > 28 else ""
                 weight, change = "", ""
                 if weight_raw:
                     match = re.match(r'(\d+)\(([+-]?\d+)\)', weight_raw)
@@ -580,7 +594,7 @@ class NarNetkeibaAnalyzer:
                 time_sec = self._parse_time(time_str)
                 
                 # 上りの秒換算
-                l3f_str = data[23] if len(data) > 23 else ""
+                l3f_str = data[27] if len(data) > 27 else ""
                 l3f_sec = self._parse_time(l3f_str)
                 
                 # レース名から回・日を抽出
@@ -632,7 +646,7 @@ class NarNetkeibaAnalyzer:
                     '基準3F': None, '基準場3F': None,
                     '平t差': None, '平場t差': None, '基t差': None, '基場t差': None,
                     '基3F差': None, '基場3F差': None,
-                    'タイム指数': None, '上り指数': None, '馬場差': None, 'RPCI': None,
+                    'タイム指数': None, '上り指数': None, '馬場差': None, 'RPCI': rpci_val,
                     'horse_id': horse_id,
                     'race_id': race_id_full
                 }
@@ -778,6 +792,24 @@ class NarNetkeibaAnalyzer:
             del wb['Sheet']
         
         sorted_rids = sorted(all_data.keys())
+        
+        # === RaceInfoシートを作成（create_interactive_chartsとの互換性確保）===
+        ri_ws = wb.create_sheet('RaceInfo')
+        ri_ws.append(['race_num', 'race_name', 'course_info', 'venue', 'date'])
+        for rid in sorted_rids:
+            race_data = all_data[rid]
+            race_info = race_data['race_info']
+            race_num = rid[-2:]
+            course = race_info.get('course', 'ダート')
+            distance = race_info.get('distance', '')
+            course_info = f"{course}{distance}m" if distance else course
+            ri_ws.append([
+                race_num,
+                race_info.get('race_name', ''),
+                course_info,
+                self.venue_name,
+                f"{self.target_date[:4]}/{self.target_date[4:6]}/{self.target_date[6:]}"
+            ])
         
         for rid in sorted_rids:
             race_data = all_data[rid]
