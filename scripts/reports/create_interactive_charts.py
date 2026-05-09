@@ -361,11 +361,15 @@ def create_interactive_charts(source_file: str, output_file: str = None):
                             rpci = safe_float(row, ['RPCI'], 0.0)
                             has_rpci = rpci > 0
                             if not has_rpci: rpci = 50.0
+                            agari_idx = safe_float(row, ['上り指数', 'L指数', 'agari_index'])
+                            tenkai_idx = safe_float(row, ['展開補正T指数', 'tenkai_adj_t_index'])
 
                             if time_idx > 0:
                                 horse_chart_info[umaban]['records'].append({
                                     'time_idx': round(time_idx, 1),
                                     'l3f_idx': round(l3f_idx, 1),
+                                    'agari_idx': round(agari_idx, 1),
+                                    'tenkai_idx': round(tenkai_idx, 1),
                                     'idx_conf': round(idx_conf, 2) if idx_conf else None,
                                     'idx_n': int(idx_n) if idx_n else None,
                                     'correction_note': row.get('補正情報', ''),
@@ -1550,8 +1554,14 @@ def generate_html(source_file: str, races: list, all_data: dict) -> str:
                 <div id="${{id}}" class="chart-box ${{wide?'':'short'}}"></div>
             </div>`;
 
-        let hasL3f = false, hasCorners = false, hasRpci = false;
-        pts.forEach(p => {{ if(p.has_l3f) hasL3f=true; if(p.has_corners) hasCorners=true; if(p.has_rpci) hasRpci=true; }});
+        let hasL3f = false, hasCorners = false, hasRpci = false, hasAgari = false, hasTenkai = false;
+        pts.forEach(p => {{
+            if(p.has_l3f) hasL3f=true;
+            if(p.has_corners) hasCorners=true;
+            if(p.has_rpci) hasRpci=true;
+            if(hasPlotValue(p.agari_idx)) hasAgari = true;
+            if(hasPlotValue(p.tenkai_idx)) hasTenkai = true;
+        }});
 
         let chartHTML = '<div class="chart-grid">';
         chartHTML += createPanel('c_tidx', '① 走力(T指数) 馬別比較', '箱ひげ + 全履歴点', true);
@@ -1559,6 +1569,8 @@ def generate_html(source_file: str, races: list, all_data: dict) -> str:
         if(hasCorners) chartHTML += createPanel('c2', `${{hasL3f?'③':'②'}} 走力(T指数) vs 初期位置`);
         if(hasL3f && hasCorners) chartHTML += createPanel('c3', '④ 末脚(上がり指数) vs 初期位置');
         if(hasL3f && hasRpci) chartHTML += createPanel('c4', `${{hasCorners?'⑤':'③'}} 末脚(上がり指数) vs ペース(RPCI)`);
+        if(hasAgari) chartHTML += createPanel('c5', '指数追加① 上り指数(Agari) vs T指数');
+        if(hasTenkai) chartHTML += createPanel('c6', '指数追加② 展開補正T指数(Tenkai) vs T指数');
         chartHTML += createPanel('c_rank', `${{hasL3f&&hasCorners?'⑥':'②'}} 走力(T指数) vs 着順`);
         chartHTML += '</div>';
         if(!hasL3f && !hasCorners) {{
@@ -1635,6 +1647,8 @@ def generate_html(source_file: str, races: list, all_data: dict) -> str:
         if(hasCorners) createScatterChart('c2', 'initial_pos', 'time_idx', '初期位置(最初に取れる通過順)', 'T指数');
         if(hasL3f && hasCorners) createScatterChart('c3', 'initial_pos', 'l3f_idx', '初期位置(最初に取れる通過順)', '上がり指数');
         if(hasL3f && hasRpci) createScatterChart('c4', 'rpci', 'l3f_idx', 'RPCI', '上がり指数');
+        if(hasAgari) createScatterChart('c5', 'agari_idx', 'time_idx', '上り指数(Agari)', 'T指数');
+        if(hasTenkai) createScatterChart('c6', 'tenkai_idx', 'time_idx', '展開補正T指数(Tenkai)', 'T指数');
     }}
 
 

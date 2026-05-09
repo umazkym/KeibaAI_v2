@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import difflib
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -28,6 +27,7 @@ class IndexModelConfig:
     position_col: str = "passing_order_4"
     finish_pos_col: str = "finish_position"
     margin_col: str = "margin"
+    margin_seconds_col: str = "margin_seconds"
     distance_col: str = "distance_m"
     surface_col: str = "track_surface"
     condition_col: str = "track_condition"
@@ -36,6 +36,26 @@ class IndexModelConfig:
     course_direction_col: str = "course_direction"
     is_outer_col: str = "is_outer_course"
     weight_col: Optional[str] = "carried_weight"
+
+
+def _to_jsonable(obj):
+    if isinstance(obj, dict):
+        return {str(k): _to_jsonable(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_to_jsonable(v) for v in obj]
+    if isinstance(obj, tuple):
+        return tuple(_to_jsonable(v) for v in obj)
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    if isinstance(obj, (np.integer, np.int64, np.int32)):
+        return int(obj)
+    if isinstance(obj, (np.floating, np.float64, np.float32)):
+        return float(obj)
+    if isinstance(obj, (pd.Timestamp, pd.Timedelta)):
+        return str(obj)
+    if pd.isna(obj):
+        return None
+    return obj
 
 
 class RaceIndexModeler:
@@ -50,11 +70,6 @@ class RaceIndexModeler:
         self._tenkai_features_: Optional[Sequence[str]] = None
 
     def validate_schema(self, df: pd.DataFrame) -> None:
-        """Validate that required columns exist in the dataframe.
-
-        When columns are missing, raise a ValueError with hint suggestions
-        using close matches from the dataframe columns.
-        """
         required = [
             self.cfg.race_id_col, self.cfg.horse_id_col, self.cfg.date_col,
             self.cfg.finish_time_col, self.cfg.last3f_col, self.cfg.pace_col,
@@ -64,19 +79,15 @@ class RaceIndexModeler:
         ]
         missing = [c for c in required if c not in df.columns]
         if missing:
-            hints: Dict[str, List[str]] = {}
-            for m in missing:
-                # suggest up to 3 close column names
-                hints[m] = difflib.get_close_matches(m, df.columns.tolist(), n=3, cutoff=0.6)
-            hint_msgs = []
-            for k, v in hints.items():
-                if v:
-                    hint_msgs.append(f"{k} (did you mean: {v})")
-                else:
-                    hint_msgs.append(f"{k}")
-            raise ValueError(
-                "Missing required columns: [" + ", ".join(missing) + "] - hints: " + "; ".join(hint_msgs)
-            )
+            present = set(df.columns)
+            is_lap_dataset = {"lap_times", "first_half", "second_half"}.issubset(present)
+            hint = ""
+            if is_lap_dataset:
+                hint = (
+                    " Detected lap-detail schema. This script requires horse-level result parquet "
+                    "(e.g., with horse_id, finish_time_seconds, last_3f_time, pace_index)."
+                )
+            raise ValueError(f"Missing required columns: {missing}.{hint}")
 
     @staticmethod
     def _winsorize_series(s: pd.Series, p: float = 0.01) -> pd.Series:
@@ -145,7 +156,7 @@ class RaceIndexModeler:
             ("num", Pipeline([("imp", SimpleImputer(strategy="median")), ("sc", StandardScaler())]), num_cols),
             ("cat", Pipeline([("imp", SimpleImputer(strategy="most_frequent")), ("oh", OneHotEncoder(handle_unknown="ignore"))]), cat_cols),
         ])
-        model = Pipeline([("pre", pre), ("reg", HuberRegressor(alpha=0.0005, epsilon=1.35))])
+        model = Pipeline([("pre", pre), ("reg", HuberRegressor(alpha=0.0005, epsilon=1.35, max_iter=2000))])
         model.fit(X, y)
         self.agari_model_ = model
         self._agari_features_ = X.columns.tolist()
@@ -165,7 +176,8 @@ class RaceIndexModeler:
         d = df.copy()
         d["position_rate"] = d[self.cfg.position_col] / d.groupby(self.cfg.race_id_col)[self.cfg.horse_id_col].transform("count").clip(lower=1)
         d["pace_x_pos"] = d[self.cfg.pace_col] * d["position_rate"]
-        d["margin_per_km"] = d[self.cfg.margin_col].fillna(0.0) / (d[self.cfg.distance_col].clip(lower=1000) / 1000)
+        margin_series = d[self.cfg.margin_col] if self.cfg.margin_col in d.columns else d[self.cfg.margin_seconds_col]
+        d["margin_per_km"] = pd.to_numeric(margin_series, errors="coerce").fillna(0.0) / (d[self.cfg.distance_col].clip(lower=1000) / 1000)
         y = d["t_index"]
         features = [
             self.cfg.pace_col, "position_rate", "pace_x_pos", "margin_per_km",
@@ -213,26 +225,6 @@ class RaceIndexModeler:
         return d
 
 
-def _to_jsonable(obj: object) -> object:
-    if isinstance(obj, dict):
-        return {str(k): _to_jsonable(v) for k, v in obj.items()}
-    elif isinstance(obj, (list, tuple, set)):
-        return [_to_jsonable(v) for v in obj]
-    elif isinstance(obj, np.ndarray):
-        return [_to_jsonable(v) for v in obj.tolist()]
-    elif isinstance(obj, np.integer):
-        return int(obj)
-    elif isinstance(obj, (np.floating, float)):
-        if np.isnan(obj):
-            return None
-        return float(obj)
-    elif type(obj).__name__ in ("Timestamp", "Timedelta"):
-        return str(obj)
-    elif pd.api.types.is_scalar(obj) and pd.isna(obj):
-        return None
-    return obj
-
-
 def debug_data_overview(parquet_path: str, sample_n: int = 5) -> Dict[str, object]:
     df = pd.read_parquet(parquet_path)
     overview = {
@@ -254,6 +246,9 @@ def run_pipeline(parquet_path: str, output_path: str, central_only: bool = True)
         work = df[df[modeler.cfg.central_col] == 1].copy()
     else:
         work = df.copy()
+
+    if len(work) == 0:
+        raise ValueError("No rows available for modeling after filtering (check is_central filter or input data).")
 
     modeler.fit_all(work)
     out = modeler.transform_all(work)
@@ -285,17 +280,12 @@ if __name__ == "__main__":
     parser.add_argument("--parquet", required=True, help="Input parquet file path")
     parser.add_argument("--output", required=True, help="Output parquet path")
     parser.add_argument("--overview", action="store_true", help="Print data overview JSON")
+    parser.add_argument("--run", action="store_true", help="Run modeling pipeline")
     parser.add_argument("--include-local", action="store_true", help="Include local races")
-    parser.add_argument("--run", action="store_true", help="Run full pipeline (write output)")
     args = parser.parse_args()
 
     if args.overview:
         info = debug_data_overview(args.parquet)
         print(json.dumps(info, ensure_ascii=False, indent=2))
-
     if args.run:
         run_pipeline(args.parquet, args.output, central_only=not args.include_local)
-    else:
-        if not args.overview:
-            # neither overview nor run was requested; print help-ish message
-            print("No action requested. Use --overview to print data overview or --run to execute the pipeline.")
