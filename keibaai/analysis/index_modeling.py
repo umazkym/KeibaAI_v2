@@ -194,6 +194,25 @@ class RaceIndexModeler:
         d = self.transform_tenkai_t_index(d)
         return d
 
+def _to_jsonable(obj: object) -> object:
+    if isinstance(obj, dict):
+        return {str(k): _to_jsonable(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple, set)):
+        return [_to_jsonable(v) for v in obj]
+    elif isinstance(obj, np.ndarray):
+        return [_to_jsonable(v) for v in obj.tolist()]
+    elif isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, (np.floating, float)):
+        if np.isnan(obj):
+            return None
+        return float(obj)
+    elif type(obj).__name__ in ("Timestamp", "Timedelta"):
+        return str(obj)
+    elif pd.api.types.is_scalar(obj) and pd.isna(obj):
+        return None
+    return obj
+
 
 def debug_data_overview(parquet_path: str, sample_n: int = 5) -> Dict[str, object]:
     df = pd.read_parquet(parquet_path)
@@ -204,7 +223,7 @@ def debug_data_overview(parquet_path: str, sample_n: int = 5) -> Dict[str, objec
         "head": df.head(sample_n).to_dict(orient="records"),
         "describe_numeric": df.describe(include=[np.number]).T.reset_index().head(30).to_dict(orient="records"),
     }
-    return overview
+    return _to_jsonable(overview)
 
 
 def run_pipeline(parquet_path: str, output_path: str, central_only: bool = True) -> None:
