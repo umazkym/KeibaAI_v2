@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import difflib
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -49,6 +50,11 @@ class RaceIndexModeler:
         self._tenkai_features_: Optional[Sequence[str]] = None
 
     def validate_schema(self, df: pd.DataFrame) -> None:
+        """Validate that required columns exist in the dataframe.
+
+        When columns are missing, raise a ValueError with hint suggestions
+        using close matches from the dataframe columns.
+        """
         required = [
             self.cfg.race_id_col, self.cfg.horse_id_col, self.cfg.date_col,
             self.cfg.finish_time_col, self.cfg.last3f_col, self.cfg.pace_col,
@@ -58,7 +64,19 @@ class RaceIndexModeler:
         ]
         missing = [c for c in required if c not in df.columns]
         if missing:
-            raise ValueError(f"Missing required columns: {missing}")
+            hints: Dict[str, List[str]] = {}
+            for m in missing:
+                # suggest up to 3 close column names
+                hints[m] = difflib.get_close_matches(m, df.columns.tolist(), n=3, cutoff=0.6)
+            hint_msgs = []
+            for k, v in hints.items():
+                if v:
+                    hint_msgs.append(f"{k} (did you mean: {v})")
+                else:
+                    hint_msgs.append(f"{k}")
+            raise ValueError(
+                "Missing required columns: [" + ", ".join(missing) + "] - hints: " + "; ".join(hint_msgs)
+            )
 
     @staticmethod
     def _winsorize_series(s: pd.Series, p: float = 0.01) -> pd.Series:
@@ -194,6 +212,7 @@ class RaceIndexModeler:
         d = self.transform_tenkai_t_index(d)
         return d
 
+
 def _to_jsonable(obj: object) -> object:
     if isinstance(obj, dict):
         return {str(k): _to_jsonable(v) for k, v in obj.items()}
@@ -256,9 +275,16 @@ if __name__ == "__main__":
     parser.add_argument("--output", required=True, help="Output parquet path")
     parser.add_argument("--overview", action="store_true", help="Print data overview JSON")
     parser.add_argument("--include-local", action="store_true", help="Include local races")
+    parser.add_argument("--run", action="store_true", help="Run full pipeline (write output)")
     args = parser.parse_args()
 
     if args.overview:
         info = debug_data_overview(args.parquet)
         print(json.dumps(info, ensure_ascii=False, indent=2))
-    run_pipeline(args.parquet, args.output, central_only=not args.include_local)
+
+    if args.run:
+        run_pipeline(args.parquet, args.output, central_only=not args.include_local)
+    else:
+        if not args.overview:
+            # neither overview nor run was requested; print help-ish message
+            print("No action requested. Use --overview to print data overview or --run to execute the pipeline.")
