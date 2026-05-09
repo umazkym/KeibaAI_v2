@@ -7,9 +7,9 @@
     1. 【ソート】ボタンを全表示（スクロールなし、Wrap）。
     2. 【比較】対戦マトリクス（早見表）＋詳細アコーディオン。
     3. 【チャート】
-        - ③ 末脚(縦) vs 位置取り(横) に変更。
+        - ③ 末脚(縦) vs 初期位置(横) に変更。
         - ④ 上がり指数(縦) vs RPCI(横) を追加。
-    4. 【ロジック】位置取り計算を「(平均通過順 - 1) / (頭数 - 1)」に変更。
+    4. 【ロジック】位置取り計算を「最初に取得できる通過順 / 頭数」に変更。
     5. 【データ】比較詳細の「通過」が表示されないデータ不備を修正（1C~4Cから合成）。
     6. 【バグ修正】対戦履歴の馬番識別を「馬名」ベースに変更（過去の馬番混入防止）。
     7. 【バグ修正】枠番の色分けをデータ（出走枠番）準拠に変更（変則頭数等に対応）。
@@ -24,6 +24,7 @@ import itertools
 from collections import defaultdict
 import re
 import statistics
+from datetime import datetime
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -47,7 +48,8 @@ DISPLAY_COLUMNS = [
     'タイム', '着差', '人気', 'ｵｯｽﾞ',
     '上がり', 'ﾍﾟｰｽ1', 'ﾍﾟｰｽ2', '通過', '1角', '2角', '3角', '4角',
     '着順', '体重', '増減', 'レース名',
-    '平t差', '基t差', 'T指数', 'L指数', '馬場差', 'RPCI'
+    '平t差', '基t差', 'T指数', 'L指数', '馬場差', 'RPCI',
+    '指数信頼度', '指数N', '補正情報'
 ]
 
 COL_MAP = {
@@ -62,6 +64,26 @@ def normalize_text(text):
     t = str(text).strip()
     t = t.translate(str.maketrans('０１２３４５６７８９', '0123456789'))
     return t
+
+def parse_report_date(value):
+    if value is None or value == "":
+        return None
+    s = normalize_text(value)
+    if s.endswith(".0"):
+        s = s[:-2]
+    s = s.replace("/", "").replace("-", "")
+    try:
+        if len(s) == 8 and s.isdigit():
+            return datetime.strptime(s, "%Y%m%d")
+        return datetime.fromisoformat(str(value).replace("/", "-"))
+    except Exception:
+        return None
+
+def is_pre_target_history(row, target_dt):
+    if target_dt is None:
+        return True
+    row_dt = parse_report_date(row.get('日付'))
+    return row_dt is not None and row_dt < target_dt
 
 def get_waku_fallback(umaban):
     """Fallback calculation if data missing"""
@@ -242,6 +264,16 @@ def create_interactive_charts(source_file: str, output_file: str = None):
         if sheet_name.startswith('Race_'):
             race_num = sheet_name.replace('Race_', '')
             headers, rows = read_sheet_data(wb[sheet_name])
+            meta = race_meta.get(race_num, {})
+            target_dt = parse_report_date(meta.get('date'))
+            if target_dt is not None:
+                before_count = len(rows)
+                rows = [r for r in rows if is_pre_target_history(r, target_dt)]
+                removed = before_count - len(rows)
+                if removed:
+                    logger.info(
+                        f"Race_{race_num}: removed {removed} same-day/future rows from HTML data"
+                    )
 
             processed_rows = []
             horse_chart_info = {}
@@ -287,12 +319,21 @@ def create_interactive_charts(source_file: str, output_file: str = None):
                             def safe_float(r, k_list, d=0.0):
                                 for k in k_list:
                                     if k in r and r[k]:
-                                        try: return float(r[k])
-                                        except: pass
+                                        try:
+                                            return float(r[k])
+                                        except:
+                                            m = re.search(r'\d+(?:\.\d+)?', str(r[k]))
+                                            if m:
+                                                try:
+                                                    return float(m.group(0))
+                                                except:
+                                                    pass
                                 return d
 
                             time_idx = safe_float(row, ['タイム指数', 'T指数'])
                             l3f_idx = safe_float(row, ['上り指数', 'L指数'])
+                            idx_conf = safe_float(row, ['指数信頼度'])
+                            idx_n = safe_float(row, ['指数N'])
                             heads = safe_float(row, ['頭数'], 1)
                             c1 = safe_float(row, ['1C', '1角'])
                             c2 = safe_float(row, ['2C', '2角'])
@@ -301,14 +342,21 @@ def create_interactive_charts(source_file: str, output_file: str = None):
 
                             valid_corners = [c for c in [c1, c2, c3, c4] if c > 0]
                             has_corners = len(valid_corners) > 0
-                            if valid_corners:
-                                avg_rank = statistics.mean(valid_corners)
-                            else: avg_rank = heads / 2
+                            corner_pairs = [('1C', c1), ('2C', c2), ('3C', c3), ('4C', c4)]
+                            first_pair = next(((lbl, c) for lbl, c in corner_pairs if c > 0), None)
+                            last_rank = next((c for c in [c4, c3, c2, c1] if c > 0), None)
+                            avg_rank = statistics.mean(valid_corners) if valid_corners else heads / 2
+                            initial_corner = first_pair[0] if first_pair else ''
+                            initial_rank = first_pair[1] if first_pair else avg_rank
 
-                            if heads > 1: pos_score = (avg_rank - 1) / (heads - 1)
-                            else: pos_score = 0.5
-                            pos_score = max(0.0, min(1.0, pos_score))
-                            pos_score = round(pos_score, 3)
+                            def norm_rank(v):
+                                if heads > 1:
+                                    return max(0.0, min(1.0, (v - 1) / (heads - 1)))
+                                return 0.5
+
+                            last_pos = round(norm_rank(last_rank if last_rank is not None else avg_rank), 3)
+                            avg_pos = round(norm_rank(avg_rank), 3)
+                            initial_pos = round(norm_rank(initial_rank), 3)
 
                             rpci = safe_float(row, ['RPCI'], 0.0)
                             has_rpci = rpci > 0
@@ -318,7 +366,15 @@ def create_interactive_charts(source_file: str, output_file: str = None):
                                 horse_chart_info[umaban]['records'].append({
                                     'time_idx': round(time_idx, 1),
                                     'l3f_idx': round(l3f_idx, 1),
-                                    'c1_ratio': pos_score,
+                                    'idx_conf': round(idx_conf, 2) if idx_conf else None,
+                                    'idx_n': int(idx_n) if idx_n else None,
+                                    'correction_note': row.get('補正情報', ''),
+                                    'c1_ratio': initial_pos,
+                                    'initial_pos': initial_pos,
+                                    'initial_corner': initial_corner,
+                                    'last_pos': last_pos,
+                                    'avg_pos': avg_pos,
+                                    'early_pos': initial_pos,
                                     'rpci': round(rpci, 1),
                                     'has_l3f': l3f_idx != 0.0,
                                     'has_corners': has_corners,
@@ -336,7 +392,6 @@ def create_interactive_charts(source_file: str, output_file: str = None):
             if rows:
                 first = processed_rows[0]
                 # RaceInfoシートからレース名を取得 (フォールバック: 最初の行のデータ)
-                meta = race_meta.get(race_num, {})
                 ri_name = meta.get('race_name', '')
                 ri_course_info = meta.get('course_info', '')
                 ri_venue = meta.get('venue', '')
@@ -372,6 +427,29 @@ def create_interactive_charts(source_file: str, output_file: str = None):
                     'cond': first.get('馬場', ''),
                     'heads': heads_count,
                 }
+            else:
+                meta = race_meta.get(race_num, {})
+                ri_course_info = meta.get('course_info', '')
+                ri_course = ''
+                ri_dist = ''
+                if ri_course_info:
+                    if 'ダ' in ri_course_info:
+                        ri_course = 'ダート'
+                    elif '芝' in ri_course_info:
+                        ri_course = '芝'
+                    dm = re.search(r'(\d{3,4})', ri_course_info)
+                    if dm:
+                        ri_dist = dm.group(1)
+                all_data['race_info'][race_num] = {
+                    'race_name': meta.get('race_name', ''),
+                    'date': meta.get('date', ''),
+                    'place': meta.get('venue', ''),
+                    'course': ri_course,
+                    'dist': ri_dist,
+                    'weather': '',
+                    'cond': '',
+                    'heads': '',
+                }
 
             m_data, matrix_data = calculate_dynamic_matchups(processed_rows, name_map)
             all_data['matchups'][race_num] = m_data
@@ -389,7 +467,13 @@ def create_interactive_charts(source_file: str, output_file: str = None):
         except ImportError:
             from advanced_analyzer import AdvancedPaceAnalyzer
 
-        analyzer = AdvancedPaceAnalyzer()
+        report_cutoffs = [
+            parse_report_date(info.get('date'))
+            for info in all_data.get('race_info', {}).values()
+            if parse_report_date(info.get('date')) is not None
+        ]
+        analyzer_cutoff = min(report_cutoffs) if report_cutoffs else None
+        analyzer = AdvancedPaceAnalyzer(cutoff_date=analyzer_cutoff)
 
         for race_num in all_data['races'].keys():
             race_info = all_data['race_info'].get(race_num, {})
@@ -786,7 +870,7 @@ def generate_html(source_file: str, races: list, all_data: dict) -> str:
                 <th style="padding:4px;border:1px solid #e5e7eb">馬名</th>
                 <th style="padding:4px;border:1px solid #e5e7eb" title="走破タイムの相対評価 (負=速い)">走力</th>
                 <th style="padding:4px;border:1px solid #e5e7eb" title="上がり3Fの相対評価 (負=速い)">末脚</th>
-                <th style="padding:4px;border:1px solid #e5e7eb" title="3角通過時の相対位置 (0=先頭, 1=最後尾)">位置取り</th>
+                <th style="padding:4px;border:1px solid #e5e7eb" title="最初に取得できる通過順の相対位置 (0=先頭, 1=最後尾)">初期位置</th>
                 <th style="padding:4px;border:1px solid #e5e7eb" title="同コースでの走力評価と出走回数">同コース</th>
                 <th style="padding:4px;border:1px solid #e5e7eb" title="ペース指数 (低=前傾, 高=後傾)">ペース</th>
                 <th style="padding:4px;border:1px solid #e5e7eb">勝率</th>
@@ -873,7 +957,7 @@ def generate_html(source_file: str, races: list, all_data: dict) -> str:
             ${{dynHTML}}
             <div class="card">
                 <div class="font-bold text-xs" style="margin-bottom:4px;">📊 出走馬 総合比較</div>
-                <div style="font-size:9px;color:var(--text-light);margin-bottom:6px">走力/末脚: 負=速い（緑）, 正=遅い（赤） | 位置取り: 0=先頭, 1=最後尾 | 同コース=同コース評価(出走数)</div>
+                <div style="font-size:9px;color:var(--text-light);margin-bottom:6px">走力/末脚: 負=速い（緑）, 正=遅い（赤） | 初期位置: 0=先頭, 1=最後尾 | 同コース=同コース評価(出走数)</div>
                 ${{tableHTML || noData}}
             </div>
             <div class="card">
@@ -882,7 +966,7 @@ def generate_html(source_file: str, races: list, all_data: dict) -> str:
                 <div id="pac1" style="height:${{h}}"></div>
             </div>
             <div class="card">
-                <div class="font-bold text-xs" style="margin-bottom:4px;">📍 位置取り × 着順の関係</div>
+                <div class="font-bold text-xs" style="margin-bottom:4px;">📍 初期位置 × 着順の関係</div>
                 <div style="font-size:9px;color:var(--text-light);margin-bottom:4px">最終コーナーでの位置（0=先頭, 1=最後尾）と着順の関係。赤線=トレンド</div>
                 <div id="pac2" style="height:${{h}}"></div>
             </div>
@@ -989,7 +1073,7 @@ def generate_html(source_file: str, races: list, all_data: dict) -> str:
                     }}
                 }});
             }}
-            if(traces2.length) Plotly.newPlot('pac2',traces2,{{...baseLayout,xaxis:{{...baseLayout.xaxis,title:'正規化最終コーナー位置(0=先頭)'}},yaxis:{{...baseLayout.yaxis,title:'着順',autorange:'reversed'}}}},cfg);
+            if(traces2.length) Plotly.newPlot('pac2',traces2,{{...baseLayout,xaxis:{{...baseLayout.xaxis,title:'正規化初期位置(0=先頭)'}},yaxis:{{...baseLayout.yaxis,title:'着順',autorange:'reversed'}}}},cfg);
         }}
 
         // ③ 通過軌跡 (直近2走のみ + 同コース)
@@ -1440,7 +1524,9 @@ def generate_html(source_file: str, races: list, all_data: dict) -> str:
             const rank = r['着順'] ? `${{r['着順']}}着(差${{r['着差']||'-'}})` : '';
             const raceInfo = r['場所'] ? `${{p.course}}${{r['場所']}}${{r['距離']}}m` : p.course;
             const horseName = p.name || r['馬名'] || '';
-            return `${{p.date}} ${{p.u}}番 ${{horseName}}<br>${{raceInfo}} ${{pop}}<br>${{rank}}<br>T:${{p.time_idx ?? '-'}} 上り:${{p.l3f_idx ?? '-'}} RPCI:${{p.rpci ?? '-'}}`;
+            const conf = p.idx_conf ? `<br>信頼度:${{p.idx_conf}} N:${{p.idx_n || '-'}}` : '';
+            const initPos = p.initial_corner ? `<br>初期位置:${{p.initial_corner}} ${{p.initial_pos ?? '-'}}` : '';
+            return `${{p.date}} ${{p.u}}番 ${{horseName}}<br>${{raceInfo}} ${{pop}}<br>${{rank}}<br>T:${{p.time_idx ?? '-'}} 上り:${{p.l3f_idx ?? '-'}} RPCI:${{p.rpci ?? '-'}}${{initPos}}${{conf}}`;
         }};
 
         const makeMarker = (list) => ({{
@@ -1470,8 +1556,8 @@ def generate_html(source_file: str, races: list, all_data: dict) -> str:
         let chartHTML = '<div class="chart-grid">';
         chartHTML += createPanel('c_tidx', '① 走力(T指数) 馬別比較', '箱ひげ + 全履歴点', true);
         if(hasL3f) chartHTML += createPanel('c1', '② 走力(T指数) vs 末脚(上がり指数)');
-        if(hasCorners) chartHTML += createPanel('c2', `${{hasL3f?'③':'②'}} 走力(T指数) vs 位置取り`);
-        if(hasL3f && hasCorners) chartHTML += createPanel('c3', '④ 末脚(上がり指数) vs 位置取り');
+        if(hasCorners) chartHTML += createPanel('c2', `${{hasL3f?'③':'②'}} 走力(T指数) vs 初期位置`);
+        if(hasL3f && hasCorners) chartHTML += createPanel('c3', '④ 末脚(上がり指数) vs 初期位置');
         if(hasL3f && hasRpci) chartHTML += createPanel('c4', `${{hasCorners?'⑤':'③'}} 末脚(上がり指数) vs ペース(RPCI)`);
         chartHTML += createPanel('c_rank', `${{hasL3f&&hasCorners?'⑥':'②'}} 走力(T指数) vs 着順`);
         chartHTML += '</div>';
@@ -1546,8 +1632,8 @@ def generate_html(source_file: str, races: list, all_data: dict) -> str:
         }}
 
         if(hasL3f) createScatterChart('c1', 'l3f_idx', 'time_idx', '上がり指数', 'T指数');
-        if(hasCorners) createScatterChart('c2', 'c1_ratio', 'time_idx', '位置取り', 'T指数');
-        if(hasL3f && hasCorners) createScatterChart('c3', 'c1_ratio', 'l3f_idx', '位置取り', '上がり指数');
+        if(hasCorners) createScatterChart('c2', 'initial_pos', 'time_idx', '初期位置(最初に取れる通過順)', 'T指数');
+        if(hasL3f && hasCorners) createScatterChart('c3', 'initial_pos', 'l3f_idx', '初期位置(最初に取れる通過順)', '上がり指数');
         if(hasL3f && hasRpci) createScatterChart('c4', 'rpci', 'l3f_idx', 'RPCI', '上がり指数');
     }}
 

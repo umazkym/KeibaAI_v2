@@ -54,9 +54,34 @@ VENUE_NAME_TO_CODE = {v: k for k, v in VENUE_MAP.items()}
 
 import numpy as np
 
+MIN_REPORT_HISTORY_DATE = pd.Timestamp("2024-10-01")
+LOCAL_STD_WINDOWS = (3, 7, 14, 30)
+LOCAL_STD_MIN_SAMPLES = 6
+FIELD_ADJ_MIN_SAMPLES = 5
+FIELD_ADJ_SHRINKAGE_N = 40
+MAX_FIELD_TIME_ADJ = 1.2
+MAX_FIELD_L3F_ADJ = 0.6
+INDEX_ROLLING_YEARS = 3
+INDEX_MIN_GLOBAL_SAMPLES = 10
+INDEX_MIN_VENUE_SAMPLES = 5
+INDEX_MIN_SEASONAL_SAMPLES = 10
+INDEX_ADJ_SHRINKAGE_N = 30
+MAX_INDEX_TIME_ADJ = 3.0
+MAX_INDEX_L3F_ADJ = 3.0
+
+
 class MetricCalculator:
     def __init__(self, reference_df: pd.DataFrame):
-        self.reference_df = reference_df
+        self.reference_df = reference_df.copy()
+        self.reference_df['race_date'] = pd.to_datetime(self.reference_df['race_date'], errors='coerce')
+        for col in ['distance_m', 'finish_position', 'finish_time_seconds', 'last_3f_time']:
+            self.reference_df[col] = pd.to_numeric(self.reference_df[col], errors='coerce')
+        if 'field_size' not in self.reference_df.columns and 'race_id' in self.reference_df.columns:
+            self.reference_df['field_size'] = self.reference_df.groupby('race_id')['race_id'].transform('size')
+        self.reference_df['field_size_bucket'] = self.reference_df.get(
+            'field_size', pd.Series(index=self.reference_df.index, dtype='float64')
+        ).apply(self._field_size_bucket)
+
         self.avg_time_lookup = {}
         self.avg_cond_time_lookup = {}
         self.std_3f_lookup = {} # Kept for fallback or reference if needed
@@ -67,8 +92,24 @@ class MetricCalculator:
         
         self.regression_models = {} # (venue, dist, surf) -> (slope, intercept)
         self.regression_cond_models = {} # (venue, dist, surf, cond) -> (slope, intercept)
+        self.field_size_adjustments = {}
+        self.dynamic_global_stats = {}
+        self.dynamic_venue_adjustment = {}
+        self.dynamic_seasonal_adjustment = {}
         
         self._prepare_lookups()
+
+    @staticmethod
+    def _field_size_bucket(field_size):
+        try:
+            n = int(field_size)
+        except Exception:
+            return None
+        if n <= 9:
+            return "small"
+        if n <= 13:
+            return "medium"
+        return "large"
 
     def _prepare_lookups(self):
         """Pre-calculates static lookups and groups data."""
@@ -76,6 +117,7 @@ class MetricCalculator:
         
         # Filter for 1-3rd place once
         df_top3 = self.reference_df[self.reference_df['finish_position'].isin([1, 2, 3])].copy()
+        df_top3 = df_top3.dropna(subset=['race_date', 'venue', 'distance_m', 'track_surface', 'finish_time_seconds'])
         
         # 1. Static Averages (Venue, Dist, Surf)
         avg_time_series = df_top3.groupby(['venue', 'distance_m', 'track_surface'])['finish_time_seconds'].mean()
@@ -84,8 +126,17 @@ class MetricCalculator:
         # 2. Static Condition Averages (Venue, Dist, Surf, Cond)
         avg_cond_time_series = df_top3.groupby(['venue', 'distance_m', 'track_surface', 'track_condition'])['finish_time_seconds'].mean()
         self.avg_cond_time_lookup = avg_cond_time_series.to_dict()
+
+        # 3. Field-size adjustments. Large fields are often slightly slower because
+        # position loss and traffic change the race shape; shrink aggressively.
+        self._prepare_field_size_adjustments(df_top3)
+
+        # 4. Dynamic index baselines built from data strictly before target date.
+        # Static pickle files can be stale or contain future data for historical
+        # re-runs, so the report prefers these in-memory lookups.
+        self._prepare_dynamic_index_lookups(df_top3)
         
-        # 3. Group Data for Time-Dependent Queries & Regression
+        # 5. Group Data for Time-Dependent Queries & Regression
         for name, group in df_top3.groupby(['venue', 'distance_m', 'track_surface']):
             self.grouped_data[name] = group.sort_values('race_date')
             
@@ -101,6 +152,197 @@ class MetricCalculator:
             
         logger.info("Lookups prepared.")
 
+    def _prepare_dynamic_index_lookups(self, df_top3):
+        valid = df_top3.copy()
+        valid = valid.dropna(subset=[
+            'race_date', 'distance_m', 'track_surface', 'track_condition',
+            'finish_time_seconds', 'last_3f_time'
+        ])
+        valid = valid[valid['track_surface'].isin(['芝', 'ダート'])]
+        if valid.empty:
+            return
+
+        valid['month'] = valid['race_date'].dt.month
+        anchor = valid['race_date'].max()
+        recent_cutoff = anchor - pd.DateOffset(years=INDEX_ROLLING_YEARS)
+        recent = valid[valid['race_date'] >= recent_cutoff].copy()
+
+        self.dynamic_global_stats = self._build_global_stats(valid, recent)
+        self.dynamic_venue_adjustment = self._build_venue_adjustment(valid, recent)
+        self.dynamic_seasonal_adjustment = self._build_seasonal_adjustment(valid)
+        logger.info(
+            "Dynamic index lookups prepared: "
+            f"global={len(self.dynamic_global_stats)}, "
+            f"venue={len(self.dynamic_venue_adjustment)}, "
+            f"season={len(self.dynamic_seasonal_adjustment)}"
+        )
+
+    def _build_global_stats(self, all_df, recent_df):
+        lookup = {}
+        cols = ['distance_m', 'track_surface', 'track_condition']
+
+        def add_stats(source_df, source_name):
+            grouped = source_df.groupby(cols).agg(
+                time_mean=('finish_time_seconds', 'mean'),
+                time_std=('finish_time_seconds', 'std'),
+                count=('finish_time_seconds', 'size'),
+                l3f_mean=('last_3f_time', 'mean'),
+                l3f_std=('last_3f_time', 'std'),
+            ).reset_index()
+            for _, row in grouped.iterrows():
+                if int(row['count']) < INDEX_MIN_GLOBAL_SAMPLES:
+                    continue
+                key = (int(row['distance_m']), row['track_surface'], row['track_condition'])
+                lookup[key] = {
+                    'time_mean': float(row['time_mean']),
+                    'time_std': max(float(row['time_std']), 0.5),
+                    'l3f_mean': float(row['l3f_mean']),
+                    'l3f_std': max(float(row['l3f_std']), 0.3),
+                    'count': int(row['count']),
+                    'source': source_name,
+                }
+
+        add_stats(all_df, 'dynamic_all_time')
+        add_stats(recent_df, f'dynamic_recent_{INDEX_ROLLING_YEARS}y')
+        return lookup
+
+    def _build_venue_adjustment(self, all_df, recent_df):
+        adjustment = {}
+        cols = ['venue', 'distance_m', 'track_surface', 'track_condition']
+
+        def add_adjustments(source_df, source_name):
+            grouped = source_df.groupby(cols).agg(
+                venue_time_mean=('finish_time_seconds', 'mean'),
+                count=('finish_time_seconds', 'size'),
+                venue_l3f_mean=('last_3f_time', 'mean'),
+            ).reset_index()
+            for _, row in grouped.iterrows():
+                if int(row['count']) < INDEX_MIN_VENUE_SAMPLES:
+                    continue
+                venue = row['venue']
+                dist = int(row['distance_m'])
+                surf = row['track_surface']
+                cond = row['track_condition']
+                global_key = (dist, surf, cond)
+                g = self.dynamic_global_stats.get(global_key)
+                if not g:
+                    continue
+
+                shrink = min(1.0, float(row['count']) / INDEX_ADJ_SHRINKAGE_N)
+                time_adj = np.clip(
+                    (float(row['venue_time_mean']) - float(g['time_mean'])) * shrink,
+                    -MAX_INDEX_TIME_ADJ,
+                    MAX_INDEX_TIME_ADJ,
+                )
+                l3f_adj = np.clip(
+                    (float(row['venue_l3f_mean']) - float(g['l3f_mean'])) * shrink,
+                    -MAX_INDEX_L3F_ADJ,
+                    MAX_INDEX_L3F_ADJ,
+                )
+                data = {
+                    'time_adjustment': float(time_adj),
+                    'l3f_adjustment': float(l3f_adj),
+                    'venue_time_mean': float(row['venue_time_mean']),
+                    'global_time_mean': float(g['time_mean']),
+                    'count': int(row['count']),
+                    'source': source_name,
+                    'shrinkage': round(float(shrink), 3),
+                }
+                adjustment[(venue, dist, surf, cond)] = data
+                adjustment.setdefault((venue, dist, surf), {**data, 'default_condition': cond})
+
+        add_adjustments(all_df, 'dynamic_all_time')
+        add_adjustments(recent_df, f'dynamic_recent_{INDEX_ROLLING_YEARS}y')
+        return adjustment
+
+    def _build_seasonal_adjustment(self, df_top3):
+        adjustment = {}
+        cols = ['venue', 'distance_m', 'track_surface']
+        overall = df_top3.groupby(cols).agg(
+            overall_time_mean=('finish_time_seconds', 'mean'),
+            overall_l3f_mean=('last_3f_time', 'mean'),
+        ).reset_index()
+        monthly = df_top3.groupby(cols + ['month']).agg(
+            month_time_mean=('finish_time_seconds', 'mean'),
+            month_l3f_mean=('last_3f_time', 'mean'),
+            count=('finish_time_seconds', 'size'),
+        ).reset_index()
+        merged = monthly.merge(overall, on=cols, how='left')
+        merged = merged[merged['count'] >= INDEX_MIN_SEASONAL_SAMPLES]
+        for _, row in merged.iterrows():
+            shrink = min(1.0, float(row['count']) / INDEX_ADJ_SHRINKAGE_N)
+            time_adj = np.clip(
+                (float(row['month_time_mean']) - float(row['overall_time_mean'])) * shrink,
+                -MAX_INDEX_TIME_ADJ,
+                MAX_INDEX_TIME_ADJ,
+            )
+            l3f_adj = np.clip(
+                (float(row['month_l3f_mean']) - float(row['overall_l3f_mean'])) * shrink,
+                -MAX_INDEX_L3F_ADJ,
+                MAX_INDEX_L3F_ADJ,
+            )
+            key = (row['venue'], int(row['distance_m']), row['track_surface'], int(row['month']))
+            adjustment[key] = {
+                'time_adj': float(time_adj),
+                'l3f_adj': float(l3f_adj),
+                'count': int(row['count']),
+                'source': 'dynamic_cutoff',
+                'shrinkage': round(float(shrink), 3),
+            }
+        return adjustment
+
+    def _prepare_field_size_adjustments(self, df_top3):
+        """Builds conservative field-size adjustments from historical top-3 data."""
+        required = ['venue', 'distance_m', 'track_surface', 'track_condition', 'field_size_bucket',
+                    'finish_time_seconds', 'last_3f_time']
+        if any(c not in df_top3.columns for c in required):
+            return
+
+        valid = df_top3.dropna(subset=['field_size_bucket', 'finish_time_seconds']).copy()
+        if valid.empty:
+            return
+
+        def add_adjustments(base_cols, key_builder):
+            base = valid.groupby(base_cols).agg(
+                base_time=('finish_time_seconds', 'mean'),
+                base_l3f=('last_3f_time', 'mean'),
+                base_n=('finish_time_seconds', 'size')
+            ).reset_index()
+            bucket_cols = base_cols + ['field_size_bucket']
+            bucket = valid.groupby(bucket_cols).agg(
+                bucket_time=('finish_time_seconds', 'mean'),
+                bucket_l3f=('last_3f_time', 'mean'),
+                count=('finish_time_seconds', 'size')
+            ).reset_index()
+            merged = bucket.merge(base, on=base_cols, how='left')
+            for _, row in merged.iterrows():
+                if int(row['count']) < FIELD_ADJ_MIN_SAMPLES:
+                    continue
+                shrink = min(1.0, float(row['count']) / FIELD_ADJ_SHRINKAGE_N)
+                time_adj = np.clip((row['bucket_time'] - row['base_time']) * shrink,
+                                   -MAX_FIELD_TIME_ADJ, MAX_FIELD_TIME_ADJ)
+                l3f_adj = 0.0
+                if pd.notna(row.get('bucket_l3f')) and pd.notna(row.get('base_l3f')):
+                    l3f_adj = np.clip((row['bucket_l3f'] - row['base_l3f']) * shrink,
+                                      -MAX_FIELD_L3F_ADJ, MAX_FIELD_L3F_ADJ)
+                key = key_builder(row)
+                self.field_size_adjustments[key] = {
+                    'time_adjustment': float(time_adj),
+                    'l3f_adjustment': float(l3f_adj),
+                    'count': int(row['count']),
+                    'bucket': row['field_size_bucket'],
+                    'shrinkage': round(float(shrink), 3),
+                }
+
+        add_adjustments(
+            ['venue', 'distance_m', 'track_surface', 'track_condition'],
+            lambda r: (r['venue'], int(r['distance_m']), r['track_surface'], r['track_condition'], r['field_size_bucket'])
+        )
+        add_adjustments(
+            ['venue', 'distance_m', 'track_surface'],
+            lambda r: (r['venue'], int(r['distance_m']), r['track_surface'], r['field_size_bucket'])
+        )
+
     def _fit_regression(self, key, group, is_condition_specific):
         """Fits a linear regression model for 3F prediction."""
         if len(group) < 2:
@@ -113,7 +355,7 @@ class MetricCalculator:
             dist_minus_600 = group['distance_m'] - 600
             time_minus_3f = group['finish_time_seconds'] - group['last_3f_time']
             
-            valid_mask = (time_minus_3f > 0) & (dist_minus_600 > 0)
+            valid_mask = (time_minus_3f > 0) & (dist_minus_600 > 0) & (group['last_3f_time'] > 0)
             if not valid_mask.any():
                 return
 
@@ -138,6 +380,27 @@ class MetricCalculator:
 
     def get_avg_cond_time(self, venue, dist, surf, cond):
         return self.avg_cond_time_lookup.get((venue, dist, surf, cond))
+
+    def get_field_size_adjustment(self, venue, dist, surf, cond, field_size):
+        bucket = self._field_size_bucket(field_size)
+        if not bucket:
+            return None
+        exact = self.field_size_adjustments.get((venue, int(dist), surf, cond, bucket))
+        if exact:
+            return exact
+        return self.field_size_adjustments.get((venue, int(dist), surf, bucket))
+
+    def get_global_stats(self, dist, surf, cond):
+        return self.dynamic_global_stats.get((int(dist), surf, cond))
+
+    def get_venue_adjustment(self, venue, dist, surf, cond):
+        exact = self.dynamic_venue_adjustment.get((venue, int(dist), surf, cond))
+        if exact:
+            return exact
+        return self.dynamic_venue_adjustment.get((venue, int(dist), surf))
+
+    def get_seasonal_adjustment(self, venue, dist, surf, month):
+        return self.dynamic_seasonal_adjustment.get((venue, int(dist), surf, int(month)))
 
     def predict_std_3f(self, venue, dist, surf, finish_time, last_3f):
         """Predicts Standard 3F based on regression."""
@@ -180,8 +443,26 @@ class MetricCalculator:
         except:
             return None
 
+    @staticmethod
+    def _window_mean(group, date_obj, cond=None):
+        best_sub = None
+        for days in LOCAL_STD_WINDOWS:
+            start_date = date_obj - timedelta(days=days)
+            end_date = date_obj + timedelta(days=days)
+            mask = (group['race_date'] >= start_date) & (group['race_date'] <= end_date)
+            if cond is not None:
+                mask = mask & (group['track_condition'] == cond)
+            sub_group = group[mask]
+            if len(sub_group) >= LOCAL_STD_MIN_SAMPLES:
+                return sub_group['finish_time_seconds'].mean()
+            if best_sub is None or len(sub_group) > len(best_sub):
+                best_sub = sub_group
+        if best_sub is not None and not best_sub.empty:
+            return best_sub['finish_time_seconds'].mean()
+        return None
+
     def get_std_time(self, venue, dist, surf, date_obj):
-        """Calculates Standard Time (Avg of +/- 3 days) with caching."""
+        """Calculates local standard time using expanding windows with caching."""
         date_str = date_obj.strftime('%Y%m%d')
         key = (venue, dist, surf, date_str)
         if key in self.std_time_cache:
@@ -191,25 +472,14 @@ class MetricCalculator:
         if group is None or group.empty:
             self.std_time_cache[key] = None
             return None
-            
-        # Filter by date range
-        start_date = date_obj - timedelta(days=3)
-        end_date = date_obj + timedelta(days=3)
-        
-        # Since group is sorted, we could use searchsorted, but boolean mask is fast enough on small groups
-        mask = (group['race_date'] >= start_date) & (group['race_date'] <= end_date)
-        sub_group = group[mask]
-        
-        if sub_group.empty:
-            val = None
-        else:
-            val = sub_group['finish_time_seconds'].mean()
+
+        val = self._window_mean(group, date_obj)
         
         self.std_time_cache[key] = val
         return val
 
     def get_std_cond_time(self, venue, dist, surf, cond, date_obj):
-        """Calculates Standard Condition Time with caching."""
+        """Calculates local condition-specific standard time with caching."""
         date_str = date_obj.strftime('%Y%m%d')
         key = (venue, dist, surf, cond, date_str)
         if key in self.std_cond_time_cache:
@@ -221,17 +491,8 @@ class MetricCalculator:
         if group is None or group.empty:
             self.std_cond_time_cache[key] = None
             return None
-            
-        start_date = date_obj - timedelta(days=3)
-        end_date = date_obj + timedelta(days=3)
-        
-        mask = (group['race_date'] >= start_date) & (group['race_date'] <= end_date) & (group['track_condition'] == cond)
-        sub_group = group[mask]
-        
-        if sub_group.empty:
-            val = None
-        else:
-            val = sub_group['finish_time_seconds'].mean()
+
+        val = self._window_mean(group, date_obj, cond=cond)
             
         self.std_cond_time_cache[key] = val
         return val
@@ -298,6 +559,13 @@ class NetkeibaAnalyzer:
             # Ensure IDs are strings for lookup
             df['race_id'] = df['race_id'].astype(str)
             df['horse_id'] = df['horse_id'].astype(str)
+            cutoff_date = pd.to_datetime(self.target_date)
+            before_count = len(df)
+            df = df[df['race_date'] < cutoff_date].copy()
+            logger.info(
+                f"Reference cutoff applied: kept {len(df):,}/{before_count:,} rows before {self.target_date}"
+            )
+            df['field_size'] = df.groupby('race_id')['race_id'].transform('size')
             
             self.reference_df = df
             logger.info(f"Loaded {len(df)} rows of reference data.")
@@ -630,6 +898,44 @@ class NetkeibaAnalyzer:
             logger.error(f"Error parsing history: {e}")
             return []
 
+    def filter_history_for_report(self, history: List[Dict], current_race_id: str = None) -> List[Dict]:
+        """
+        Keeps only information that would have been known before the target race day.
+
+        Netkeiba horse result pages include the target race result after the race has
+        been run. For prediction reports this is direct leakage, so the cutoff is
+        strictly earlier than self.target_date. The lower bound keeps the report
+        focused on recent form without allowing same-day answers into the charts.
+        """
+        target_date_obj = pd.to_datetime(self.target_date)
+        filtered = []
+        removed_future = 0
+        removed_old = 0
+
+        for h in history:
+            h_date = pd.to_datetime(h.get('日付', ''), errors='coerce')
+            if pd.isna(h_date):
+                continue
+            if h_date >= target_date_obj:
+                removed_future += 1
+                continue
+            if str(h.get('race_id', '')) == str(current_race_id):
+                removed_future += 1
+                continue
+            if h_date < MIN_REPORT_HISTORY_DATE:
+                removed_old += 1
+                continue
+            filtered.append(h)
+
+        if removed_future:
+            logger.info(
+                f"Removed {removed_future} same-day/future history rows for race {current_race_id}"
+            )
+        if removed_old:
+            logger.debug(f"Removed {removed_old} history rows older than {MIN_REPORT_HISTORY_DATE.date()}")
+
+        return filtered
+
     def load_stats_lookup(self):
         """Load pre-calculated statistics lookup table."""
         # 1. Existing Venue-Specific Stats
@@ -689,6 +995,20 @@ class NetkeibaAnalyzer:
         if not hasattr(self, 'stats_lookup'):
             self.load_stats_lookup()
 
+        def confidence_score(global_n, venue_n, season_n=None, field_n=None):
+            score = 0.0
+            score += 0.45 if global_n >= 80 else 0.30 if global_n >= 30 else 0.15 if global_n >= 10 else 0.0
+            score += 0.25 if venue_n >= 30 else 0.15 if venue_n >= 10 else 0.05 if venue_n >= 5 else 0.0
+            if season_n is not None:
+                score += 0.15 if season_n >= 30 else 0.08 if season_n >= 10 else 0.03
+            else:
+                score += 0.08
+            if field_n is not None:
+                score += 0.15 if field_n >= 30 else 0.08 if field_n >= 10 else 0.03
+            else:
+                score += 0.07
+            return min(1.0, score)
+
         for race in history:
             venue = race.get('場所', '')
             dist_str = race.get('距離', '')
@@ -704,6 +1024,10 @@ class NetkeibaAnalyzer:
                 distance = int(dist_str) if dist_str.isdigit() else 0
             except:
                 distance = 0
+            try:
+                field_size = int(str(race.get('頭数', '')).strip())
+            except:
+                field_size = None
             
             # Parse Time
             def parse_time(t_str):
@@ -731,7 +1055,8 @@ class NetkeibaAnalyzer:
             # Initialize metrics with None
             for col in ['タイム指数', '上り指数', '場別タイム指数', '場別上り指数', '馬場差', 'RPCI',
                        '平均t', '平均場t', '基準t', '基準場t', '基準3F', '基準場3F', 
-                       '平t差', '平場t差', '基t差', '基場t差', '基3F差', '基場3F差']:
+                       '平t差', '平場t差', '基t差', '基場t差', '基3F差', '基場3F差',
+                       '指数信頼度', '指数N', '補正情報']:
                 race[col] = None
             
             # Parse Date
@@ -815,7 +1140,9 @@ class NetkeibaAnalyzer:
             # Venue Adjustment Key: (Venue, Distance, Surface, Condition)
             # Fallback Key: (Venue, Distance, Surface)
             adj_data = None
-            if hasattr(self, 'venue_adjustment'):
+            if self.metric_calculator and distance > 0:
+                adj_data = self.metric_calculator.get_venue_adjustment(venue, distance, surface, full_cond)
+            if not adj_data and hasattr(self, 'venue_adjustment'):
                 adj_data = self.venue_adjustment.get(key)
                 if not adj_data:
                     adj_data = self.venue_adjustment.get((venue, distance, surface))
@@ -823,15 +1150,35 @@ class NetkeibaAnalyzer:
             # Seasonal Adjustment (v2)
             season_time_adj = 0.0
             season_l3f_adj = 0.0
-            if hasattr(self, 'seasonal_adjustment') and date_obj is not None:
+            season_data = None
+            if self.metric_calculator and distance > 0 and date_obj is not None:
+                race_month = date_obj.month
+                season_data = self.metric_calculator.get_seasonal_adjustment(venue, distance, surface, race_month)
+            if not season_data and hasattr(self, 'seasonal_adjustment') and date_obj is not None:
                 race_month = date_obj.month
                 season_data = self.seasonal_adjustment.get((venue, distance, surface, race_month))
-                if season_data:
-                    season_time_adj = season_data.get('time_adj', 0.0)
-                    season_l3f_adj = season_data.get('l3f_adj', 0.0)
+            if season_data:
+                season_time_adj = season_data.get('time_adj', 0.0)
+                season_l3f_adj = season_data.get('l3f_adj', 0.0)
+
+            field_adj = None
+            field_time_adj = 0.0
+            field_l3f_adj = 0.0
+            if self.metric_calculator and distance > 0 and field_size:
+                field_adj = self.metric_calculator.get_field_size_adjustment(
+                    venue, distance, surface, full_cond, field_size
+                )
+                if field_adj:
+                    field_time_adj = field_adj.get('time_adjustment', 0.0)
+                    field_l3f_adj = field_adj.get('l3f_adjustment', 0.0)
             
-            if hasattr(self, 'global_stats') and global_key in self.global_stats and adj_data:
-                g_stats = self.global_stats[global_key]
+            g_stats = None
+            if self.metric_calculator and distance > 0:
+                g_stats = self.metric_calculator.get_global_stats(distance, surface, full_cond)
+            if not g_stats and hasattr(self, 'global_stats'):
+                g_stats = self.global_stats.get(global_key)
+
+            if g_stats and adj_data:
                 time_adj = adj_data.get('time_adjustment', 0.0)
                 l3f_adj = adj_data.get('l3f_adjustment', 0.0)
                 
@@ -840,7 +1187,8 @@ class NetkeibaAnalyzer:
                     # Adjusted Time = Real Time - Venue Adj - Seasonal Adj
                     # Venue adj: positive = venue is slower → subtract to normalize
                     # Seasonal adj: positive = this month is slower → subtract to normalize
-                    adj_time = time_sec - time_adj - season_time_adj
+                    # Field adj: positive = larger/smaller field bucket runs slower.
+                    adj_time = time_sec - time_adj - season_time_adj - field_time_adj
                     g_mean = g_stats['time_mean']
                     g_std = g_stats['time_std']
                     
@@ -852,7 +1200,7 @@ class NetkeibaAnalyzer:
                 
                 # L3F Index (Global) with venue + seasonal correction
                 if l3f_sec:
-                    adj_l3f = l3f_sec - l3f_adj - season_l3f_adj
+                    adj_l3f = l3f_sec - l3f_adj - season_l3f_adj - field_l3f_adj
                     g_mean3f = g_stats['l3f_mean']
                     g_std3f = g_stats['l3f_std']
                     
@@ -861,6 +1209,21 @@ class NetkeibaAnalyzer:
                         # Clip to reasonable range (20-80)
                         g_idx3f = max(20.0, min(80.0, g_idx3f))
                         race['上り指数'] = round(g_idx3f, 1)
+
+                global_n = int(g_stats.get('count', 0) or 0)
+                venue_n = int(adj_data.get('count', 0) or 0)
+                season_n = int(season_data.get('count', 0)) if season_data else None
+                field_n = int(field_adj.get('count', 0)) if field_adj else None
+                positive_counts = [n for n in [global_n, venue_n, season_n, field_n] if n]
+                race['指数N'] = min(positive_counts) if positive_counts else None
+                race['指数信頼度'] = round(confidence_score(global_n, venue_n, season_n, field_n), 2)
+                notes = [
+                    f"globalN={global_n}",
+                    f"venueN={venue_n}",
+                    f"seasonN={season_n}" if season_n is not None else "season=fb",
+                    f"fieldN={field_n}" if field_n is not None else "field=fb",
+                ]
+                race['補正情報'] = "; ".join(notes)
 
             # RPCI: (First 3F / Last 3F) * 50
             if pace_str and l3f_sec:
@@ -1341,19 +1704,7 @@ class NetkeibaAnalyzer:
                     
                     # logger.info(f"[{idx}/{total_horses}] Fetching history for {horse_name} ({horse_id})...")
                     history = self.get_horse_history(horse_id)
-                    
-                    # --- FILTER: Only keep history from 2024/10/1 onwards ---
-                    filter_date = pd.to_datetime("2024-10-01")
-                    filtered_history = []
-                    for h in history:
-                        try:
-                            h_date = pd.to_datetime(h.get('日付', ''))
-                            if h_date >= filter_date:
-                                filtered_history.append(h)
-                        except:
-                            pass
-                    history = filtered_history
-                    # --------------------------------------------------------
+                    history = self.filter_history_for_report(history, current_race_id=race_id)
 
                     history = self.calculate_metrics(history)
                     
@@ -1501,7 +1852,7 @@ class NetkeibaAnalyzer:
             'レース名', '性', '年齢', 
             '平均t', '平均場t', '基準t', '基準場t', '基準3F', '基準場3F', 
             '平t差', '平場t差', '基t差', '基場t差', '基3F差', '基場3F差', 
-            'タイム指数', '上り指数', '馬場差', 'RPCI',
+            'タイム指数', '上り指数', '馬場差', 'RPCI', '指数信頼度', '指数N', '補正情報',
             '展開注釈', '展開補正', '展開ラベル', '展開補正T指数',
             'ペース', '位置バイアス', '馬場速度', '相手強度',
             'horse_id', 'race_id'
@@ -1643,7 +1994,8 @@ class NetkeibaAnalyzer:
                     '枠番', '馬番', '斤量', '着順', '馬体重', '増減', '年齢',
                     '平均t', '平均場t', '基準t', '基準場t', '基準3F', '基準場3F',
                     '平t差', '平場t差', '基t差', '基場t差', '基3F差', '基場3F差',
-                    'タイム指数', '上り指数', '馬場差', 'RPCI', '上り', '上り秒', 'ｵｯｽﾞ', '人気',
+                    'タイム指数', '上り指数', '馬場差', 'RPCI', '指数信頼度', '指数N',
+                    '上り', '上り秒', 'ｵｯｽﾞ', '人気',
                     'ﾍﾟｰｽ1', 'ﾍﾟｰｽ2', '4C', 'タイム秒'
                 ]
                 

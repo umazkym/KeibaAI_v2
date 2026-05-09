@@ -1,62 +1,61 @@
-import pandas as pd
-import sys
 import os
+import sys
 
-# Add project root to path
+import pandas as pd
+
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 
 from keibaai.src.features.report_metrics import ReportMetricsFeatureGenerator
 
-def test_metrics_generation():
-    print("Loading races.parquet...")
-    try:
-        df = pd.read_parquet(r"c:\Users\zk-ht\Keiba\Keiba_AI_v2\keibaai\data\parsed\parquet\races\races.parquet")
-    except FileNotFoundError:
-        print("races.parquet not found. Skipping test.")
-        return
 
-    # Use a subset for speed
-    print(f"Total rows: {len(df)}")
-    # Filter for a specific venue/year to ensure enough data for window functions
-    # Tokyo (05), 2023
-    df['race_date'] = pd.to_datetime(df['race_date'])
-    subset = df[(df['race_date'] >= '2023-01-01') & (df['race_date'] <= '2023-12-31') & (df['venue'] == '東京')].copy()
-    
-    if len(subset) < 100:
-        print("Not enough data in subset. Using full df (slow).")
-        subset = df.head(10000).copy()
-    else:
-        print(f"Subset rows: {len(subset)}")
+def _sample_history():
+    rows = []
+    dates = pd.date_range('2024-01-01', periods=8, freq='14D')
+    for i, date in enumerate(dates):
+        rows.append({
+            'race_id': f'R{i}',
+            'horse_id': f'H{i}',
+            'race_date': date,
+            'venue': '東京',
+            'distance_m': 1600,
+            'track_surface': '芝',
+            'finish_position': 1 if i % 3 == 0 else 2,
+            'finish_time_seconds': 96.0 + i * 0.2,
+            'last_3f_time': 34.0 + i * 0.05,
+        })
+    return pd.DataFrame(rows)
 
-    print("Initializing Generator...")
-    generator = ReportMetricsFeatureGenerator(subset)
-    
-    print("Annotating metrics...")
-    annotated_df = generator.annotate_race_metrics()
-    
-    print("Verification:")
-    cols = ['standard_time', 'track_bias', 'time_deviation_score', 'standard_3f', 'l3f_deviation_score']
-    print(annotated_df[cols].describe())
-    
-    # Check for NaNs
-    nan_counts = annotated_df[cols].isna().sum()
-    print("\nNaN Counts:")
-    print(nan_counts)
-    
-    # Sample check
-    sample = annotated_df.dropna(subset=['time_deviation_score']).iloc[0]
-    print("\nSample Row:")
-    print(f"Date: {sample['race_date']}")
-    print(f"Venue: {sample['venue']} {sample['distance_m']}m {sample['track_surface']}")
-    print(f"Time: {sample['finish_time_seconds']}")
-    print(f"Standard Time: {sample['standard_time']}")
-    print(f"Deviation Score: {sample['time_deviation_score']}")
-    
-    # Logic check
-    # If Time < Standard, Score should be positive
-    expected_score = (sample['standard_time'] - sample['finish_time_seconds']) / sample['standard_time']
-    print(f"Manual Calc: {expected_score}")
-    assert abs(sample['time_deviation_score'] - expected_score) < 1e-6, "Score calculation mismatch"
+
+def test_metrics_generation_no_future_window():
+    df = _sample_history()
+    generator = ReportMetricsFeatureGenerator(df)
+    annotated = generator.transform(df)
+
+    target = annotated[annotated['race_id'] == 'R6'].iloc[0]
+    past = df[pd.to_datetime(df['race_date']) < pd.Timestamp('2024-03-25')]
+    expected = past['finish_time_seconds'].mean()
+
+    assert abs(target['standard_time'] - expected) < 1e-9
+    assert target['standard_time'] < df.loc[df['race_id'] == 'R7', 'finish_time_seconds'].iloc[0]
+
+
+def test_annotate_race_metrics_backward_compatibility():
+    df = _sample_history()
+    generator = ReportMetricsFeatureGenerator(df)
+    annotated = generator.annotate_race_metrics()
+
+    expected_cols = {
+        'standard_time',
+        'track_bias',
+        'time_deviation_score',
+        'standard_3f',
+        'l3f_deviation_score',
+    }
+    assert expected_cols.issubset(annotated.columns)
+
 
 if __name__ == "__main__":
-    test_metrics_generation()
+    test_metrics_generation_no_future_window()
+    test_annotate_race_metrics_backward_compatibility()
+    print("report_metrics consistency checks passed")

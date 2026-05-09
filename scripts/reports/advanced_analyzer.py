@@ -9,7 +9,6 @@ import os
 import pandas as pd
 import numpy as np
 import logging
-from sklearn.cluster import KMeans
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +16,10 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 DATA_DIR = os.path.join(BASE_DIR, "keibaai", "data")
 RACES_PARQUET = os.path.join(DATA_DIR, "parsed", "parquet", "races", "races.parquet")
 RACE_DETAILS_PARQUET = os.path.join(DATA_DIR, "parsed", "parquet", "race_details", "race_details.parquet")
+PACE_INDEX_HIGH_DEFAULT = 1.36
+PACE_INDEX_SLOW_DEFAULT = 2.03
+PACE_INDEX_MEDIAN_DEFAULT = 1.80
+MIN_PACE_CUTOFF_SAMPLES = 20
 
 # ロードするカラム
 RACES_COLS = [
@@ -42,11 +45,86 @@ def _safe_round(val, n=3):
     return round(float(val), n)
 
 
+def _numpy_kmeans(X, n_clusters, max_iter=100, random_state=42):
+    """Small deterministic K-Means fallback used when sklearn/SciPy is unavailable."""
+    X = np.asarray(X, dtype=float)
+    n_samples = len(X)
+    if n_samples == 0:
+        return np.array([], dtype=int), np.empty((0, 0), dtype=float)
+    n_clusters = max(1, min(int(n_clusters), n_samples))
+    rng = np.random.default_rng(random_state)
+
+    # k-means++ style initialization keeps clusters stable on lap-time vectors.
+    first_idx = int(rng.integers(n_samples))
+    centers = [X[first_idx]]
+    while len(centers) < n_clusters:
+        current = np.vstack(centers)
+        distances = ((X[:, None, :] - current[None, :, :]) ** 2).sum(axis=2).min(axis=1)
+        total = float(distances.sum())
+        if not np.isfinite(total) or total <= 0:
+            next_idx = len(centers) % n_samples
+        else:
+            next_idx = int(rng.choice(n_samples, p=distances / total))
+        centers.append(X[next_idx])
+
+    centers = np.vstack(centers)
+    labels = np.zeros(n_samples, dtype=int)
+    for _ in range(max_iter):
+        distances = ((X[:, None, :] - centers[None, :, :]) ** 2).sum(axis=2)
+        new_labels = distances.argmin(axis=1)
+        new_centers = centers.copy()
+        for i in range(n_clusters):
+            members = X[new_labels == i]
+            if len(members):
+                new_centers[i] = members.mean(axis=0)
+            else:
+                farthest = int(distances.min(axis=1).argmax())
+                new_centers[i] = X[farthest]
+        if np.array_equal(new_labels, labels) and np.allclose(new_centers, centers):
+            labels = new_labels
+            centers = new_centers
+            break
+        labels = new_labels
+        centers = new_centers
+    return labels, centers
+
+
+def _pace_cutoffs(values):
+    vals = pd.to_numeric(pd.Series(values), errors='coerce').dropna().to_numpy(dtype=float)
+    vals = vals[np.isfinite(vals)]
+    if len(vals) >= MIN_PACE_CUTOFF_SAMPLES:
+        return {
+            'high_cut': round(float(np.quantile(vals, 1 / 3)), 3),
+            'slow_cut': round(float(np.quantile(vals, 2 / 3)), 3),
+            'median': round(float(np.median(vals)), 3),
+            'sample_count': int(len(vals)),
+            'source': 'course',
+        }
+    if len(vals) >= 5:
+        return {
+            'high_cut': round(float(np.quantile(vals, 1 / 3)), 3),
+            'slow_cut': round(float(np.quantile(vals, 2 / 3)), 3),
+            'median': round(float(np.median(vals)), 3),
+            'sample_count': int(len(vals)),
+            'source': 'small_course',
+        }
+    return {
+        'high_cut': PACE_INDEX_HIGH_DEFAULT,
+        'slow_cut': PACE_INDEX_SLOW_DEFAULT,
+        'median': PACE_INDEX_MEDIAN_DEFAULT,
+        'sample_count': int(len(vals)),
+        'source': 'global_default',
+    }
+
+
 class AdvancedPaceAnalyzer:
-    def __init__(self):
+    def __init__(self, cutoff_date=None):
         self.races_df = None
         self._group_time_stats = None
         self._group_l3f_stats = None
+        self.cutoff_date = pd.to_datetime(cutoff_date, errors='coerce') if cutoff_date else None
+        if pd.isna(self.cutoff_date):
+            self.cutoff_date = None
         self._load_data()
 
     def _load_data(self):
@@ -55,6 +133,14 @@ class AdvancedPaceAnalyzer:
             return
         try:
             self.races_df = pd.read_parquet(RACES_PARQUET, columns=RACES_COLS)
+            self.races_df['race_date'] = pd.to_datetime(self.races_df['race_date'], errors='coerce')
+            if self.cutoff_date is not None:
+                before_count = len(self.races_df)
+                self.races_df = self.races_df[self.races_df['race_date'] < self.cutoff_date].copy()
+                logger.info(
+                    f"Applied analyzer cutoff {self.cutoff_date.date()}: "
+                    f"{len(self.races_df):,}/{before_count:,} rows kept"
+                )
             # 頭数算出
             fs = self.races_df.groupby('race_id').size().reset_index(name='field_size')
             self.races_df = self.races_df.merge(fs, on='race_id', how='left')
@@ -65,6 +151,11 @@ class AdvancedPaceAnalyzer:
     def _ensure_group_stats(self):
         """Z-score計算用のグループ統計をキャッシュ"""
         if self._group_time_stats is not None:
+            return
+        if self.races_df is None or self.races_df.empty:
+            gcols = ['venue', 'distance_m', 'track_surface', 'track_condition']
+            self._group_time_stats = pd.DataFrame(columns=gcols + ['time_mean', 'time_std', 'time_n'])
+            self._group_l3f_stats = pd.DataFrame(columns=gcols + ['l3f_mean', 'l3f_std', 'l3f_n'])
             return
         gcols = ['venue', 'distance_m', 'track_surface', 'track_condition']
         vt = self.races_df.dropna(subset=['finish_time_seconds'])
@@ -112,14 +203,21 @@ class AdvancedPaceAnalyzer:
             return []
         X = np.array(valid)
         nc = min(n_clusters, len(X))
-        km = KMeans(n_clusters=nc, random_state=42, n_init=10)
-        km.fit(X)
+        try:
+            from sklearn.cluster import KMeans
+            km = KMeans(n_clusters=nc, random_state=42, n_init=10)
+            km.fit(X)
+            labels = km.labels_
+            centers = km.cluster_centers_
+        except Exception as e:
+            logger.warning(f"KMeans unavailable; using numpy fallback for lap clusters: {e}")
+            labels, centers = _numpy_kmeans(X, nc, random_state=42)
         info = []
         for i in range(nc):
             info.append({
                 'cluster_id': i,
-                'count': int(np.sum(km.labels_ == i)),
-                'center_laps': [round(float(x), 2) for x in km.cluster_centers_[i]],
+                'count': int(np.sum(labels == i)),
+                'center_laps': [round(float(x), 2) for x in centers[i]],
             })
         info.sort(key=lambda x: x['count'], reverse=True)
         return info
@@ -168,16 +266,21 @@ class AdvancedPaceAnalyzer:
         return result
 
     # ==========================================
-    # ② コース位置取り×着順 相関データ
+    # ② コース初期位置×着順 相関データ
     # ==========================================
     def get_course_position_stats(self, venue, distance_m, track_surface, max_points=2000):
         course_df = self._filter_course(venue, distance_m, track_surface)
         if course_df.empty:
             return {'points': [], 'trend': [], 'race_count': 0}
         df = course_df.copy()
-        # 最終コーナー位置を使用（4角優先、なければ3角、2角）
-        df['last_corner'] = df['passing_order_4'].fillna(df['passing_order_3']).fillna(df['passing_order_2'])
-        df['norm_lc'] = df.apply(lambda r: _norm_pos(r['last_corner'], r['field_size']), axis=1)
+        # 最初に取得できる通過順を使用（1角優先、なければ2角、3角、4角）
+        df['initial_corner'] = (
+            df['passing_order_1']
+            .fillna(df['passing_order_2'])
+            .fillna(df['passing_order_3'])
+            .fillna(df['passing_order_4'])
+        )
+        df['norm_lc'] = df.apply(lambda r: _norm_pos(r['initial_corner'], r['field_size']), axis=1)
         df['norm_l3f'] = df.apply(lambda r: _norm_pos(r['last3f_rank'], r['field_size']), axis=1)
         valid = df.dropna(subset=['norm_lc', 'finish_position'])
         if len(valid) > max_points:
@@ -337,6 +440,8 @@ class AdvancedPaceAnalyzer:
         """
         if not horse_profiles:
             return {'formation': [], 'pace_prediction': {}, 'advantages': [], 'course_baseline': {}}
+        if self.races_df is None or self.races_df.empty:
+            return {'formation': [], 'pace_prediction': {}, 'advantages': [], 'course_baseline': {}}
 
         self._ensure_group_stats()
 
@@ -431,6 +536,7 @@ class AdvancedPaceAnalyzer:
             else:
                 label = '追込'
             formation.append({
+                'hid': h['hid'],
                 'umaban': h['umaban'],
                 'name': h['name'],
                 'lead_score': h['lead_score'],
@@ -445,13 +551,23 @@ class AdvancedPaceAnalyzer:
 
         # コース全体のペース指数分布
         course_df = self._filter_course(cur_venue, float(cur_dist), cur_surface)
-        pi_values = course_df['pace_index'].dropna().tolist() if not course_df.empty else []
-        pi_median = round(float(np.median(pi_values)), 1) if pi_values else 50.0
+        if not course_df.empty:
+            pi_values = (
+                course_df.dropna(subset=['pace_index'])
+                .drop_duplicates('race_id')['pace_index']
+                .tolist()
+            )
+        else:
+            pi_values = []
+        pace_cuts = _pace_cutoffs(pi_values)
+        pi_median = pace_cuts['median']
+        high_cut = pace_cuts['high_cut']
+        slow_cut = pace_cuts['slow_cut']
 
         if n_escapees >= 3:
             pace_type = 'high'
             pace_label = 'ハイペース'
-            pace_reason = f'逃げ/先行候補が{n_escapees}頭と多く、前半のペースが上がりやすい'
+            pace_reason = f'逃げ/先行候補が{n_escapees}頭と多く、前半のペースが上がりやすい（PI低位≦{high_cut}）'
         elif n_escapees >= 2:
             pace_type = 'mid'
             pace_label = 'ミドルペース'
@@ -459,7 +575,7 @@ class AdvancedPaceAnalyzer:
         elif n_escapees == 1:
             pace_type = 'slow'
             pace_label = 'スローペース'
-            pace_reason = f'逃げ馬は{escape_candidates[0]["name"]}のみ。単騎逃げでペースが落ち着く可能性が高い'
+            pace_reason = f'逃げ馬は{escape_candidates[0]["name"]}のみ。単騎逃げでペースが落ち着く可能性が高い（PI高位≧{slow_cut}）'
         else:
             pace_type = 'mid'
             pace_label = 'ミドルペース'
@@ -471,6 +587,10 @@ class AdvancedPaceAnalyzer:
             'reason': pace_reason,
             'pi_median': pi_median,
             'n_escapees': n_escapees,
+            'pi_high_cut': high_cut,
+            'pi_slow_cut': slow_cut,
+            'pi_sample_count': pace_cuts['sample_count'],
+            'pi_source': pace_cuts['source'],
         }
 
         # --- 各馬の有利/不利判定 ---
@@ -492,31 +612,31 @@ class AdvancedPaceAnalyzer:
             if pace_data and len(pace_data) >= 2:
                 # ペースが予測ペースに近い時の着順を見る
                 if pace_type == 'high':
-                    # ハイペース（PI < 48）での成績
-                    hi_pace = [p for p in pace_data if p['pi'] < 48]
-                    lo_pace = [p for p in pace_data if p['pi'] >= 48]
+                    # pace_index は低いほど前傾。コース別の下位1/3をハイペース扱いにする。
+                    hi_pace = [p for p in pace_data if p['pi'] <= high_cut]
+                    lo_pace = [p for p in pace_data if p['pi'] > high_cut]
                     if hi_pace:
                         hi_avg = np.mean([p['fp'] for p in hi_pace])
                         lo_avg = np.mean([p['fp'] for p in lo_pace]) if lo_pace else hi_avg
                         if hi_avg < lo_avg - 1:
                             verdict = '有利'
-                            reason = f'ハイペース時の平均着順{hi_avg:.1f}（通常{lo_avg:.1f}）'
+                            reason = f'ハイペース時(PI≦{high_cut})の平均着順{hi_avg:.1f}（通常{lo_avg:.1f}）'
                         elif hi_avg > lo_avg + 1:
                             verdict = '不利'
-                            reason = f'ハイペース時の平均着順{hi_avg:.1f}（通常{lo_avg:.1f}）'
+                            reason = f'ハイペース時(PI≦{high_cut})の平均着順{hi_avg:.1f}（通常{lo_avg:.1f}）'
                 elif pace_type == 'slow':
-                    # スローペース（PI > 50）での成績
-                    sl_pace = [p for p in pace_data if p['pi'] > 50]
-                    ot_pace = [p for p in pace_data if p['pi'] <= 50]
+                    # pace_index は高いほど後傾。コース別の上位1/3をスローペース扱いにする。
+                    sl_pace = [p for p in pace_data if p['pi'] >= slow_cut]
+                    ot_pace = [p for p in pace_data if p['pi'] < slow_cut]
                     if sl_pace:
                         sl_avg = np.mean([p['fp'] for p in sl_pace])
                         ot_avg = np.mean([p['fp'] for p in ot_pace]) if ot_pace else sl_avg
                         if sl_avg < ot_avg - 1:
                             verdict = '有利'
-                            reason = f'スローペース時の平均着順{sl_avg:.1f}（通常{ot_avg:.1f}）'
+                            reason = f'スローペース時(PI≧{slow_cut})の平均着順{sl_avg:.1f}（通常{ot_avg:.1f}）'
                         elif sl_avg > ot_avg + 1:
                             verdict = '不利'
-                            reason = f'スローペース時の平均着順{sl_avg:.1f}（通常{ot_avg:.1f}）'
+                            reason = f'スローペース時(PI≧{slow_cut})の平均着順{sl_avg:.1f}（通常{ot_avg:.1f}）'
 
             # 位置取りによる補正
             pos_label = h['position_label']

@@ -5,6 +5,10 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+PAST_WINDOWS_DAYS = (30, 90, 180, 365)
+MIN_STANDARD_SAMPLES = 6
+
+
 class ReportMetricsFeatureGenerator:
     def __init__(self, history_df: pd.DataFrame):
         """
@@ -13,7 +17,10 @@ class ReportMetricsFeatureGenerator:
                         Used to learn standard times and regression models.
         """
         self.history_df = history_df.copy()
-        self.history_df['race_date'] = pd.to_datetime(self.history_df['race_date'])
+        self.history_df['race_date'] = pd.to_datetime(self.history_df['race_date'], errors='coerce')
+        for col in ['distance_m', 'finish_position', 'finish_time_seconds', 'last_3f_time']:
+            if col in self.history_df.columns:
+                self.history_df[col] = pd.to_numeric(self.history_df[col], errors='coerce')
         self._prepare_lookups()
 
     def _prepare_lookups(self):
@@ -22,6 +29,9 @@ class ReportMetricsFeatureGenerator:
         
         # Filter for 1-3rd place for standard time calculation
         df_top3 = self.history_df[self.history_df['finish_position'].isin([1, 2, 3])].copy()
+        df_top3 = df_top3.dropna(subset=[
+            'race_date', 'venue', 'distance_m', 'track_surface', 'finish_time_seconds'
+        ])
         
         # 1. Static Averages (Venue, Dist, Surf)
         self.avg_time_lookup = df_top3.groupby(['venue', 'distance_m', 'track_surface'])['finish_time_seconds'].mean().to_dict()
@@ -62,28 +72,48 @@ class ReportMetricsFeatureGenerator:
         except Exception as e:
             pass
 
-    def calculate_standard_time(self, row, window_days=3):
-        """
-        Calculates Standard Time using HISTORY data around the row's date.
-        """
+    def _past_group(self, row):
         key = (row['venue'], row['distance_m'], row['track_surface'])
         group = self.grouped_data.get(key)
-        
         if group is None or group.empty:
-            return np.nan
-            
+            return None
         date_obj = row['race_date']
-        start_date = date_obj - timedelta(days=window_days)
-        end_date = date_obj + timedelta(days=window_days)
-        
-        # Look for races in history within window
-        mask = (group['race_date'] >= start_date) & (group['race_date'] <= end_date)
-        sub_group = group[mask]
-        
-        if sub_group.empty:
+        if pd.isna(date_obj):
+            return None
+        return group[group['race_date'] < date_obj]
+
+    def calculate_group_average_time(self, row):
+        """Calculates a no-future group average for the row's condition."""
+        past = self._past_group(row)
+        if past is None or len(past) < MIN_STANDARD_SAMPLES:
             return np.nan
-            
-        return sub_group['finish_time_seconds'].mean()
+        return past['finish_time_seconds'].mean()
+
+    def calculate_standard_time(self, row):
+        """
+        Calculates Standard Time from past-only HISTORY data.
+
+        The old +/- window included the target row and future races. For feature
+        generation and backtesting that is leakage, so we expand backward in time
+        until there are enough samples.
+        """
+        past = self._past_group(row)
+        if past is None or past.empty:
+            return np.nan
+
+        date_obj = row['race_date']
+        best = None
+        for days in PAST_WINDOWS_DAYS:
+            start_date = date_obj - timedelta(days=days)
+            sub_group = past[past['race_date'] >= start_date]
+            if len(sub_group) >= MIN_STANDARD_SAMPLES:
+                return sub_group['finish_time_seconds'].mean()
+            if best is None or len(sub_group) > len(best):
+                best = sub_group
+
+        if best is not None and len(best) >= 2:
+            return best['finish_time_seconds'].mean()
+        return np.nan
 
     def predict_standard_3f(self, row):
         """Predicts Standard 3F based on regression models learned from HISTORY."""
@@ -113,11 +143,11 @@ class ReportMetricsFeatureGenerator:
         """
         logger.info("Annotating race metrics for target dataframe...")
         df = target_df.copy()
-        df['race_date'] = pd.to_datetime(df['race_date'])
+        df['race_date'] = pd.to_datetime(df['race_date'], errors='coerce')
 
-        # 1. Global Average Time
+        # 1. No-future global average time for the same venue/distance/surface.
         df['global_avg_time'] = df.apply(
-            lambda x: self.avg_time_lookup.get((x['venue'], x['distance_m'], x['track_surface']), np.nan), axis=1
+            lambda x: self.calculate_group_average_time(x), axis=1
         )
         
         # 2. Standard Time (Local Window)
@@ -138,3 +168,7 @@ class ReportMetricsFeatureGenerator:
         df['l3f_deviation_score'] = (df['standard_3f'] - df['last_3f_time']) / df['standard_3f']
         
         return df
+
+    def annotate_race_metrics(self, target_df: pd.DataFrame = None) -> pd.DataFrame:
+        """Backward-compatible wrapper used by older diagnostics."""
+        return self.transform(self.history_df if target_df is None else target_df)
